@@ -1,7 +1,7 @@
 /**
  * Visual planet data for Cakrapala 3D Solar System.
  *
- * Scaled for high-fidelity interactive visualization with photorealistic NASA textures.
+ * Scaled for high-fidelity interactive visualization with authentic IAU/NASA distances.
  */
 
 import type { PlanetDefinition, SunDefinition } from "./types";
@@ -25,6 +25,7 @@ export const PLANET_DATA: PlanetDefinition[] = [
     visualOrbitRadius: 7.0,
     orbitSpeed: 1.607,
     hasRing: false,
+    realSemiMajorAxisAU: 0.387,
   },
   {
     id: "venus",
@@ -36,6 +37,7 @@ export const PLANET_DATA: PlanetDefinition[] = [
     visualOrbitRadius: 11.5,
     orbitSpeed: 1.174,
     hasRing: false,
+    realSemiMajorAxisAU: 0.723,
   },
   {
     id: "earth",
@@ -47,6 +49,7 @@ export const PLANET_DATA: PlanetDefinition[] = [
     visualOrbitRadius: 16.0,
     orbitSpeed: 1.0,
     hasRing: false,
+    realSemiMajorAxisAU: 1.000,
   },
   {
     id: "mars",
@@ -58,8 +61,9 @@ export const PLANET_DATA: PlanetDefinition[] = [
     visualOrbitRadius: 21.0,
     orbitSpeed: 0.802,
     hasRing: false,
+    realSemiMajorAxisAU: 1.524,
   },
-  // Main Asteroid Belt is located between Mars (21.0) and Jupiter (41.0) -> Belt spans 26.5 to 34.5
+  // Main Asteroid Belt is located between Mars (21.0) and Jupiter (41.0) -> Belt spans 26.5 to 34.5 (2.1 to 3.3 AU)
   {
     id: "jupiter",
     name: "Jupiter",
@@ -70,6 +74,7 @@ export const PLANET_DATA: PlanetDefinition[] = [
     visualOrbitRadius: 41.0,
     orbitSpeed: 0.434,
     hasRing: false,
+    realSemiMajorAxisAU: 5.204,
   },
   {
     id: "saturn",
@@ -81,6 +86,7 @@ export const PLANET_DATA: PlanetDefinition[] = [
     visualOrbitRadius: 55.0,
     orbitSpeed: 0.323,
     hasRing: true,
+    realSemiMajorAxisAU: 9.582,
   },
   {
     id: "uranus",
@@ -92,6 +98,7 @@ export const PLANET_DATA: PlanetDefinition[] = [
     visualOrbitRadius: 69.0,
     orbitSpeed: 0.228,
     hasRing: false,
+    realSemiMajorAxisAU: 19.201,
   },
   {
     id: "neptune",
@@ -103,5 +110,6 @@ export const PLANET_DATA: PlanetDefinition[] = [
     visualOrbitRadius: 83.0,
     orbitSpeed: 0.182,
     hasRing: false,
+    realSemiMajorAxisAU: 30.047,
   },
 ];

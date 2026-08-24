@@ -47,6 +47,8 @@ export type PlanetDefinition = {
   /** Base orbit speed coefficient (rad/s at 1× speed) — not astronomically precise. */
   orbitSpeed: number;
   hasRing: boolean;
+  /** Authentic astronomical Semi-Major Axis distance from the Sun in AU (IAU standard). */
+  realSemiMajorAxisAU: number;
 };
 
 /** Simulation runtime state managed by React (Milestone 1). */

@@ -291,7 +291,12 @@ export default function SpaceExplorerLayout() {
                 </div>
                 <span>{planet.name.toUpperCase()}</span>
               </div>
-              <span className="text-[9px] text-slate-400">{(planet.visualOrbitRadius / 10).toFixed(1)} AU</span>
+              <span className="text-[9px] text-cyan-400 font-mono font-bold">
+                {planet.realSemiMajorAxisAU >= 10
+                  ? planet.realSemiMajorAxisAU.toFixed(1)
+                  : planet.realSemiMajorAxisAU.toFixed(2)}{" "}
+                AU
+              </span>
             </button>
           ))}
         </div>
