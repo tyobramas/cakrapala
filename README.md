@@ -17,28 +17,6 @@ Despite billions of dollars invested in space exploration, global astronomical l
 
 ### 2. AI & Technical Approach (Powered by IBM Bob & IBM Granite)
 
-```mermaid
-graph TD
-    subgraph Data & Telemetry Ingestion
-        NASA[NASA JPL NeoWs API] --> API[/api/asteroids]
-        NORAD[NORAD CelesTrak TLE] --> SGP4[satellite.js SGP4 Engine]
-        IAU[Yale BSC5 9,000+ Stars] --> SkyEngine[astronomy-engine]
-    end
-
-    subgraph AI Intelligence Layer (IBM Bob & IBM Granite)
-        IBMBob[IBM Bob AI Developer & Architecture Copilot] -.-> Architecture[System Architecture & Code Synthesis]
-        Granite[IBM Granite Space AI Co-Pilot] --> NLP[Astrophysical Reasoning & NLP]
-        NLP --> Voice[Bidirectional Web Speech Synthesis]
-    end
-
-    subgraph 3D Spatial Rendering & HUD Cockpit
-        API --> Radar[Three.js Asteroid Proximity Radar]
-        SGP4 --> SatGlobe[CesiumJS Geospatial Satellite Fleet]
-        SkyEngine --> SkyDome[Stellarium-Style Ground Sky View]
-        Voice --> HUD[Aerospace Tactical Telemetry Deck]
-    end
-```
-
 * **Role of IBM Bob (AI Engineering & Architecture Copilot)**:
   * **Architectural Acceleration**: **IBM Bob** served as the core enterprise AI copilot guiding the end-to-end software architecture, modular decomposition, and Keplerian mathematical formulation.
   * **High-Precision Algorithmic Synthesis**: Accelerated the development of complex coordinate transformation matrices (ECEF $\leftrightarrow$ ENU $\leftrightarrow$ Topocentric Az/Alt), SGP4 orbital propagation, and hyperbolic trajectory curves.
