@@ -4,15 +4,18 @@
  * AstronomyTerminal — Retro Sci-Fi Aerospace HUD & AI Flight Director Terminal
  * Powered by Nara Router (qwen-3.8-max-free)
  * Features:
+ *   - createPortal mounting directly to document.body (prevents header backdrop-blur clipping)
  *   - Real-time animated typing effect for terminal output
  *   - Multi-turn conversation memory within active session
  *   - Astronomy & Planetary Defense scope-guarded reasoning
  *   - Interactive Quick Telemetry Command Chips
  *   - Speech Synthesis (TTS) & Audio readout
  *   - Terminal CRT scanlines and status reticles
+ *   - ESC key and backdrop click to close
  */
 
 import { useState, useEffect, useRef } from "react";
+import { createPortal } from "react-dom";
 import {
   Terminal,
   Send,
@@ -27,9 +30,6 @@ import {
   Check,
   Maximize2,
   Minimize2,
-  Orbit,
-  Crosshair,
-  Compass,
 } from "lucide-react";
 
 export interface TerminalMessage {
@@ -52,25 +52,21 @@ const QUICK_COMMANDS = [
     label: "> /asteroid-defense",
     prompt:
       "Bagaimana sistem pertahanan planet mendeteksi dan mengantisipasi ancaman asteroid dekat Bumi (NEO)?",
-    category: "DEFENSE",
   },
   {
     label: "> /iss-telemetry",
     prompt:
       "Berapa kecepatan, ketinggian orbit, dan periode revolusi International Space Station (ISS) saat ini?",
-    category: "SATELLITE",
   },
   {
     label: "> /planetarium-stars",
     prompt:
       "Jelaskan rasi bintang utama yang paling mudah diamati dari Indonesia (seperti Orion dan Salib Selatan).",
-    category: "SKY DOME",
   },
   {
     label: "> /jwst-lagrange",
     prompt:
       "Why is the James Webb Space Telescope positioned at Sun-Earth Lagrange Point 2 (L2)?",
-    category: "ASTROPHYSICS",
   },
 ];
 
@@ -79,6 +75,7 @@ export default function AstronomyTerminal({
   onClose,
   initialPrompt = "",
 }: AstronomyTerminalProps) {
+  const [mounted, setMounted] = useState<boolean>(false);
   const [input, setInput] = useState<string>("");
   const [messages, setMessages] = useState<TerminalMessage[]>([
     {
@@ -101,14 +98,41 @@ export default function AstronomyTerminal({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Auto-scroll when messages update or streaming changes
+  // Client-side mount check for createPortal
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Prevent background scrolling & listen for ESC key when open
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [isOpen, onClose]);
+
+  // Auto-scroll when messages update
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages, displayedStreamingText, isLoading]);
+    if (isOpen) {
+      scrollToBottom();
+    }
+  }, [messages, displayedStreamingText, isLoading, isOpen]);
 
   // Focus input when opened
   useEffect(() => {
@@ -126,12 +150,12 @@ export default function AstronomyTerminal({
 
     let currentIndex = 0;
     const fullText = streamingTargetText;
-    const speed = Math.max(8, Math.min(25, Math.floor(1500 / fullText.length))); // Dynamic speed for snappy response
+    const speed = Math.max(8, Math.min(25, Math.floor(1500 / fullText.length)));
 
     if (typingTimerRef.current) clearInterval(typingTimerRef.current);
 
     typingTimerRef.current = setInterval(() => {
-      currentIndex += 2; // Type 2 chars per tick for smooth natural velocity
+      currentIndex += 2;
       if (currentIndex >= fullText.length) {
         setDisplayedStreamingText(fullText);
         setIsTyping(false);
@@ -192,14 +216,12 @@ export default function AstronomyTerminal({
       }),
     };
 
-    // Append user message immediately
     const updatedMessages = [...messages, userMessage];
     setMessages(updatedMessages);
     setInput("");
     setIsLoading(true);
 
     try {
-      // Build conversation payload for backend
       const payloadMessages = updatedMessages
         .filter((m) => m.role === "user" || m.role === "assistant")
         .map((m) => ({
@@ -222,7 +244,6 @@ export default function AstronomyTerminal({
       const botReply = data.message;
       const latencyMs = data.latencyMs;
 
-      // Add a placeholder streaming message
       const botMessageId = `bot-${Date.now()}`;
       setMessages((prev) => [
         ...prev,
@@ -241,7 +262,6 @@ export default function AstronomyTerminal({
         },
       ]);
 
-      // Start Typewriter Animation
       setDisplayedStreamingText("");
       setStreamingTargetText(botReply);
       setIsTyping(true);
@@ -252,7 +272,7 @@ export default function AstronomyTerminal({
         role: "assistant",
         content: `**[TELEMETRY LINK ERROR]**: ${
           err.message || "Failed to establish link with Nara Router."
-        }\n\n*Please ensure your NARA_ROUTER_API_KEY is configured in .env.local.*`,
+        }\n\n*Please check your NARA_ROUTER_API_KEY in .env.local.*`,
         timestamp: "ERR.01",
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -282,32 +302,44 @@ export default function AstronomyTerminal({
     setTimeout(() => setCopiedId(null), 2000);
   };
 
-  if (!isOpen) return null;
+  if (!isOpen || !mounted) return null;
 
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-4 md:p-6 bg-black/85 backdrop-blur-lg animate-in fade-in duration-200">
-      {/* ── Terminal Container ── */}
+  const modalContent = (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="astro-terminal-title"
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      {/* ── Terminal Window Box ── */}
       <div
-        className={`relative w-full transition-all duration-300 flex flex-col overflow-hidden font-mono bg-[#040813]/95 border border-cyan-500/40 rounded-2xl shadow-[0_0_50px_rgba(6,182,212,0.25),inset_0_1px_2px_rgba(255,255,255,0.1)] ${
+        className={`relative w-full transition-all duration-300 flex flex-col font-mono bg-[#030713] border border-cyan-500/50 rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.95),0_0_35px_rgba(6,182,212,0.25)] overflow-hidden ${
           isMaximized
-            ? "h-[98vh] max-w-[98vw] rounded-xl"
-            : "h-[680px] max-h-[92vh] max-w-4xl"
+            ? "h-[94vh] max-w-[96vw]"
+            : "h-[620px] max-h-[88vh] max-w-4xl"
         }`}
+        onClick={(e) => e.stopPropagation()}
       >
-        {/* ── Subtle CRT Scanline & Grain Overlay ── */}
+        {/* ── CRT Scanline Overlay ── */}
         <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] opacity-40 z-10" />
 
-        {/* ── Terminal Header HUD ── */}
-        <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-cyan-500/30 bg-[#060e22]/90 select-none">
-          {/* Left: Terminal Identity */}
+        {/* ── Sticky Top Header HUD ── */}
+        <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-cyan-500/30 bg-[#050c1e] select-none shrink-0">
+          {/* Left: Identity */}
           <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-950/80 border border-cyan-400/50 shadow-[0_0_10px_rgba(6,182,212,0.5)]">
+            <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-950/90 border border-cyan-400/60 shadow-[0_0_12px_rgba(6,182,212,0.5)]">
               <Terminal className="w-4 h-4 text-cyan-300 animate-pulse" />
               <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-black tracking-widest text-cyan-200 uppercase">
+                <span
+                  id="astro-terminal-title"
+                  className="text-xs sm:text-sm font-black tracking-widest text-cyan-200 uppercase"
+                >
                   CAKRAPALA // ASTRO-AI TERMINAL
                 </span>
                 <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hidden sm:inline-block">
@@ -334,7 +366,7 @@ export default function AstronomyTerminal({
                 }
               }}
               title={ttsEnabled ? "Mute TTS Audio" : "Enable TTS Audio Readout"}
-              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border ${
+              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
                 ttsEnabled
                   ? "bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]"
                   : "bg-slate-900/60 text-slate-400 border-slate-700 hover:text-slate-200 hover:border-slate-600"
@@ -348,7 +380,7 @@ export default function AstronomyTerminal({
             <button
               onClick={handleClearHistory}
               title="Purge session memory"
-              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold text-slate-400 bg-slate-900/60 border border-slate-700 hover:text-amber-300 hover:border-amber-500/50 transition-all flex items-center gap-1"
+              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold text-slate-400 bg-slate-900/60 border border-slate-700 hover:text-amber-300 hover:border-amber-500/50 transition-all flex items-center gap-1 cursor-pointer"
             >
               <RotateCcw className="w-3.5 h-3.5" />
               <span className="hidden md:inline text-[10px]">RESET</span>
@@ -358,7 +390,7 @@ export default function AstronomyTerminal({
             <button
               onClick={() => setIsMaximized(!isMaximized)}
               title={isMaximized ? "Restore size" : "Maximize terminal"}
-              className="p-1.5 rounded-lg text-slate-400 bg-slate-900/60 border border-slate-700 hover:text-slate-100 hover:border-slate-600 transition-all hidden sm:flex"
+              className="p-1.5 rounded-lg text-slate-400 bg-slate-900/60 border border-slate-700 hover:text-slate-100 hover:border-slate-600 transition-all hidden sm:flex cursor-pointer"
             >
               {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
             </button>
@@ -366,25 +398,26 @@ export default function AstronomyTerminal({
             {/* Close Button */}
             <button
               onClick={onClose}
-              title="Close terminal"
-              className="p-1.5 rounded-lg text-slate-400 bg-red-950/40 border border-red-500/40 hover:bg-red-900/60 hover:text-red-200 transition-all"
+              title="Close terminal (ESC)"
+              className="p-1.5 sm:px-2 sm:py-1 rounded-lg text-slate-300 bg-red-950/60 border border-red-500/60 hover:bg-red-900 hover:text-white transition-all flex items-center gap-1 cursor-pointer shadow-sm"
             >
-              <X className="w-4 h-4" />
+              <X className="w-4 h-4 text-red-400 hover:text-white" />
+              <span className="text-[10px] font-bold hidden sm:inline">CLOSE</span>
             </button>
           </div>
         </div>
 
         {/* ── Quick Telemetry Command Chips ── */}
-        <div className="relative z-20 px-4 sm:px-6 py-2 border-b border-cyan-950/80 bg-[#030714]/90 flex items-center gap-2 overflow-x-auto no-scrollbar select-none text-[11px]">
+        <div className="relative z-20 px-4 sm:px-6 py-2 border-b border-cyan-950/80 bg-[#02050f] flex items-center gap-2 overflow-x-auto no-scrollbar select-none text-[11px] shrink-0">
           <span className="text-slate-500 font-bold shrink-0 flex items-center gap-1 text-[10px]">
-            <Radio className="w-3 h-3 text-cyan-400 animate-pulse" /> TELEMETRY CHIPS:
+            <Radio className="w-3 h-3 text-cyan-400 animate-pulse" /> QUICK CHIPS:
           </span>
           {QUICK_COMMANDS.map((cmd, idx) => (
             <button
               key={idx}
               disabled={isLoading || isTyping}
               onClick={() => handleSendMessage(cmd.prompt)}
-              className="shrink-0 px-2.5 py-1 rounded-md bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-900/50 hover:border-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.3)] transition-all font-mono text-[10.5px] disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1.5"
+              className="shrink-0 px-2.5 py-1 rounded-md bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-900/50 hover:border-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.3)] transition-all font-mono text-[10.5px] disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1.5 cursor-pointer"
             >
               <span>{cmd.label}</span>
             </button>
@@ -431,7 +464,7 @@ export default function AstronomyTerminal({
                         <button
                           onClick={() => handleCopy(msg.id, msg.content)}
                           title="Copy response"
-                          className="text-slate-500 hover:text-cyan-300 transition-colors p-0.5"
+                          className="text-slate-500 hover:text-cyan-300 transition-colors p-0.5 cursor-pointer"
                         >
                           {copiedId === msg.id ? (
                             <Check className="w-3 h-3 text-emerald-400" />
@@ -442,7 +475,7 @@ export default function AstronomyTerminal({
                         <button
                           onClick={() => speakText(msg.content.replace(/[*_#`]/g, ""))}
                           title="Read out text"
-                          className="text-slate-500 hover:text-cyan-300 transition-colors p-0.5"
+                          className="text-slate-500 hover:text-cyan-300 transition-colors p-0.5 cursor-pointer"
                         >
                           <Volume2 className="w-3 h-3" />
                         </button>
@@ -451,7 +484,7 @@ export default function AstronomyTerminal({
                   </div>
                 </div>
 
-                {/* Message Body with Markdown formatting support */}
+                {/* Message Body */}
                 <div className="whitespace-pre-wrap break-words text-slate-100 font-mono leading-relaxed">
                   {contentToRender}
                   {isLatestStreaming && (
@@ -476,7 +509,7 @@ export default function AstronomyTerminal({
         </div>
 
         {/* ── Terminal Command Input ── */}
-        <div className="relative z-20 p-3 sm:p-4 border-t border-cyan-500/30 bg-[#060c1e]/95 select-none">
+        <div className="relative z-20 p-3 sm:p-4 border-t border-cyan-500/30 bg-[#050b1a] select-none shrink-0">
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -493,7 +526,7 @@ export default function AstronomyTerminal({
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask anything about space, asteroids, orbit physics, or planetarium stars..."
+              placeholder="Ask about space, orbit physics, planetary defense, or constellations..."
               disabled={isLoading || isTyping}
               className="flex-1 bg-transparent text-slate-100 placeholder-slate-500 text-xs sm:text-sm font-mono focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
             />
@@ -501,7 +534,7 @@ export default function AstronomyTerminal({
             <button
               type="submit"
               disabled={!input.trim() || isLoading || isTyping}
-              className="px-3 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.5)] disabled:opacity-40 disabled:pointer-events-none shrink-0"
+              className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.5)] disabled:opacity-40 disabled:pointer-events-none shrink-0 cursor-pointer"
             >
               <span>SEND</span>
               <Send className="w-3 h-3" />
@@ -522,4 +555,6 @@ export default function AstronomyTerminal({
       </div>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }
