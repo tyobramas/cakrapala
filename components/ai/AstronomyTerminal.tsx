@@ -70,6 +70,142 @@ const QUICK_COMMANDS = [
   },
 ];
 
+/**
+ * TerminalMessageContent — Parses markdown tokens (**bold**, ### headers, - lists)
+ * into beautiful, clean tactical HUD typography without raw asterisks or hash marks.
+ */
+function TerminalMessageContent({
+  content,
+  isStreaming,
+}: {
+  content: string;
+  isStreaming?: boolean;
+}) {
+  if (!content) return null;
+
+  // Function to parse inline bold, code, italic without raw symbols
+  const renderInlineFormatted = (text: string) => {
+    // Regex for inline patterns: **bold**, `code`, *italic*
+    const tokens = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g);
+
+    return tokens.map((token, idx) => {
+      if (!token) return null;
+
+      // Bold: **text**
+      if (token.startsWith("**") && token.endsWith("**") && token.length >= 4) {
+        return (
+          <strong key={idx} className="font-bold text-cyan-200">
+            {token.slice(2, -2)}
+          </strong>
+        );
+      }
+
+      // Inline Code: `code`
+      if (token.startsWith("`") && token.endsWith("`") && token.length >= 2) {
+        return (
+          <code
+            key={idx}
+            className="px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-[11px] font-mono mx-0.5"
+          >
+            {token.slice(1, -1)}
+          </code>
+        );
+      }
+
+      // Italic: *text*
+      if (token.startsWith("*") && token.endsWith("*") && token.length >= 2) {
+        return (
+          <em key={idx} className="italic text-slate-300">
+            {token.slice(1, -1)}
+          </em>
+        );
+      }
+
+      // Clean any stray asterisks or hashes from partial streaming
+      const cleaned = token.replace(/\*\*/g, "").replace(/^#{1,6}\s*/g, "");
+      return <span key={idx}>{cleaned}</span>;
+    });
+  };
+
+  const lines = content.split("\n");
+  const renderedElements: React.ReactNode[] = [];
+
+  for (let i = 0; i < lines.length; i++) {
+    const rawLine = lines[i];
+    const trimmedLine = rawLine.trim();
+
+    if (!trimmedLine) {
+      renderedElements.push(<div key={`blank-${i}`} className="h-1.5" />);
+      continue;
+    }
+
+    // 1. Heading Check: ### Title, ## Title, # Title
+    const headerMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
+    if (headerMatch) {
+      const titleText = headerMatch[2];
+      renderedElements.push(
+        <div
+          key={`h-${i}`}
+          className="mt-3 mb-1.5 pt-1.5 border-t border-cyan-500/20 flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm tracking-wide uppercase"
+        >
+          <span className="w-1.5 h-1.5 rounded-sm bg-emerald-400 shrink-0" />
+          <span>{renderInlineFormatted(titleText)}</span>
+        </div>
+      );
+      continue;
+    }
+
+    // 2. Bullet list check: - Item, * Item, • Item
+    const bulletMatch = trimmedLine.match(/^[-*•]\s+(.+)$/);
+    if (bulletMatch) {
+      const itemContent = bulletMatch[1];
+      renderedElements.push(
+        <div key={`b-${i}`} className="flex items-start gap-2.5 my-1 pl-1 text-slate-200">
+          <span className="text-cyan-400 font-bold text-xs select-none shrink-0 mt-0.5">▸</span>
+          <div className="flex-1 leading-relaxed">
+            {renderInlineFormatted(itemContent)}
+          </div>
+        </div>
+      );
+      continue;
+    }
+
+    // 3. Numbered list check: 1. Item, 2. Item
+    const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
+    if (numberedMatch) {
+      const num = numberedMatch[1];
+      const itemContent = numberedMatch[2];
+      renderedElements.push(
+        <div key={`n-${i}`} className="flex items-start gap-2.5 my-1 pl-1 text-slate-200">
+          <span className="text-cyan-400 font-bold text-xs select-none shrink-0 font-mono mt-0.5">
+            {num}.
+          </span>
+          <div className="flex-1 leading-relaxed">
+            {renderInlineFormatted(itemContent)}
+          </div>
+        </div>
+      );
+      continue;
+    }
+
+    // 4. Regular Paragraph / Telemetry Text
+    renderedElements.push(
+      <p key={`p-${i}`} className="my-1 leading-relaxed text-slate-200">
+        {renderInlineFormatted(trimmedLine)}
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-0.5">
+      {renderedElements}
+      {isStreaming && (
+        <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 animate-pulse align-middle" />
+      )}
+    </div>
+  );
+}
+
 export default function AstronomyTerminal({
   isOpen,
   onClose,
@@ -484,12 +620,12 @@ export default function AstronomyTerminal({
                   </div>
                 </div>
 
-                {/* Message Body */}
-                <div className="whitespace-pre-wrap break-words text-slate-100 font-mono leading-relaxed">
-                  {contentToRender}
-                  {isLatestStreaming && (
-                    <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 animate-pulse align-middle" />
-                  )}
+                {/* Formatted Tactical Message Body */}
+                <div className="text-slate-100 font-mono text-xs sm:text-[13px] leading-relaxed">
+                  <TerminalMessageContent
+                    content={contentToRender}
+                    isStreaming={isLatestStreaming}
+                  />
                 </div>
               </div>
             );
