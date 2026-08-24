@@ -56,11 +56,11 @@ export async function POST(request: NextRequest) {
       process.env.NARA_ROUTER_API_KEY ||
       "sk-nry-VyXJm8i88IoU1ES8QJ1tbRjyR7PDJ7rzfrFW2ZaFHFQ";
     const primaryModel =
-      process.env.NARA_ROUTER_MODEL || "qwen-3.8-max-free";
+      process.env.NARA_ROUTER_MODEL || "mistral-medium-3-5";
 
-    // Candidate models for ultra-resilient fast fallback
+    // Candidate models strictly for Mistral family (free / non-rate-limited)
     const candidateModels = Array.from(
-      new Set([primaryModel, "qwen3.7-flash", "agnes-2.0-flash"])
+      new Set([primaryModel, "mistral-large"])
     );
 
     // Filter valid user and assistant messages
