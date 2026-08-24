@@ -1,6 +1,6 @@
 # 🌌 Cakrapala — 3D Aerospace Space Observatory & Planetary Defense Radar
 
-![Cakrapala Project Banner](./public/cakrapala-banner.svg)
+![Cakrapala Project Banner](./public/banner.png)
 
 > **An interactive, AI-augmented 3D space observatory and real-time planetary defense cockpit transforming raw NASA, NORAD, and IAU telemetry into intuitive spatial intelligence.**
 
