@@ -180,7 +180,7 @@ export default function Footer() {
 
               <div>
                 <span className="text-[9px] text-slate-500 uppercase block">Astrophysics AI Agent</span>
-                <strong className="text-amber-300 font-bold block">Nara Router (Qwen-3.8)</strong>
+                <strong className="text-amber-300 font-bold block">Deep Space AI Flight Director</strong>
               </div>
 
               <div className="pt-2 border-t border-slate-800 text-[10px] text-slate-500 flex items-center justify-between">
@@ -194,7 +194,7 @@ export default function Footer() {
         {/* ── Bottom Copyright Bar ─────────────────────────────────────────────── */}
         <div className="border-t border-slate-800/80 pt-6 flex flex-col sm:flex-row items-center justify-between gap-3 text-slate-500 text-[11px]">
           <div>
-            &copy; {new Date().getFullYear()} <strong className="text-slate-300">Cakrapala</strong> &bull; NASA Deep Space Observatory &amp; Nara Router AI Astrophysics Terminal.
+            &copy; {new Date().getFullYear()} <strong className="text-slate-300">Cakrapala</strong> &bull; NASA Deep Space Observatory &amp; Planetary Defense AI Terminal.
           </div>
 
           <div className="flex items-center gap-3">

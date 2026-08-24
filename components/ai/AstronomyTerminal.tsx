@@ -82,7 +82,7 @@ export default function AstronomyTerminal({
       id: "sys-init",
       role: "assistant",
       content:
-        "**[CAKRAPALA FLIGHT CONTROL // NODE ONLINE]**\n\nGreetings, Commander. I am **SYS-AI**, your dedicated Aerospace & Planetary Defense AI Terminal powered by Nara Router. \n\nTelemetry systems operational. Ask me about **orbital mechanics, asteroid impact risks, satellite tracking, planetarium star catalogs, or deep-space astrophysics**.",
+        "**[CAKRAPALA FLIGHT CONTROL // NODE ONLINE]**\n\nGreetings, Commander. I am **SYS-AI**, your dedicated Deep Space Flight Director & Planetary Defense Intelligence Unit.\n\nTelemetry systems operational. Ask me about **orbital mechanics, asteroid impact risks, satellite tracking, planetarium star catalogs, or deep-space astrophysics**.",
       timestamp: "SYS.00",
     },
   ]);
@@ -271,8 +271,8 @@ export default function AstronomyTerminal({
         id: `err-${Date.now()}`,
         role: "assistant",
         content: `**[TELEMETRY LINK ERROR]**: ${
-          err.message || "Failed to establish link with Nara Router."
-        }\n\n*Please check your NARA_ROUTER_API_KEY in .env.local.*`,
+          err.message || "Failed to establish link with Deep Space Command Center."
+        }\n\n*Telemetry uplink connection interrupted. Please try again in a moment.*`,
         timestamp: "ERR.01",
       };
       setMessages((prev) => [...prev, errorMessage]);
@@ -347,7 +347,7 @@ export default function AstronomyTerminal({
                 </span>
               </div>
               <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                <span className="text-cyan-400">NODE:</span> NARA-QWEN-3.8
+                <span className="text-cyan-400">NODE:</span> DEEP-SPACE-AI // SYS-05
                 <span className="text-slate-600">&bull;</span>
                 <span className="text-cyan-400">SCOPE:</span> ASTROPHYSICS & DEFENSE
               </div>
@@ -500,7 +500,7 @@ export default function AstronomyTerminal({
             <div className="flex items-center gap-3 p-3.5 rounded-xl bg-[#050f24]/80 border border-cyan-500/40 text-cyan-300 animate-pulse mr-8 sm:mr-16">
               <Cpu className="w-4 h-4 animate-spin text-cyan-400" />
               <span className="text-xs font-bold tracking-wider">
-                TRANSMITTING TO NARA ROUTER // SYNTHESIZING ASTROPHYSICAL TELEMETRY...
+                TRANSMITTING TO DEEP SPACE COMMAND CENTER // SYNTHESIZING ASTROPHYSICAL TELEMETRY...
               </span>
             </div>
           )}

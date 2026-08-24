@@ -252,7 +252,7 @@ export default function Navbar() {
               <span>LAUNCH AI ASTRO-TERMINAL</span>
             </div>
             <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-              NARA QWEN
+              SYS-AI
             </span>
           </button>
 

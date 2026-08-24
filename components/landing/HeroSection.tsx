@@ -337,7 +337,7 @@ export default function HeroSection() {
               <Bot className="w-4 h-4 text-cyan-400 animate-pulse group-hover:scale-110 transition-transform" />
               <span>LAUNCH AI ASTRO-TERMINAL</span>
               <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
-                NARA QWEN
+                DEEP SPACE AI
               </span>
             </button>
           </div>
@@ -447,8 +447,8 @@ export default function HeroSection() {
 
               <div>
                 <div className="flex items-center justify-between text-slate-400 mb-1 text-[9px]">
-                  <span>Nara Router AI Astrophysics Co-Pilot</span>
-                  <span className="text-cyan-300 font-bold">ONLINE (QWEN-3.8)</span>
+                  <span>Deep Space Astrophysics AI Co-Pilot</span>
+                  <span className="text-cyan-300 font-bold">ONLINE (SYS-AI)</span>
                 </div>
                 <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
                   <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 w-full" />
