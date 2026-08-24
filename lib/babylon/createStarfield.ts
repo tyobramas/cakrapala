@@ -4,7 +4,8 @@
  * createStarfield — Ultra High-Definition 8K PhotoDome Celestial Sky.
  *
  * Uses Babylon.js native PhotoDome with the 8K ESO Milky Way Panorama (/textures/milkyway.jpg)
- * and infinite distance depth projection, matching the high-definition quality of the planetarium sky.
+ * and infinite distance depth projection, calibrated to the exact IAU J2000 Galactic-to-Ecliptic
+ * celestial inclination (60.19°) and Galactic Center alignment.
  */
 
 import {
@@ -32,10 +33,15 @@ export function createStarfield(scene: Scene): void {
       photoDome.mesh.infiniteDistance = true;
       photoDome.mesh.checkCollisions = false;
 
-      // Realistic astronomical galactic tilt (60° inclination to the ecliptic plane)
-      photoDome.mesh.rotation.x = 0.48;
-      photoDome.mesh.rotation.y = 2.15;
-      photoDome.mesh.rotation.z = 0.25;
+      // ── IAU J2000 Astronomical Galactic Orientation ─────────────────────────
+      // 1. Inclination of Galactic Equator to Ecliptic Plane (Solar System Orbit Disk) = 60.19° (~1.0505 rad)
+      // 2. Galactic Center (Sagittarius A*) Ecliptic Longitude = ~266.8° (Ascending Node ~176.84°)
+      const GALACTIC_INCLINATION_RAD = (60.19 * Math.PI) / 180; // 60.19°
+      const ASCENDING_NODE_RAD = (176.84 * Math.PI) / 180;       // 176.84°
+
+      photoDome.mesh.rotation.x = GALACTIC_INCLINATION_RAD;
+      photoDome.mesh.rotation.y = ASCENDING_NODE_RAD;
+      photoDome.mesh.rotation.z = 0;
     }
 
     photoDome.imageMode = PhotoDome.MODE_MONOSCOPIC;
