@@ -56,11 +56,11 @@ export async function POST(request: NextRequest) {
       process.env.NARA_ROUTER_API_KEY ||
       "sk-nry-VyXJm8i88IoU1ES8QJ1tbRjyR7PDJ7rzfrFW2ZaFHFQ";
     const configuredModel =
-      process.env.NARA_ROUTER_MODEL || "mistral-medium-3-5";
+      process.env.NARA_ROUTER_MODEL || "agnes-2.5-flash";
 
     // Candidate model chain: Configured model first, followed by fast high-reliability flash models
     const candidateModels = Array.from(
-      new Set([configuredModel, "agnes-2.5-flash", "agnes-2.0-flash", "mistral-large"])
+      new Set([configuredModel, "agnes-2.5-flash", "agnes-2.0-flash", "mistral-medium-3-5"])
     );
 
     // Filter valid user and assistant messages
