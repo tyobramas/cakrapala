@@ -25,13 +25,17 @@ import {
   Radio,
   ChevronRight,
   Crosshair,
+  Terminal,
+  Bot,
 } from "lucide-react";
+import AstronomyTerminal from "@/components/ai/AstronomyTerminal";
 
 export default function Navbar() {
   const pathname = usePathname();
   const [timeUtc, setTimeUtc] = useState<string>("");
   const [gmst, setGmst] = useState<string>("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
+  const [isAiTerminalOpen, setIsAiTerminalOpen] = useState<boolean>(false);
 
   const NAV_ITEMS = [
     {
@@ -178,8 +182,21 @@ export default function Navbar() {
           })}
         </nav>
 
-        {/* ── Right: Telemetry Clock & Mobile Drawer Toggle ─────────────────── */}
+        {/* ── Right: AI Terminal, Telemetry Clock & Mobile Drawer Toggle ─── */}
         <div className="flex items-center gap-2 sm:gap-3 shrink-0 font-mono text-xs">
+          {/* AI Terminal Trigger Button */}
+          <button
+            type="button"
+            onClick={() => setIsAiTerminalOpen(true)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl sm:rounded-2xl bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-500/50 hover:border-cyan-300 text-cyan-300 shadow-[0_0_15px_rgba(6,182,212,0.25)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)] transition-all font-mono font-bold text-[10px] sm:text-[11px] cursor-pointer"
+            title="Open AI Astro-Terminal"
+          >
+            <Terminal className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
+            <span className="hidden sm:inline">AI TERMINAL</span>
+            <span className="inline sm:hidden">AI</span>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+          </button>
+
           {/* Live Telemetry Clock Pill */}
           <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl sm:rounded-2xl bg-[#060b18]/90 border border-slate-700/80 text-slate-300 shadow-md backdrop-blur-xl">
             <span className="w-2 h-2 rounded-full bg-emerald-400 animate-ping shrink-0" />
@@ -221,6 +238,23 @@ export default function Navbar() {
               ONLINE
             </span>
           </div>
+
+          {/* AI Terminal Quick Launcher in Mobile Drawer */}
+          <button
+            onClick={() => {
+              setIsMobileMenuOpen(false);
+              setIsAiTerminalOpen(true);
+            }}
+            className="w-full mb-2 p-2.5 rounded-xl bg-gradient-to-r from-cyan-500/20 to-indigo-500/20 border border-cyan-500/50 text-cyan-200 font-bold text-xs flex items-center justify-between shadow-[0_0_15px_rgba(6,182,212,0.25)]"
+          >
+            <div className="flex items-center gap-2.5">
+              <Terminal className="w-4 h-4 text-cyan-400 animate-pulse" />
+              <span>LAUNCH AI ASTRO-TERMINAL</span>
+            </div>
+            <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+              NARA QWEN
+            </span>
+          </button>
 
           <div className="grid grid-cols-1 gap-1.5">
             {NAV_ITEMS.map((item) => {
@@ -270,6 +304,12 @@ export default function Navbar() {
           </div>
         </div>
       )}
+
+      {/* ── Global Astronomy Terminal Modal ───────────────────────────────── */}
+      <AstronomyTerminal
+        isOpen={isAiTerminalOpen}
+        onClose={() => setIsAiTerminalOpen(false)}
+      />
     </header>
   );
 }

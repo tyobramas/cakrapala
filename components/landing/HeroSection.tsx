@@ -31,7 +31,7 @@ import {
   Sparkle,
 } from "lucide-react";
 import LiveHeroMilkyWay from "./LiveHeroMilkyWay";
-import GraniteAIAssistant from "./GraniteAIAssistant";
+import AstronomyTerminal from "../ai/AstronomyTerminal";
 import { SATELLITE_CATALOG } from "@/lib/satellites/satelliteCatalog";
 
 interface LiveTelemetry {
@@ -327,6 +327,20 @@ export default function HeroSection() {
 
           {/* Borderless 3D Rotating Galaxy */}
           <LiveHeroMilkyWay />
+
+          {/* AI Flight Director Terminal Launch Bar */}
+          <div className="z-20 -mt-6 mb-2 flex items-center justify-center">
+            <button
+              onClick={() => setIsAiModalOpen(true)}
+              className="flex items-center gap-2.5 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-cyan-500/20 via-indigo-500/20 to-cyan-500/20 hover:from-cyan-500/35 hover:to-indigo-500/35 border border-cyan-500/50 hover:border-cyan-300 text-cyan-200 font-mono font-bold text-xs shadow-[0_0_30px_rgba(6,182,212,0.35)] hover:shadow-[0_0_40px_rgba(6,182,212,0.6)] transition-all group cursor-pointer"
+            >
+              <Bot className="w-4 h-4 text-cyan-400 animate-pulse group-hover:scale-110 transition-transform" />
+              <span>LAUNCH AI ASTRO-TERMINAL</span>
+              <span className="text-[9px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40">
+                NARA QWEN
+              </span>
+            </button>
+          </div>
         </div>
 
         {/* ══════════════════════════════════════════════════════════════════════
@@ -433,11 +447,11 @@ export default function HeroSection() {
 
               <div>
                 <div className="flex items-center justify-between text-slate-400 mb-1 text-[9px]">
-                  <span>IBM Granite Astrophysics Co-Pilot</span>
-                  <span className="text-cyan-300 font-bold">READY (ONLINE)</span>
+                  <span>Nara Router AI Astrophysics Co-Pilot</span>
+                  <span className="text-cyan-300 font-bold">ONLINE (QWEN-3.8)</span>
                 </div>
                 <div className="h-1.5 w-full bg-slate-800 rounded-full overflow-hidden">
-                  <div className="h-full bg-gradient-to-r from-cyan-500 to-indigo-400 w-full" />
+                  <div className="h-full bg-gradient-to-r from-cyan-500 to-emerald-400 w-full" />
                 </div>
               </div>
             </div>
@@ -453,11 +467,11 @@ export default function HeroSection() {
         </div>
       </div>
 
-      {/* ── IBM Granite Space AI Assistant Modal ────────────────────────────── */}
-      <GraniteAIAssistant
+      {/* ── Cakrapala AI Astronomy Terminal Modal ────────────────────────────── */}
+      <AstronomyTerminal
         isOpen={isAiModalOpen}
         onClose={() => setIsAiModalOpen(false)}
-        initialQuery={speechText}
+        initialPrompt={speechText}
       />
     </section>
   );
