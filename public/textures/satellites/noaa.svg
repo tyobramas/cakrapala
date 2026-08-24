@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="200" height="120">
+  <defs>
+    <linearGradient id="noaaSolar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#7dd3fc" />
+    </linearGradient>
+
+    <linearGradient id="noaaBody" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="40%" stop-color="#cbd5e1" />
+      <stop offset="100%" stop-color="#64748b" />
+    </linearGradient>
+
+    <linearGradient id="goldCap" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="60%" stop-color="#eab308" />
+      <stop offset="100%" stop-color="#a16207" />
+    </linearGradient>
+
+    <filter id="noaaGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#noaaGlow)">
+    <!-- ── Single Asymmetric Solar Array Wing (Port side) ──────── -->
+    <rect x="8" y="25" width="70" height="70" rx="3" fill="url(#noaaSolar)" stroke="#0369a1" stroke-width="1.2" />
+    <!-- Panel grid -->
+    <line x1="8" y1="48" x2="78" y2="48" stroke="#bae6fd" stroke-width="0.8" />
+    <line x1="8" y1="72" x2="78" y2="72" stroke="#bae6fd" stroke-width="0.8" />
+    <line x1="31" y1="25" x2="31" y2="95" stroke="#bae6fd" stroke-width="0.8" />
+    <line x1="54" y1="25" x2="54" y2="95" stroke="#bae6fd" stroke-width="0.8" />
+    <!-- Wing boom -->
+    <rect x="78" y="56" width="22" height="8" fill="#475569" stroke="#94a3b8" stroke-width="0.8" />
+
+    <!-- ── Satellite Bus / Instrument Module ────────────────────── -->
+    <rect x="100" y="32" width="46" height="56" rx="4" fill="url(#noaaBody)" stroke="#f1f5f9" stroke-width="1.2" />
+
+    <!-- AVHRR / Microwave Sounder Sensors (Gold thermal blanket) -->
+    <rect x="146" y="40" width="18" height="20" rx="2" fill="url(#goldCap)" stroke="#fef08a" stroke-width="0.8" />
+    <circle cx="155" cy="50" r="4" fill="#0f172a" stroke="#38bdf8" stroke-width="0.8" />
+
+    <!-- Earth Sensor / High-Resolution Radiometer (Nadir-pointing) -->
+    <polygon points="120,88 126,88 129,98 117,98" fill="#334155" stroke="#94a3b8" stroke-width="0.8" />
+
+    <!-- Communications / S-Band Antenna Dish -->
+    <path d="M 125,20 A 10,10 0 0,1 145,20" fill="none" stroke="#e2e8f0" stroke-width="2" />
+    <line x1="135" y1="20" x2="135" y2="32" stroke="#cbd5e1" stroke-width="1.5" />
+    <circle cx="135" cy="18" r="1.5" fill="#ef4444" />
+
+    <!-- Status beacon -->
+    <circle cx="106" cy="38" r="2.5" fill="#10b981" />
+  </g>
+</svg>

@@ -1,0 +1,115 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="200" height="120">
+  <defs>
+    <!-- Solar panel gradient -->
+    <linearGradient id="solarGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="30%" stop-color="#2563eb" />
+      <stop offset="70%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#0284c7" />
+    </linearGradient>
+
+    <!-- Solar panel grid pattern -->
+    <pattern id="solarGrid" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect width="6" height="6" fill="none" stroke="#60a5fa" stroke-width="0.4" stroke-opacity="0.6"/>
+      <line x1="0" y1="0" x2="6" y2="6" stroke="#93c5fd" stroke-width="0.3" stroke-opacity="0.3"/>
+    </pattern>
+
+    <!-- Module metal gradient -->
+    <linearGradient id="metalGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="40%" stop-color="#cbd5e1" />
+      <stop offset="70%" stop-color="#64748b" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+
+    <!-- Gold foil insulation gradient -->
+    <linearGradient id="goldFoil" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="50%" stop-color="#eab308" />
+      <stop offset="100%" stop-color="#854d0e" />
+    </linearGradient>
+
+    <!-- Glow effect -->
+    <filter id="issGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+
+    <filter id="beaconGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="3" result="glow" />
+      <feMerge>
+        <feMergeNode in="glow" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#issGlow)">
+    <!-- ── LEFT SOLAR ARRAY WINGS (Port) ────────────────────────── -->
+    <rect x="8" y="10" width="38" height="42" rx="2" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="1.2" />
+    <rect x="8" y="10" width="38" height="42" fill="url(#solarGrid)" />
+    <rect x="8" y="68" width="38" height="42" rx="2" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="1.2" />
+    <rect x="8" y="68" width="38" height="42" fill="url(#solarGrid)" />
+
+    <rect x="52" y="14" width="30" height="38" rx="2" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="1" />
+    <rect x="52" y="14" width="30" height="38" fill="url(#solarGrid)" />
+    <rect x="52" y="68" width="30" height="38" rx="2" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="1" />
+    <rect x="52" y="68" width="30" height="38" fill="url(#solarGrid)" />
+
+    <!-- ── RIGHT SOLAR ARRAY WINGS (Starboard) ──────────────────── -->
+    <rect x="118" y="14" width="30" height="38" rx="2" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="1" />
+    <rect x="118" y="14" width="30" height="38" fill="url(#solarGrid)" />
+    <rect x="118" y="68" width="30" height="38" rx="2" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="1" />
+    <rect x="118" y="68" width="30" height="38" fill="url(#solarGrid)" />
+
+    <rect x="154" y="10" width="38" height="42" rx="2" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="1.2" />
+    <rect x="154" y="10" width="38" height="42" fill="url(#solarGrid)" />
+    <rect x="154" y="68" width="38" height="42" rx="2" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="1.2" />
+    <rect x="154" y="68" width="38" height="42" fill="url(#solarGrid)" />
+
+    <!-- Solar panel mast dividers -->
+    <line x1="27" y1="6" x2="27" y2="114" stroke="#e2e8f0" stroke-width="2" />
+    <line x1="67" y1="10" x2="67" y2="110" stroke="#e2e8f0" stroke-width="1.8" />
+    <line x1="133" y1="10" x2="133" y2="110" stroke="#e2e8f0" stroke-width="1.8" />
+    <line x1="173" y1="6" x2="173" y2="114" stroke="#e2e8f0" stroke-width="2" />
+
+    <!-- ── INTEGRATED TRUSS STRUCTURE (ITS) ─────────────────────── -->
+    <rect x="4" y="56" width="192" height="8" rx="1.5" fill="#475569" stroke="#cbd5e1" stroke-width="1" />
+    <path d="M 10,56 L 20,64 M 20,56 L 10,64 M 30,56 L 40,64 M 40,56 L 30,64 M 50,56 L 60,64 M 60,56 L 50,64 M 70,56 L 80,64 M 80,56 L 70,64 M 120,56 L 130,64 M 130,56 L 120,64 M 140,56 L 150,64 M 150,56 L 140,64 M 160,56 L 170,64 M 170,56 L 160,64 M 180,56 L 190,64 M 190,56 L 180,64" stroke="#94a3b8" stroke-width="0.8" />
+
+    <!-- Thermal Radiators -->
+    <rect x="76" y="24" width="10" height="32" rx="1" fill="#f8fafc" stroke="#94a3b8" stroke-width="0.8" />
+    <rect x="114" y="24" width="10" height="32" rx="1" fill="#f8fafc" stroke="#94a3b8" stroke-width="0.8" />
+
+    <!-- ── CENTRAL PRESSURIZED MODULE COMPLEX ───────────────────── -->
+    <rect x="94" y="28" width="12" height="22" rx="3" fill="url(#metalGrad)" stroke="#f1f5f9" stroke-width="1" />
+    <rect x="84" y="32" width="9" height="14" rx="1" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="0.6" />
+    <rect x="107" y="32" width="9" height="14" rx="1" fill="url(#solarGrad)" stroke="#38bdf8" stroke-width="0.6" />
+
+    <!-- Zarya FGB -->
+    <rect x="92" y="48" width="16" height="24" rx="3" fill="url(#goldFoil)" stroke="#fef08a" stroke-width="1" />
+
+    <!-- Unity & Destiny Labs -->
+    <circle cx="100" cy="74" r="7" fill="url(#metalGrad)" stroke="#f1f5f9" stroke-width="1" />
+    <rect x="93" y="78" width="14" height="20" rx="3" fill="url(#metalGrad)" stroke="#f8fafc" stroke-width="1" />
+
+    <!-- Columbus & Kibo Modules -->
+    <rect x="80" y="86" width="13" height="9" rx="2" fill="url(#metalGrad)" stroke="#94a3b8" stroke-width="0.8" />
+    <rect x="107" y="84" width="16" height="12" rx="2.5" fill="url(#metalGrad)" stroke="#94a3b8" stroke-width="0.8" />
+
+    <!-- Cupola observation dome -->
+    <circle cx="100" cy="85" r="3.5" fill="#38bdf8" stroke="#0284c7" stroke-width="0.8" />
+    <circle cx="99" cy="84" r="1" fill="#ffffff" />
+
+    <!-- Docking adapter -->
+    <polygon points="96,98 104,98 102,104 98,104" fill="#64748b" stroke="#e2e8f0" stroke-width="0.6" />
+
+    <!-- Navigation Beacons -->
+    <circle cx="196" cy="60" r="3" fill="#10b981" filter="url(#beaconGlow)" />
+    <circle cx="4" cy="60" r="3" fill="#ef4444" filter="url(#beaconGlow)" />
+    <circle cx="100" cy="60" r="2.5" fill="#00f0ff" filter="url(#beaconGlow)" />
+  </g>
+</svg>

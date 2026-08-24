@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="200" height="120">
+  <defs>
+    <linearGradient id="slSolar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0284c7" />
+      <stop offset="50%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#bae6fd" />
+    </linearGradient>
+
+    <linearGradient id="slBus" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#f8fafc" />
+      <stop offset="50%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#334155" />
+    </linearGradient>
+
+    <filter id="slGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#slGlow)">
+    <!-- ── Single Large Fold-Out Accordion Solar Array (Top) ────── -->
+    <rect x="80" y="10" width="40" height="60" rx="2" fill="url(#slSolar)" stroke="#0284c7" stroke-width="1" />
+    <!-- Segment lines -->
+    <line x1="80" y1="22" x2="120" y2="22" stroke="#e0f2fe" stroke-width="0.8" />
+    <line x1="80" y1="34" x2="120" y2="34" stroke="#e0f2fe" stroke-width="0.8" />
+    <line x1="80" y1="46" x2="120" y2="46" stroke="#e0f2fe" stroke-width="0.8" />
+    <line x1="80" y1="58" x2="120" y2="58" stroke="#e0f2fe" stroke-width="0.8" />
+    <line x1="100" y1="10" x2="100" y2="70" stroke="#f1f5f9" stroke-width="1.2" />
+
+    <!-- Array connection hinge -->
+    <rect x="96" y="70" width="8" height="6" fill="#475569" stroke="#94a3b8" stroke-width="0.6" />
+
+    <!-- ── Flat-Panel Satellite Bus (Bottom Chassis) ────────────── -->
+    <rect x="55" y="76" width="90" height="26" rx="3" fill="url(#slBus)" stroke="#f1f5f9" stroke-width="1.2" />
+
+    <!-- 4x Phased Array Ku/Ka-Band Antennas (Circular dishes on chassis) -->
+    <circle cx="70" cy="89" r="6.5" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" />
+    <circle cx="70" cy="89" r="3" fill="#cbd5e1" />
+
+    <circle cx="90" cy="89" r="6.5" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" />
+    <circle cx="90" cy="89" r="3" fill="#cbd5e1" />
+
+    <circle cx="110" cy="89" r="6.5" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" />
+    <circle cx="110" cy="89" r="3" fill="#cbd5e1" />
+
+    <circle cx="130" cy="89" r="6.5" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" />
+    <circle cx="130" cy="89" r="3" fill="#cbd5e1" />
+
+    <!-- Krypton / Argon Hall-Effect Ion Thruster (Glow) -->
+    <rect x="95" y="102" width="10" height="4" rx="1" fill="#38bdf8" />
+    <circle cx="100" cy="106" r="3" fill="#00f0ff" />
+
+    <!-- Navigation Beacon -->
+    <circle cx="58" cy="80" r="2" fill="#ef4444" />
+    <circle cx="142" cy="80" r="2" fill="#10b981" />
+  </g>
+</svg>

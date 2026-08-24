@@ -4,20 +4,35 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "copy-cesium-assets": "node scripts/copy-cesium-assets.mjs",
+    "generate-star-catalog": "node scripts/generate-star-catalog.mjs",
+    "generate-constellation-lines": "node scripts/generate-constellation-lines.mjs",
+    "generate-data": "npm run generate-star-catalog && npm run generate-constellation-lines",
+    "prebuild": "npm run copy-cesium-assets && npm run generate-data",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
   },
   "dependencies": {
+    "@babylonjs/core": "^9.22.1",
+    "@babylonjs/gui": "^9.22.1",
+    "@types/three": "^0.185.4",
+    "astronomy-engine": "^2.1.19",
+    "cesium": "^1.144.0",
+    "lucide-react": "^1.33.0",
     "next": "16.3.2",
     "react": "19.2.8",
-    "react-dom": "19.2.8"
+    "react-dom": "19.2.8",
+    "satellite.js": "^7.1.0",
+    "three": "^0.185.1"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
+    "@types/copy-webpack-plugin": "^8.0.1",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "copy-webpack-plugin": "^14.0.0",
     "eslint": "^9",
     "eslint-config-next": "16.3.2",
     "tailwindcss": "^4",

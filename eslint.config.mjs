@@ -12,6 +12,10 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Cesium vendor assets copied to public/ — not our code.
+    "public/cesium/**",
+    // Build scripts — not linted as application code.
+    "scripts/**",
   ]),
 ]);
 

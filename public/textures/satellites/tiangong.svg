@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="200" height="120">
+  <defs>
+    <linearGradient id="tgSolar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0369a1" />
+      <stop offset="40%" stop-color="#0ea5e9" />
+      <stop offset="80%" stop-color="#38bdf8" />
+      <stop offset="100%" stop-color="#bae6fd" />
+    </linearGradient>
+
+    <pattern id="tgGrid" width="6" height="6" patternUnits="userSpaceOnUse">
+      <rect width="6" height="6" fill="none" stroke="#e0f2fe" stroke-width="0.35" stroke-opacity="0.7"/>
+    </pattern>
+
+    <linearGradient id="tgHull" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="50%" stop-color="#e2e8f0" />
+      <stop offset="100%" stop-color="#94a3b8" />
+    </linearGradient>
+
+    <filter id="tgGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#tgGlow)">
+    <!-- ── Giant Flexible Solar Array Wings on Wentian & Mengtian ── -->
+    <!-- Far Left Wing (Wentian) -->
+    <rect x="6" y="15" width="44" height="90" rx="3" fill="url(#tgSolar)" stroke="#0284c7" stroke-width="1.2" />
+    <rect x="6" y="15" width="44" height="90" fill="url(#tgGrid)" />
+    <!-- Center mast -->
+    <line x1="28" y1="10" x2="28" y2="110" stroke="#f1f5f9" stroke-width="2" />
+
+    <!-- Far Right Wing (Mengtian) -->
+    <rect x="150" y="15" width="44" height="90" rx="3" fill="url(#tgSolar)" stroke="#0284c7" stroke-width="1.2" />
+    <rect x="150" y="15" width="44" height="90" fill="url(#tgGrid)" />
+    <!-- Center mast -->
+    <line x1="172" y1="10" x2="172" y2="110" stroke="#f1f5f9" stroke-width="2" />
+
+    <!-- ── T-Shaped Station Modules ────────────────────────────── -->
+    <!-- Wentian Lab Module (Left Arm) -->
+    <rect x="52" y="52" width="38" height="16" rx="3" fill="url(#tgHull)" stroke="#cbd5e1" stroke-width="1" />
+    <circle cx="60" cy="60" r="3" fill="#ef4444" /> <!-- China Flag accent -->
+
+    <!-- Mengtian Lab Module (Right Arm) -->
+    <rect x="110" y="52" width="38" height="16" rx="3" fill="url(#tgHull)" stroke="#cbd5e1" stroke-width="1" />
+    <rect x="130" y="50" width="12" height="20" rx="2" fill="#64748b" /> <!-- Airlock -->
+
+    <!-- Tianhe Core Module (Center Longitudinal Spine) -->
+    <rect x="88" y="22" width="24" height="76" rx="5" fill="url(#tgHull)" stroke="#cbd5e1" stroke-width="1.2" />
+    
+    <!-- Tianhe Core Solar Wings (smaller inner wings) -->
+    <rect x="74" y="28" width="12" height="24" rx="1.5" fill="url(#tgSolar)" stroke="#0284c7" stroke-width="0.8" />
+    <rect x="114" y="28" width="12" height="24" rx="1.5" fill="url(#tgSolar)" stroke="#0284c7" stroke-width="0.8" />
+
+    <!-- Node Hub / Forward Docking Port -->
+    <circle cx="100" cy="22" r="8" fill="#475569" stroke="#94a3b8" stroke-width="1" />
+    <!-- Shenzhou Crew Craft Docked -->
+    <ellipse cx="100" cy="12" rx="5" ry="6" fill="#f8fafc" stroke="#64748b" stroke-width="0.8" />
+
+    <!-- Tianzhou Cargo Craft Docked (Aft) -->
+    <rect x="94" y="98" width="12" height="14" rx="2" fill="#475569" stroke="#94a3b8" stroke-width="0.8" />
+
+    <!-- Navigation Beacons -->
+    <circle cx="6" cy="60" r="3" fill="#ef4444" />
+    <circle cx="194" cy="60" r="3" fill="#10b981" />
+    <circle cx="100" cy="60" r="2.5" fill="#f59e0b" />
+  </g>
+</svg>

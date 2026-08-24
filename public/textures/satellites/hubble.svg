@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 120" width="200" height="120">
+  <defs>
+    <linearGradient id="hstSolar" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1e3a8a" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#93c5fd" />
+    </linearGradient>
+
+    <linearGradient id="hstFoil" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff" />
+      <stop offset="30%" stop-color="#e2e8f0" />
+      <stop offset="70%" stop-color="#94a3b8" />
+      <stop offset="100%" stop-color="#475569" />
+    </linearGradient>
+
+    <linearGradient id="hstGold" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fde047" />
+      <stop offset="60%" stop-color="#ca8a04" />
+      <stop offset="100%" stop-color="#713f12" />
+    </linearGradient>
+
+    <filter id="hstGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="2.5" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <g filter="url(#hstGlow)">
+    <!-- ── Left Solar Array Wing ───────────────────────────────── -->
+    <rect x="10" y="24" width="60" height="20" rx="2" fill="url(#hstSolar)" stroke="#60a5fa" stroke-width="1" />
+    <line x1="10" y1="34" x2="70" y2="34" stroke="#bfdbfe" stroke-width="1.2" />
+    <line x1="30" y1="24" x2="30" y2="44" stroke="#93c5fd" stroke-width="0.8" />
+    <line x1="50" y1="24" x2="50" y2="44" stroke="#93c5fd" stroke-width="0.8" />
+    <!-- Wing boom connector -->
+    <rect x="70" y="32" width="16" height="4" fill="#94a3b8" stroke="#cbd5e1" stroke-width="0.6" />
+
+    <!-- ── Right Solar Array Wing ──────────────────────────────── -->
+    <rect x="130" y="24" width="60" height="20" rx="2" fill="url(#hstSolar)" stroke="#60a5fa" stroke-width="1" />
+    <line x1="130" y1="34" x2="190" y2="34" stroke="#bfdbfe" stroke-width="1.2" />
+    <line x1="150" y1="24" x2="150" y2="44" stroke="#93c5fd" stroke-width="0.8" />
+    <line x1="170" y1="24" x2="170" y2="44" stroke="#93c5fd" stroke-width="0.8" />
+    <!-- Wing boom connector -->
+    <rect x="114" y="32" width="16" height="4" fill="#94a3b8" stroke="#cbd5e1" stroke-width="0.6" />
+
+    <!-- ── Main Optical Telescope Assembly (OTA) Cylinder ──────── -->
+    <!-- Forward Tube (Aperture / Secondary mirror housing) -->
+    <rect x="88" y="18" width="24" height="38" rx="3" fill="url(#hstFoil)" stroke="#f1f5f9" stroke-width="1.2" />
+    <!-- Open Aperture Door (folded open) -->
+    <polygon points="88,18 78,6 94,6 96,18" fill="url(#hstGold)" stroke="#fef08a" stroke-width="0.8" />
+    <!-- Optical Aperture dark opening & secondary mirror spider -->
+    <ellipse cx="100" cy="20" rx="9" ry="3.5" fill="#020617" stroke="#38bdf8" stroke-width="0.8" />
+    <circle cx="100" cy="20" r="1.5" fill="#facc15" />
+
+    <!-- Aft Shroud (Equipment section / Wide Field Camera) -->
+    <rect x="85" y="56" width="30" height="42" rx="4" fill="url(#hstFoil)" stroke="#f8fafc" stroke-width="1.2" />
+    <!-- Thermal radiator strips on aft section -->
+    <line x1="88" y1="64" x2="112" y2="64" stroke="#64748b" stroke-width="0.8" />
+    <line x1="88" y1="74" x2="112" y2="74" stroke="#64748b" stroke-width="0.8" />
+    <line x1="88" y1="84" x2="112" y2="84" stroke="#64748b" stroke-width="0.8" />
+
+    <!-- High Gain Antennas (HGA dishes on booms) -->
+    <line x1="85" y1="60" x2="68" y2="72" stroke="#cbd5e1" stroke-width="1.5" />
+    <path d="M 62,66 A 8,8 0 0,0 72,78" fill="none" stroke="#fde047" stroke-width="2" />
+
+    <line x1="115" y1="60" x2="132" y2="72" stroke="#cbd5e1" stroke-width="1.5" />
+    <path d="M 138,66 A 8,8 0 0,1 128,78" fill="none" stroke="#fde047" stroke-width="2" />
+
+    <!-- Status beacon -->
+    <circle cx="100" cy="94" r="2.5" fill="#38bdf8" />
+  </g>
+</svg>
