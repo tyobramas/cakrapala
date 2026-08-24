@@ -14,7 +14,7 @@ const ASTRONOMY_SYSTEM_PROMPT = `You are CAKRAPALA AI TERMINAL (SYS-AI) — the 
   5. Space Exploration History & Future Missions (Apollo, Artemis, Voyager, DART asteroid deflection, Mars rovers).
 
 ### LANGUAGE ADAPTATION:
-- If the user communicates in Indonesian, respond fluently and naturally in Indonesian.
+- If the user communicates in Indonesian, respond fluently, concisely, and naturally in Indonesian.
 - If the user communicates in English, respond in English.
 - Maintain consistent terminology (e.g., Lunar Distance, Apogee/Perigee, Perihelion/Aphelion, Ephemeris, Light Years, Astronomical Unit/AU).
 
@@ -55,12 +55,12 @@ export async function POST(request: NextRequest) {
     const apiKey =
       process.env.NARA_ROUTER_API_KEY ||
       "sk-nry-VyXJm8i88IoU1ES8QJ1tbRjyR7PDJ7rzfrFW2ZaFHFQ";
-    const primaryModel =
+    const configuredModel =
       process.env.NARA_ROUTER_MODEL || "mistral-medium-3-5";
 
-    // Candidate models strictly for Mistral family (free / non-rate-limited)
+    // Candidate model chain: Configured model first, followed by fast high-reliability flash models
     const candidateModels = Array.from(
-      new Set([primaryModel, "mistral-large"])
+      new Set([configuredModel, "agnes-2.5-flash", "agnes-2.0-flash", "mistral-large"])
     );
 
     // Filter valid user and assistant messages
@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     const sanitizedMessages: ChatMessage[] = [
       { role: "system", content: ASTRONOMY_SYSTEM_PROMPT },
-      ...validHistory.slice(-8).map((m: any) => ({
+      ...validHistory.slice(-6).map((m: any) => ({
         role: m.role as "user" | "assistant",
         content: m.content.trim(),
       })),
@@ -88,15 +88,16 @@ export async function POST(request: NextRequest) {
     const apiUrl = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
 
     let assistantMessage = "";
-    let usedModel = primaryModel;
+    let usedModel = configuredModel;
     let lastError: any = null;
 
-    // Try candidate models sequentially with timeout
+    // Try candidate models with adaptive timeouts
     for (const model of candidateModels) {
       try {
         console.log(`[AI Chat] Attempting inference with model: ${model}`);
         const controller = new AbortController();
-        const timeoutMs = model === primaryModel ? 35000 : 20000;
+        // Give mistral 65s, flash models 25s
+        const timeoutMs = model.includes("flash") ? 25000 : 65000;
         const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
         const response = await fetch(apiUrl, {
@@ -104,12 +105,13 @@ export async function POST(request: NextRequest) {
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${apiKey}`,
+            "User-Agent": "Cakrapala-Space-Observatory/1.0",
           },
           body: JSON.stringify({
             model,
             messages: sanitizedMessages,
             temperature: 0.7,
-            max_tokens: 800,
+            max_tokens: 600,
             stream: false,
           }),
           signal: controller.signal,
@@ -123,16 +125,16 @@ export async function POST(request: NextRequest) {
           if (content && typeof content === "string" && content.trim()) {
             assistantMessage = content.trim();
             usedModel = data.model || model;
-            console.log(`[AI Chat] Successfully responded using ${usedModel}`);
-            break; // Success! Exit model loop
+            console.log(`[AI Chat] Success with model: ${usedModel} (${Date.now() - startTime}ms)`);
+            break;
           }
         } else {
           const errText = await response.text();
-          console.warn(`[AI Chat] Model ${model} returned ${response.status}:`, errText);
-          lastError = errText;
+          console.warn(`[AI Chat] Model ${model} returned HTTP ${response.status}:`, errText);
+          lastError = new Error(`HTTP ${response.status}: ${errText}`);
         }
       } catch (err: any) {
-        console.warn(`[AI Chat] Error or timeout with model ${model}:`, err.message);
+        console.warn(`[AI Chat] Timeout or error with model ${model}:`, err.message);
         lastError = err;
       }
     }
@@ -140,7 +142,7 @@ export async function POST(request: NextRequest) {
     if (!assistantMessage) {
       throw new Error(
         lastError?.message ||
-          "Telemetry link busy: Deep Space Command Center is taking longer than expected. Please retry."
+          "Telemetry link busy: Deep Space Command Center is experiencing high load. Please try again."
       );
     }
 
@@ -156,11 +158,13 @@ export async function POST(request: NextRequest) {
     const latencyMs = Date.now() - startTime;
     console.error("[AI Chat API Exception]", error);
 
+    const isAbort = error.name === "AbortError" || error.message?.includes("aborted");
+
     return NextResponse.json(
       {
-        error:
-          error.message ||
-          "Telemetry link timeout. Deep Space Command Center queue is congested. Please try again.",
+        error: isAbort
+          ? "Telemetry uplink timed out while awaiting Deep Space Command Center. Please re-send your query."
+          : (error.message || "An unexpected error occurred during AI processing."),
         latencyMs,
       },
       { status: 500 }
