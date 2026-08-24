@@ -223,6 +223,7 @@ export default function AstronomyTerminal({
     },
   ]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
   const [isTyping, setIsTyping] = useState<boolean>(false);
   const [displayedStreamingText, setDisplayedStreamingText] = useState<string>("");
   const [streamingTargetText, setStreamingTargetText] = useState<string>("");
@@ -233,6 +234,8 @@ export default function AstronomyTerminal({
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
   const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const elapsedTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Client-side mount check for createPortal
   useEffect(() => {
@@ -356,6 +359,15 @@ export default function AstronomyTerminal({
     setMessages(updatedMessages);
     setInput("");
     setIsLoading(true);
+    setElapsedSeconds(0);
+
+    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+    elapsedTimerRef.current = setInterval(() => {
+      setElapsedSeconds((prev) => prev + 1);
+    }, 1000);
+
+    const abortCtrl = new AbortController();
+    abortControllerRef.current = abortCtrl;
 
     try {
       const payloadMessages = updatedMessages
@@ -369,6 +381,7 @@ export default function AstronomyTerminal({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ messages: payloadMessages }),
+        signal: abortCtrl.signal,
       });
 
       const data = await res.json();
@@ -402,6 +415,10 @@ export default function AstronomyTerminal({
       setStreamingTargetText(botReply);
       setIsTyping(true);
     } catch (err: any) {
+      if (err.name === "AbortError") {
+        console.log("[Terminal] Request aborted by user.");
+        return;
+      }
       console.error("[Terminal Error]", err);
       const errorMessage: TerminalMessage = {
         id: `err-${Date.now()}`,
@@ -413,7 +430,9 @@ export default function AstronomyTerminal({
       };
       setMessages((prev) => [...prev, errorMessage]);
     } finally {
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
       setIsLoading(false);
+      abortControllerRef.current = null;
     }
   };
 
@@ -631,13 +650,26 @@ export default function AstronomyTerminal({
             );
           })}
 
-          {/* Loading Indicator */}
+          {/* Loading Indicator with Live Timer & Cancel Button */}
           {isLoading && (
-            <div className="flex items-center gap-3 p-3.5 rounded-xl bg-[#050f24]/80 border border-cyan-500/40 text-cyan-300 animate-pulse mr-8 sm:mr-16">
-              <Cpu className="w-4 h-4 animate-spin text-cyan-400" />
-              <span className="text-xs font-bold tracking-wider">
-                TRANSMITTING TO DEEP SPACE COMMAND CENTER // SYNTHESIZING ASTROPHYSICAL TELEMETRY...
-              </span>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-[#050f24]/90 border border-cyan-500/50 text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.2)] mr-4 sm:mr-12 animate-pulse">
+              <div className="flex items-center gap-3">
+                <Cpu className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
+                <span className="text-xs font-bold tracking-wider">
+                  TRANSMITTING TO DEEP SPACE COMMAND CENTER // SYNTHESIZING TELEMETRY... ({elapsedSeconds}s)
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  if (abortControllerRef.current) abortControllerRef.current.abort();
+                  if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+                  setIsLoading(false);
+                }}
+                className="self-end sm:self-auto px-2.5 py-1 rounded bg-red-950/70 border border-red-500/60 text-red-300 hover:bg-red-900 text-[10.5px] font-bold tracking-wider transition-all cursor-pointer shrink-0"
+              >
+                BATALKAN
+              </button>
             </div>
           )}
 

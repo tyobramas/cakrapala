@@ -2,12 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 
 export const dynamic = "force-dynamic";
 
-const NARA_ROUTER_BASE_URL =
-  process.env.NARA_ROUTER_BASE_URL || "https://router.bynara.id/v1";
-const NARA_ROUTER_API_KEY = process.env.NARA_ROUTER_API_KEY || "";
-const NARA_ROUTER_MODEL =
-  process.env.NARA_ROUTER_MODEL || "qwen-3.8-max-free";
-
 const ASTRONOMY_SYSTEM_PROMPT = `You are CAKRAPALA AI TERMINAL (SYS-AI) — the high-precision aerospace artificial intelligence flight director and astrophysical reasoning unit for the Cakrapala 3D Space Observatory & Planetary Defense platform.
 
 ### CORE IDENTITY & MISSION:
@@ -22,7 +16,7 @@ const ASTRONOMY_SYSTEM_PROMPT = `You are CAKRAPALA AI TERMINAL (SYS-AI) — the 
 ### LANGUAGE ADAPTATION:
 - If the user communicates in Indonesian, respond fluently and naturally in Indonesian.
 - If the user communicates in English, respond in English.
-- Maintain consistent terminology (e.g., Lunar Distance, Apogee/Perigee, Perihelion/Aphelion, Ephemeris, Light Years).
+- Maintain consistent terminology (e.g., Lunar Distance, Apogee/Perigee, Perihelion/Aphelion, Ephemeris, Light Years, Astronomical Unit/AU).
 
 ### STRICT OUT-OF-SCOPE GUARD:
 - You are EXCLUSIVELY dedicated to Astronomy, Astrophysics, Planetary Defense, and Aerospace Space Science.
@@ -35,7 +29,7 @@ const ASTRONOMY_SYSTEM_PROMPT = `You are CAKRAPALA AI TERMINAL (SYS-AI) — the 
 - Highlight key astronomical terms and metrics using clean bolding.
 - Avoid messy, redundant, or overly nested symbols.
 - Keep explanations intuitive, mathematically accurate, and engaging (educator + mission controller vibe).
-- When discussing distances or speeds, provide helpful relatable physical comparisons (e.g., lunar distances, km/s, Megatons of TNT).`;
+- When discussing distances or speeds, provide helpful relatable physical comparisons (e.g., lunar distances, km/s, Megatons of TNT, AU).`;
 
 interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -47,7 +41,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
-    const { messages, stream = false } = body;
+    const { messages } = body;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return NextResponse.json(
@@ -56,100 +50,117 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    if (!NARA_ROUTER_API_KEY) {
-      return NextResponse.json(
-        {
-          error:
-            "NARA_ROUTER_API_KEY is not configured on the server. Please set it in .env.local",
-        },
-        { status: 500 }
-      );
-    }
+    const baseUrl =
+      process.env.NARA_ROUTER_BASE_URL || "https://router.bynara.id/v1";
+    const apiKey =
+      process.env.NARA_ROUTER_API_KEY ||
+      "sk-nry-VyXJm8i88IoU1ES8QJ1tbRjyR7PDJ7rzfrFW2ZaFHFQ";
+    const primaryModel =
+      process.env.NARA_ROUTER_MODEL || "qwen-3.8-max-free";
 
-    // Sanitize and construct conversation history with system prompt
+    // Candidate models for ultra-resilient fast fallback
+    const candidateModels = Array.from(
+      new Set([primaryModel, "qwen3.7-flash", "agnes-2.0-flash"])
+    );
+
+    // Filter valid user and assistant messages
+    const rawFiltered = messages.filter(
+      (m: any) =>
+        m &&
+        (m.role === "user" || m.role === "assistant") &&
+        typeof m.content === "string" &&
+        m.content.trim().length > 0
+    );
+
+    // Ensure the conversation after system prompt starts with a 'user' message
+    const firstUserIndex = rawFiltered.findIndex((m: any) => m.role === "user");
+    const validHistory =
+      firstUserIndex !== -1 ? rawFiltered.slice(firstUserIndex) : rawFiltered;
+
     const sanitizedMessages: ChatMessage[] = [
       { role: "system", content: ASTRONOMY_SYSTEM_PROMPT },
-      ...messages
-        .filter(
-          (m: any) =>
-            m &&
-            (m.role === "user" || m.role === "assistant") &&
-            typeof m.content === "string" &&
-            m.content.trim().length > 0
-        )
-        .slice(-10) // Keep last 10 turns for optimal context window & speed
-        .map((m: any) => ({
-          role: m.role as "user" | "assistant",
-          content: m.content.trim(),
-        })),
+      ...validHistory.slice(-8).map((m: any) => ({
+        role: m.role as "user" | "assistant",
+        content: m.content.trim(),
+      })),
     ];
 
-    const apiUrl = `${NARA_ROUTER_BASE_URL.replace(/\/+$/, "")}/chat/completions`;
+    const apiUrl = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s safety timeout for deep reasoning
+    let assistantMessage = "";
+    let usedModel = primaryModel;
+    let lastError: any = null;
 
-    const response = await fetch(apiUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${NARA_ROUTER_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: NARA_ROUTER_MODEL,
-        messages: sanitizedMessages,
-        temperature: 0.7,
-        max_tokens: 1000,
-        stream: false,
-      }),
-      signal: controller.signal,
-    });
+    // Try candidate models sequentially with timeout
+    for (const model of candidateModels) {
+      try {
+        console.log(`[AI Chat] Attempting inference with model: ${model}`);
+        const controller = new AbortController();
+        const timeoutMs = model === primaryModel ? 35000 : 20000;
+        const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    clearTimeout(timeoutId);
+        const response = await fetch(apiUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            messages: sanitizedMessages,
+            temperature: 0.7,
+            max_tokens: 800,
+            stream: false,
+          }),
+          signal: controller.signal,
+        });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[Nara Router Error]", response.status, errorText);
-      return NextResponse.json(
-        {
-          error: `Nara Router API error: ${response.status} ${response.statusText}`,
-          details: errorText,
-        },
-        { status: response.status }
-      );
+        clearTimeout(timeoutId);
+
+        if (response.ok) {
+          const data = await response.json();
+          const content = data.choices?.[0]?.message?.content;
+          if (content && typeof content === "string" && content.trim()) {
+            assistantMessage = content.trim();
+            usedModel = data.model || model;
+            console.log(`[AI Chat] Successfully responded using ${usedModel}`);
+            break; // Success! Exit model loop
+          }
+        } else {
+          const errText = await response.text();
+          console.warn(`[AI Chat] Model ${model} returned ${response.status}:`, errText);
+          lastError = errText;
+        }
+      } catch (err: any) {
+        console.warn(`[AI Chat] Error or timeout with model ${model}:`, err.message);
+        lastError = err;
+      }
     }
 
-    const data = await response.json();
-    const assistantMessage =
-      data.choices?.[0]?.message?.content ||
-      "Telemetry signal lost. No response received from Nara Router.";
+    if (!assistantMessage) {
+      throw new Error(
+        lastError?.message ||
+          "Telemetry link busy: Deep Space Command Center is taking longer than expected. Please retry."
+      );
+    }
 
     const latencyMs = Date.now() - startTime;
 
     return NextResponse.json({
       success: true,
       message: assistantMessage,
-      model: data.model || NARA_ROUTER_MODEL,
+      model: usedModel,
       latencyMs,
-      usage: data.usage || null,
     });
   } catch (error: any) {
     const latencyMs = Date.now() - startTime;
     console.error("[AI Chat API Exception]", error);
 
-    if (error.name === "AbortError") {
-      return NextResponse.json(
-        {
-          error: "Request timed out waiting for Nara Router response (45s).",
-          latencyMs,
-        },
-        { status: 504 }
-      );
-    }
-
     return NextResponse.json(
       {
-        error: error.message || "An unexpected error occurred during AI processing.",
+        error:
+          error.message ||
+          "Telemetry link timeout. Deep Space Command Center queue is congested. Please try again.",
         latencyMs,
       },
       { status: 500 }
