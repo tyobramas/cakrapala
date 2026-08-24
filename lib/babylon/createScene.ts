@@ -68,6 +68,8 @@ export function createScene(canvas: HTMLCanvasElement): SceneRig {
   );
   camera.lowerRadiusLimit = CAMERA_MIN_RADIUS;
   camera.upperRadiusLimit = CAMERA_MAX_RADIUS;
+  camera.minZ = 0.5;
+  camera.maxZ = 12000;
   camera.attachControl(canvas, /* noPreventDefault */ true);
   // Smooth inertia for a premium feel.
   camera.inertia = 0.75;
