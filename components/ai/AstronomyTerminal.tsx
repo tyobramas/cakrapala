@@ -49,6 +49,11 @@ interface AstronomyTerminalProps {
 
 const QUICK_COMMANDS = [
   {
+    label: "> /orbital-trajectories",
+    prompt:
+      "Explain how Hohmann Transfer orbits and Lunar Free-Return trajectories calculate Delta-V burns to reach the Moon.",
+  },
+  {
     label: "> /asteroid-defense",
     prompt:
       "Bagaimana sistem pertahanan planet mendeteksi dan mengantisipasi ancaman asteroid dekat Bumi (NEO)?",

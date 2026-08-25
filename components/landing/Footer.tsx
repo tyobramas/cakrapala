@@ -19,6 +19,7 @@ import {
   Compass,
   ArrowUpRight,
   Crosshair,
+  Rocket,
 } from "lucide-react";
 
 export default function Footer() {
@@ -125,6 +126,19 @@ export default function Footer() {
                     <span>ISS &amp; Satellite Live Radar</span>
                   </div>
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-amber-400 transition-colors" />
+                </Link>
+              </li>
+
+              <li>
+                <Link
+                  href="/trajectories"
+                  className="group flex items-center justify-between p-2 rounded-xl bg-[#060b18]/60 hover:bg-[#16233b] border border-slate-800 hover:border-emerald-500/40 text-slate-300 hover:text-white transition-all"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Rocket className="w-4 h-4 text-emerald-400 group-hover:translate-x-0.5 transition-transform" />
+                    <span>Orbital Trajectory &amp; Lunar Planner</span>
+                  </div>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-emerald-400 transition-colors" />
                 </Link>
               </li>
 

@@ -109,3 +109,12 @@ canvas {
   border-color: rgba(56, 189, 248, 0.35);
 }
 
+/* Hide Next.js dev indicator floating badge in bottom-left corner */
+nextjs-portal,
+#next-dev-indicator,
+[data-nextjs-toast],
+[data-nextjs-dev-overlay] {
+  display: none !important;
+}
+
+

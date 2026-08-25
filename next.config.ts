@@ -16,6 +16,9 @@ import type { NextConfig } from "next";
  */
 
 const nextConfig: NextConfig = {
+  // Disable floating development indicator badge
+  devIndicators: false,
+
   // Allow local development origins to prevent cross-origin dev resource blocking
   allowedDevOrigins: ["127.0.0.1", "localhost", "192.168.3.86"],
 

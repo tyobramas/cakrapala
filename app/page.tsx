@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Navbar from "@/components/landing/Navbar";
 import CosmicCanvas from "@/components/landing/CosmicCanvas";
 import HeroSection from "@/components/landing/HeroSection";
-import CelestialTicker from "@/components/landing/CelestialTicker";
 import ExplorationModules from "@/components/landing/ExplorationModules";
 import Footer from "@/components/landing/Footer";
 
@@ -21,16 +20,13 @@ export default function LandingPage() {
       {/* Top Aerospace Navbar */}
       <Navbar />
 
-      {/* 1. Master Aerospace Flight Deck & 3D Milky Way */}
+      {/* 1. ISS Command Center — 3D Earth Globe + Data Analytics */}
       <HeroSection />
 
-      {/* 2. Live Celestial Astrodynamic Event Ticker */}
-      <CelestialTicker />
-
-      {/* 3. Primary Observatory Exploration Modules */}
+      {/* 2. Primary Observatory Exploration Modules */}
       <ExplorationModules />
 
-      {/* 4. Futuristic NASA-grade Footer */}
+      {/* 3. Futuristic NASA-grade Footer */}
       <Footer />
     </div>
   );

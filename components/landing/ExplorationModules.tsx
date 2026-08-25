@@ -14,6 +14,7 @@ import {
   Layers,
   Crosshair,
   BookOpen,
+  Rocket,
 } from "lucide-react";
 
 interface ModuleCard {
@@ -157,6 +158,31 @@ const MODULES: ModuleCard[] = [
       "Mathematical LaTeX Formulations",
       "A-Z Scrubber & Domain Filtering",
       "Direct 1-Click SYS-AI Query Bridge",
+    ],
+  },
+  {
+    id: "trajectories",
+    mfdCode: "MODULE 06 // FLIGHT PLANNER",
+    title: "Orbital Trajectory & Lunar Planner",
+    subtitle: "ASTRODYNAMICS & Δv FLIGHT OPTIMIZER",
+    description: "Interactive 3D orbital trajectory mission design console. Real-time Keplerian orbital propagation, Hohmann transfers, Trans-Lunar Injection (TLI), 3-Body Free-Return figure-8 loops, and AI Delta-V budget optimization.",
+    href: "/trajectories",
+    badge: "ASTRODYNAMICS 3D",
+    badgeColor: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
+    engine: "Three.js & Keplerian Mechanics",
+    icon: Rocket,
+    gradient: "from-[#182037]/85 to-[#0d1425]/90",
+    borderColor: "border-slate-700/50 hover:border-emerald-400",
+    telemetry: [
+      { label: "MECHANICS", value: "KEPLER & CR3BP" },
+      { label: "TRANSFERS", value: "HOHMANN & TLI" },
+      { label: "OPTIMIZER", value: "AI Δv BUDGET SOLVER" },
+    ],
+    features: [
+      "Real-Time 3D Trajectory Spline Rendering",
+      "Trans-Lunar Injection & 3-Body Free Return",
+      "Launch Site Azimuth & Rotational Boost",
+      "Rocket Engine Burn Delta-V Breakdown",
     ],
   },
 ];
