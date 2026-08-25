@@ -27,6 +27,7 @@ import {
   Crosshair,
   Terminal,
   Bot,
+  BookOpen,
 } from "lucide-react";
 import AstronomyTerminal from "@/components/ai/AstronomyTerminal";
 
@@ -82,6 +83,15 @@ export default function Navbar() {
       code: "SYS-04",
       icon: Satellite,
       desc: "Real-Time SGP4 Orbital Fleet Tracker",
+    },
+    {
+      id: "codex",
+      label: "SPACE CODEX",
+      shortLabel: "CODEX",
+      href: "/codex",
+      code: "SYS-05",
+      icon: BookOpen,
+      desc: "Universal Astronomical Encyclopedia",
     },
   ];
 

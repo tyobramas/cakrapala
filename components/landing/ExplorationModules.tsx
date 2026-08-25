@@ -13,6 +13,7 @@ import {
   ArrowUpRight,
   Layers,
   Crosshair,
+  BookOpen,
 } from "lucide-react";
 
 interface ModuleCard {
@@ -131,6 +132,31 @@ const MODULES: ModuleCard[] = [
       "Mathematically Exact Orbit Intersect",
       "Photorealistic 3D Globe & 2D Radar",
       "Active Astronaut Crew Manifest",
+    ],
+  },
+  {
+    id: "codex",
+    mfdCode: "MODULE 05 // SPACE CODEX",
+    title: "Universal Space Codex",
+    subtitle: "ASTRONOMICAL ALMANAC & LEXICON",
+    description: "Interactive 100% English astrophysics encyclopedia and space almanac. Certified IAU definitions, mathematical formulations, orbital mechanics, and integrated AI terminal queries.",
+    href: "/codex",
+    badge: "IAU ENCYCLOPEDIA",
+    badgeColor: "bg-sky-500/15 text-sky-300 border-sky-500/40",
+    engine: "Next.js & IAU Lexicon",
+    icon: BookOpen,
+    gradient: "from-[#182037]/85 to-[#0d1425]/90",
+    borderColor: "border-slate-700/50 hover:border-sky-400",
+    telemetry: [
+      { label: "ENTRIES", value: "50+ ASTRONOMY TERMS" },
+      { label: "DOMAINS", value: "6 SCIENTIFIC FIELDS" },
+      { label: "AI BRIDGE", value: "SYS-AI ASTRO-TERMINAL" },
+    ],
+    features: [
+      "100% English Verified Definitions",
+      "Mathematical LaTeX Formulations",
+      "A-Z Scrubber & Domain Filtering",
+      "Direct 1-Click SYS-AI Query Bridge",
     ],
   },
 ];
