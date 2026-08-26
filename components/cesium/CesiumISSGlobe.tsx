@@ -376,10 +376,7 @@ export default function CesiumISSGlobe({
     const animate = () => {
       animId = requestAnimationFrame(animate);
 
-      // Rotate clouds slowly
-      if (cloudsMeshRef.current) {
-        cloudsMeshRef.current.rotation.y += 0.0003;
-      }
+      // Earth & atmosphere remain completely stationary (ECEF fixed frame)
 
       // Pulse Satellite radar ring
       pulseAngle += 0.04;
