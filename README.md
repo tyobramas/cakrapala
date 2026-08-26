@@ -19,7 +19,7 @@ Despite billions of dollars invested in space exploration, global astronomical l
 
 * **Role of IBM Bob (AI Engineering & Architecture Copilot)**:
   * **Architectural Acceleration**: **IBM Bob** served as the core enterprise AI copilot guiding the end-to-end software architecture, modular decomposition, and Keplerian mathematical formulation.
-  * **High-Precision Algorithmic Synthesis**: Accelerated the development of complex coordinate transformation matrices (ECEF $\leftrightarrow$ ENU $\leftrightarrow$ Topocentric Az/Alt), SGP4 orbital propagation, and hyperbolic trajectory curves.
+  * **High-Precision Algorithmic Synthesis**: Accelerated the development of complex coordinate transformation matrices (ECEF ⇄ ENU ⇄ Topocentric Az/Alt), SGP4 orbital propagation, and hyperbolic trajectory curves.
   * **Code Quality & Type Safety**: Ensured strict TypeScript type definitions, zero-regression builds, and optimized server-side caching routines for NASA JPL API endpoints.
 
 * **Embedded AI Assistant (IBM Granite Space AI Co-Pilot)**:
@@ -28,13 +28,13 @@ Despite billions of dollars invested in space exploration, global astronomical l
 
 * **NASA JPL NeoWs Real-Time Telemetry Engine**:
   * Automated ingestion of Near-Earth Objects (NEOs) with server-side caching (`app/api/asteroids/route.ts`).
-  * Mathematical conversion of Lunar Distances ($1\text{ LD} \approx 384,400\text{ km}$), relative approach velocities, and orbital elements ($a, e, i, \Omega, \omega$).
-  * Kinetic impact energy evaluation ($E = \frac{1}{2}mv^2$ in Megatons of TNT equivalent).
+  * Mathematical conversion of Lunar Distances (1 LD ≈ 384,400 km), relative approach velocities, and orbital elements (a, e, i, Ω, ω).
+  * Kinetic impact energy evaluation (E = 0.5 · m · v² in Megatons of TNT equivalent).
 
 * **Photorealistic 3D Spatial Graphics (Three.js & CesiumJS)**:
-  * Textured Earth model with true $23.44^\circ$ axial tilt and Rayleigh atmospheric scattering glow.
-  * Deep-space asymptotic hyperbolic trajectory ribbons spanning interplanetary distances ($280+$ 3D units).
-  * High-resolution camera-facing billboard tactical approaching chevrons ($\gg$).
+  * Textured Earth model with true 23.44° axial tilt and Rayleigh atmospheric scattering glow.
+  * Deep-space asymptotic hyperbolic trajectory ribbons spanning interplanetary distances (280+ 3D units).
+  * High-resolution camera-facing billboard tactical approaching chevrons (>>).
 
 * **NORAD SGP4 Multi-Satellite Fleet Tracking**:
   * Real-time SGP4 orbit calculation for ISS, Tiangong CSS, Hubble Space Telescope, NOAA-19, Terra, and Starlink.
@@ -44,7 +44,7 @@ Despite billions of dollars invested in space exploration, global astronomical l
 ### 3. Relevance to Challenge Theme
 
 * **Transforming Open Data into High-Impact Public Utility**: Bridges the gap between complex open government APIs (NASA Open Data, CelesTrak) and civilian public safety by delivering a reliable planetary defense monitoring system.
-* **Human-Centered Design Thinking**: Engineered through systematic user discovery (*Empathize $\rightarrow$ Persona $\rightarrow$ Define $\rightarrow$ Ideate $\rightarrow$ Prototype*), replacing overwhelming data spreadsheets with intuitive physical size comparisons (*e.g., Monas 132m, Eiffel Tower 330m, Boeing 747 70m*).
+* **Human-Centered Design Thinking**: Engineered through systematic user discovery (*Empathize → Persona → Define → Ideate → Prototype*), replacing overwhelming data spreadsheets with intuitive physical size comparisons (*e.g., Monas 132m, Eiffel Tower 330m, Boeing 747 70m*).
 * **Enterprise-Grade AI Integration**: Demonstrates the real-world power of **IBM Bob** and **IBM Granite** in accelerating scientific software engineering, complex mathematical modeling, and conversational user interfaces.
 * **Universal Web Accessibility**: Operates natively in any modern web browser via WebGL with zero installation barriers.
 
@@ -66,8 +66,8 @@ Despite billions of dollars invested in space exploration, global astronomical l
 
 ### 1. The Problem
 Space mission design and trajectory planning traditionally require proprietary, expensive desktop toolchains (e.g., STK, GMAT) that create an **accessibility and comprehension barrier**:
-* **Complex Multi-Constraint Trade-Offs**: Calculating whether a launch vehicle can reach a target orbit or return safely from the Moon involves intricate relationships between payload mass, specific impulse ($I_{sp}$), gravitational assist, and orbital plane inclination.
-* **Information Disconnect**: Theoretical $\Delta v$ spreadsheets lack intuitive, real-time 3D spatial representations, making it difficult for students, aerospace engineers, and decision-makers to immediately grasp trajectory geometry, launch site positioning, and Earth-Moon spatial relationships.
+* **Complex Multi-Constraint Trade-Offs**: Calculating whether a launch vehicle can reach a target orbit or return safely from the Moon involves intricate relationships between payload mass, specific impulse (Isp), gravitational assist, and orbital plane inclination.
+* **Information Disconnect**: Theoretical Delta-V spreadsheets lack intuitive, real-time 3D spatial representations, making it difficult for students, aerospace engineers, and decision-makers to immediately grasp trajectory geometry, launch site positioning, and Earth-Moon spatial relationships.
 
 ---
 
@@ -78,64 +78,99 @@ Space mission design and trajectory planning traditionally require proprietary, 
 3. **Photorealistic 3D Spatial Theater**:
    * **Full 360° Daytime Earth (NASA 4K Blue Marble)**: Eliminates dark shadows so all global launch sites, continents, and trajectory ground tracks remain crystal-clear from any camera angle.
    * **Exact Florida / Launch Site Pinning**: Precise geodetic-to-ECI coordinate alignment anchoring the liftoff point directly to the physical spaceport on Earth's surface.
-   * **Apollo Figure-8 Lunar Free-Return Loop**: Continuous, gap-free retrograde hyperbolic trajectory that wraps gracefully around the far side of the Moon at perilune and returns directly to Earth's atmospheric entry interface ($120\text{ km}$).
+   * **Apollo Figure-8 Lunar Free-Return Loop**: Continuous, gap-free retrograde hyperbolic trajectory that wraps gracefully around the far side of the Moon at perilune and returns directly to Earth's atmospheric entry interface (120 km).
 4. **Interactive Flight Phase & Altitude Profile Graphic**:
    * **Multi-Color Flight Timeline Bar**: Visual phase breakdown mapping directly to 3D trajectory colors:
      * 🟠 **Outbound TLI Transfer (Orange)**: LEO departure burn on prograde transfer ellipse toward the Moon.
-     * 🟣 **Lunar Perilune Flyby (Violet)**: Hyperbolic gravity slingshot swinging behind the Moon ($200\text{ km}$ perilune).
-     * 🔵 **Earth Free-Return Leg (Blue)**: Ballistic return path converging on Earth's atmospheric entry interface ($120\text{ km}$).
+     * 🟣 **Lunar Perilune Flyby (Violet)**: Hyperbolic gravity slingshot swinging behind the Moon (200 km perilune).
+     * 🔵 **Earth Free-Return Leg (Blue)**: Ballistic return path converging on Earth's atmospheric entry interface (120 km).
    * **Dynamic SVG Altitude Profile**: Real-time altitude geometry sparkline mapping the space vehicle's altitude curve from liftoff to lunar encounter and atmospheric reentry.
-5. **Focused Decision Output & AI Post-Analysis**: Single-mode optimization (*Fastest Feasible / Shortest Time*) delivering an instantaneous feasibility verdict, $\Delta v$ budget breakdown, flight timelines, and AI-driven mission risk assessment.
+5. **Focused Decision Output & AI Post-Analysis**: Single-mode optimization (*Fastest Feasible / Shortest Time*) delivering an instantaneous feasibility verdict, Delta-V budget breakdown, flight timelines, and AI-driven mission risk assessment.
 
 ---
 
 ### 3. Astrodynamics & Mathematical Formulation
 
 #### A. Rocket Performance & Delta-V Capacity (Tsiolkovsky Rocket Equation)
-The vehicle's available velocity increment $\Delta v_{\text{avail}}$ is governed by the Tsiolkovsky equation:
-$$\Delta v_{\text{avail}} = I_{\text{sp}} \cdot g_0 \cdot \ln\left(\frac{m_{\text{wet}}}{m_{\text{dry}} + m_{\text{payload}}}\right)$$
-* Where $I_{\text{sp}}$ is the vacuum specific impulse $(\text{s})$, $g_0 = 9.80665\text{ m/s}^2$ is standard gravity, $m_{\text{wet}}$ is total vehicle mass, $m_{\text{dry}}$ is structural mass, and $m_{\text{payload}}$ is the payload mass.
+The vehicle's available velocity increment (Δv_avail) is calculated via the Tsiolkovsky equation:
+
+```
+Δv_avail = Isp · g₀ · ln( m_wet / (m_dry + m_payload) )
+```
+
+* **Isp**: Vacuum specific impulse of the propulsion system (seconds)
+* **g₀**: Standard gravitational acceleration (9.80665 m/s²)
+* **m_wet**: Initial vehicle wet mass (structural mass + propellant + payload)
+* **m_dry + m_payload**: Final burnout mass after propellant expenditure
 
 ---
 
 #### B. Satellite Launch Orbit Mechanics (LEO Insertion & Plane Change)
-1. **Circular Orbital Velocity at Target Altitude ($h$)**:
-   $$v_{\text{circ}} = \sqrt{\frac{\mu_E}{R_E + h}}$$
-   * Where $\mu_E = 3.986004418 \times 10^{14}\text{ m}^3/\text{s}^2$ and $R_E = 6,378.137\text{ km}$.
 
-2. **Earth Rotation Boost from Launch Site Latitude ($\phi$)**:
-   $$v_{\text{rot}} = \omega_E \cdot (R_E + h_{\text{elev}}) \cdot \cos(\phi)$$
-   * Where $\omega_E = 7.2921159 \times 10^{-5}\text{ rad/s}$.
+1. **Circular Orbital Velocity at Target Altitude (h)**:
+   ```
+   v_circ = √( μ_E / (R_E + h) )
+   ```
+   * **μ_E**: Earth gravitational parameter (398,600.44 km³/s²)
+   * **R_E**: Earth mean equatorial radius (6,378.137 km)
+   * **h**: Target orbital altitude above mean sea level
+
+2. **Earth Rotation Boost from Launch Site Latitude (φ)**:
+   ```
+   v_rot = ω_E · (R_E + h_elev) · cos(φ)
+   ```
+   * **ω_E**: Earth angular rotation rate (7.2921159 × 10⁻⁵ rad/s)
+   * **h_elev**: Launch site elevation above sea level
 
 3. **Total Launch Delta-V Requirement**:
-   $$\Delta v_{\text{req}} = v_{\text{circ}} - v_{\text{rot}} + \Delta v_{\text{grav}} + \Delta v_{\text{drag}} + \Delta v_{\text{steering}} + \Delta v_{\text{plane}}$$
-   * Where aerodynamic and gravity losses are modeled as $\approx 1,250\text{ m/s} \cdot \left(\frac{h}{200}\right)^{0.05}$, and orbital plane inclination penalty is:
-   $$\Delta v_{\text{plane}} = 2 \cdot v_{\text{circ}} \cdot \sin\left(\frac{|\Delta i|}{2}\right) \quad \text{if } i < |\phi|$$
+   ```
+   Δv_req = v_circ - v_rot + Δv_grav + Δv_drag + Δv_steering + Δv_plane
+   ```
+   * **Atmospheric & Gravity Losses**: Modeled as `≈ 1,250 m/s · (h / 200)^0.05`
+   * **Orbital Plane Change Penalty**:
+     ```
+     Δv_plane = 2 · v_circ · sin( |Δi| / 2 )   [if target inclination < launch latitude]
+     ```
 
 ---
 
-#### C. Lunar Free-Return Mechanics (Lambert Solver & Patched-Conic Slingshot)
-1. **Trans-Lunar Injection (TLI) from Parking Orbit ($r_0 = R_E + h_{\text{park}}$)**:
-   $$v_{\text{TLI}} = \sqrt{\frac{2\mu_E}{r_0} - \frac{2\mu_E}{r_0 + r_{\text{Moon}}}}$$
-   $$\Delta v_{\text{TLI}} = v_{\text{TLI}} - \sqrt{\frac{\mu_E}{r_0}}$$
+#### C. Lunar Free-Return Mechanics (Lambert Transfer & Patched-Conic Slingshot)
+
+1. **Trans-Lunar Injection (TLI) from Parking Orbit (r₀ = R_E + h_park)**:
+   ```
+   v_TLI = √( 2·μ_E / r₀ - 2·μ_E / (r₀ + r_Moon) )
+   Δv_TLI = v_TLI - √( μ_E / r₀ )
+   ```
+   * **r₀**: Earth circular parking orbit radius (6,578 km for 200 km LEO)
+   * **r_Moon**: Distance to Moon at intercept epoch (~384,400 km)
 
 2. **Hyperbolic Flyby & Retrograde Gravity Slingshot**:
-   The spacecraft approaches the Moon's leading edge with hyperbolic excess velocity $\mathbf{v}_\infty$. The Moon's gravitational parameter $\mu_M = 4.9048695 \times 10^{12}\text{ m}^3/\text{s}^2$ bends the trajectory by turn angle $\delta$:
-   $$\sin\left(\frac{\delta}{2}\right) = \frac{1}{1 + \frac{r_{\text{peri}} \cdot v_\infty^2}{\mu_M}}$$
-   * Where $r_{\text{peri}} = R_{\text{Moon}} + h_{\text{perilune}}$ is the perilune radius from the Moon's center ($R_{\text{Moon}} = 1,737.4\text{ km}$).
+   The spacecraft approaches the Moon's leading edge with hyperbolic excess velocity (v_inf). The Moon's gravitational parameter (μ_M = 4,904.87 km³/s²) bends the trajectory by turn angle (δ):
+
+   ```
+   sin( δ / 2 ) = 1 / ( 1 + (r_peri · v_inf² / μ_M) )
+   ```
+   * **r_peri**: Perilune radius from Moon center = R_Moon (1,737.4 km) + h_perilune (200 km)
 
 3. **Continuous 3D Figure-8 Coordinate Synthesis**:
-   In Moon-centered orbital coordinates defined by radial unit vector $\hat{\mathbf{u}}_{\text{rad}} = \frac{\mathbf{r}_M}{\|\mathbf{r}_M\|}$ and tangential velocity unit vector $\hat{\mathbf{u}}_{\text{tan}}$:
-   $$\mathbf{r}_{\text{flyby}}(\theta) = \mathbf{r}_M + r_M(\theta) \left[\cos(\theta)\,\hat{\mathbf{u}}_{\text{rad}} - \sin(\theta)\,\hat{\mathbf{u}}_{\text{tan}}\right], \quad \theta \in \left[-\frac{\pi}{2}, +\frac{\pi}{2}\right]$$
-   This guarantees that the spacecraft sweeps smoothly behind the Moon's far side at perilune ($\theta = 0$) without clipping through the lunar surface, directly routing the return vector toward Earth's atmospheric entry interface ($h = 120\text{ km}$).
+   In Moon-centered orbital coordinates defined by radial unit vector (u_rad) and tangential flight velocity unit vector (u_tan):
+
+   ```
+   r_flyby(θ) = r_Moon + r_M(θ) · [ cos(θ) · u_rad - sin(θ) · u_tan ],   θ ∈ [-π/2, +π/2]
+   ```
+   * Sweeps continuously behind the Moon's far side at perilune (θ = 0) without clipping through the lunar surface, directly routing the return vector toward Earth's atmospheric entry interface (h = 120 km).
 
 ---
 
 #### D. Mission Feasibility & Margin Classification
-$$\text{Margin } (\Delta v_{\text{margin}}) = \Delta v_{\text{avail}} - \Delta v_{\text{req}}$$
-* **Feasible** ($\Delta v_{\text{margin}} \ge 500\text{ m/s}$): Green indicator; mission possesses nominal safety reserves.
-* **Marginal** ($0 \le \Delta v_{\text{margin}} < 500\text{ m/s}$): Amber indicator; high risk of mission failure without precision midcourse trimming.
-* **Infeasible** ($\Delta v_{\text{margin}} < 0\text{ m/s}$): Red indicator; vehicle propellant capacity is insufficient for the requested payload and orbit.
+
+```
+Margin (Δv_margin) = Δv_avail - Δv_req
+```
+
+* **Feasible** (Δv_margin ≥ 500 m/s): Green indicator; nominal capability with safety reserves.
+* **Marginal** (0 ≤ Δv_margin < 500 m/s): Amber indicator; flight possible under nominal conditions, sensitive to trajectory dispersion.
+* **Infeasible** (Δv_margin < 0 m/s): Red indicator; vehicle propellant capacity is insufficient for the requested payload and orbit.
 
 ---
 
