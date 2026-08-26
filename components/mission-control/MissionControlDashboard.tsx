@@ -37,7 +37,7 @@ import { validateTrajectory } from "@/lib/mission-control/trajectoryValidation";
 import { generateDeterministicMissionAnalysis } from "@/lib/mission-control/aiMissionAnalysis";
 import MissionBriefPanel from "./MissionBriefPanel";
 import DecisionPanel from "./DecisionPanel";
-import ModelLimitationsNotice from "./ModelLimitationsNotice";
+import Link from "next/link";
 import {
   Rocket,
   Cpu,
@@ -45,6 +45,8 @@ import {
   ChevronLeft,
   ChevronRight,
   RotateCcw,
+  ArrowLeft,
+  Home,
 } from "lucide-react";
 
 // Dynamic import for MissionTheater (Three.js WebGL — client only)
@@ -379,9 +381,21 @@ export default function MissionControlDashboard() {
       <header className="sticky top-0 z-30 bg-[#030712]/95 backdrop-blur-xl border-b border-slate-800/60 px-4 py-3">
         <div className="max-w-[1920px] mx-auto flex items-center justify-between">
           <div className="flex items-center gap-3">
+            {/* Back to Home Button */}
+            <Link
+              href="/"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 text-slate-300 hover:text-white transition-all text-[11px] font-bold shadow-sm group cursor-pointer"
+              title="Return to Main Observatory Home"
+            >
+              <ArrowLeft className="w-3.5 h-3.5 text-cyan-400 group-hover:-translate-x-0.5 transition-transform" />
+              <span>Home</span>
+            </Link>
+
+            <div className="h-4 w-[1px] bg-slate-800 hidden sm:block" />
+
             <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/40">
               <Rocket className="w-3.5 h-3.5 text-emerald-400" />
-              <span className="text-[10px] font-bold text-emerald-300">SYS-02</span>
+              <span className="text-[10px] font-bold text-emerald-300">SYS-05</span>
             </div>
             <div>
               <h1 className="text-sm font-black tracking-wider uppercase text-white flex items-center gap-2">
