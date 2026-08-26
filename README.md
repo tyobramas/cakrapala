@@ -6,47 +6,89 @@
 
 ---
 
-### 1. Problem Solved
-Despite billions of dollars invested in space exploration, global astronomical literacy faces a profound **information visualization gap**:
+## 🎯 1. Problem Statement
 
-1. **Space Disinformation & Misinformation Mitigation**: Eliminates sensationalist media panic by providing citizens, students, and researchers with a transparent, zero-bias radar to inspect verified NASA asteroid trajectories, flyby miss distances, and Torino impact risk scales in real time.
-2. **STEM & Astrophysics Education Accessibility**: Translates abstract mathematical concepts—such as Keplerian elliptical orbits, hyperbolic gravitational flybys, orbital inclination, and sidereal time—into interactive 3D WebGL simulations without requiring expensive software licenses or high-end GPU workstations.
-3. **Topocentric Observation from Earth**: Delivers precise observer-centric vector coordinates (Azimuth & Altitude) and Greenwich Mean Sidereal Time (GMST) calibrated for local observers worldwide using geodetic WGS-84 ellipsoid transformations.
+Despite billions of dollars invested in global space exploration and orbital infrastructure, scientific literacy and planetary defense face critical visualization and comprehension barriers:
 
----
-
-### 2. AI & Technical Approach (Powered by IBM Bob & IBM Granite)
-
-* **Role of IBM Bob (AI Engineering & Architecture Copilot)**:
-  * **Architectural Acceleration**: **IBM Bob** served as the core enterprise AI copilot guiding the end-to-end software architecture, modular decomposition, and Keplerian mathematical formulation.
-  * **High-Precision Algorithmic Synthesis**: Accelerated the development of complex coordinate transformation matrices (ECEF ⇄ ENU ⇄ Topocentric Az/Alt), SGP4 orbital propagation, and hyperbolic trajectory curves.
-  * **Code Quality & Type Safety**: Ensured strict TypeScript type definitions, zero-regression builds, and optimized server-side caching routines for NASA JPL API endpoints.
-
-* **Embedded AI Assistant (IBM Granite Space AI Co-Pilot)**:
-  * **Domain-Tuned Astrophysical Reasoning**: An embedded conversational AI co-pilot capable of answering complex inquiries regarding orbital mechanics, asteroid classification (Apollo, Amor, Aten), satellite orbital decay, and deep-space missions.
-  * **Voice Command Interface**: Bidirectional speech recognition and tactical voice synthesis for hands-free mission control navigation.
-
-* **NASA JPL NeoWs Real-Time Telemetry Engine**:
-  * Automated ingestion of Near-Earth Objects (NEOs) with server-side caching (`app/api/asteroids/route.ts`).
-  * Mathematical conversion of Lunar Distances (1 LD ≈ 384,400 km), relative approach velocities, and orbital elements (a, e, i, Ω, ω).
-  * Kinetic impact energy evaluation (E = 0.5 · m · v² in Megatons of TNT equivalent).
-
-* **Photorealistic 3D Spatial Graphics (Three.js & CesiumJS)**:
-  * Textured Earth model with true 23.44° axial tilt and Rayleigh atmospheric scattering glow.
-  * Deep-space asymptotic hyperbolic trajectory ribbons spanning interplanetary distances (280+ 3D units).
-  * High-resolution camera-facing billboard tactical approaching chevrons (>>).
-
-* **NORAD SGP4 Multi-Satellite Fleet Tracking**:
-  * Real-time SGP4 orbit calculation for ISS, Tiangong CSS, Hubble Space Telescope, NOAA-19, Terra, and Starlink.
+1. **Space Disinformation & Sensationalism**: Mainstream media frequently publishes alarmist headlines regarding Near-Earth Asteroids (NEOs). The public lacks an accessible, verified radar to independently inspect true miss distances (in Lunar Distances), orbital trajectories, and Torino impact risk scales in real time.
+2. **Abstract Astrophysics & STEM Education Barriers**: Fundamental orbital mechanics concepts—such as Keplerian elliptical orbits, hyperbolic gravity slingshots, orbital inclination penalties, and sidereal time—are difficult to grasp through 2D textbook diagrams and equations without interactive spatial 3D simulation.
+3. **Mission Planning & Delta-V Accessibility**: Trajectory planning for satellite launches and lunar exploration traditionally requires expensive, proprietary enterprise desktop software (e.g., STK, GMAT), creating an immense barrier for students, researchers, and aerospace enthusiasts.
 
 ---
 
-### 3. Relevance to Challenge Theme
+## 💡 2. Solution Description
 
-* **Transforming Open Data into High-Impact Public Utility**: Bridges the gap between complex open government APIs (NASA Open Data, CelesTrak) and civilian public safety by delivering a reliable planetary defense monitoring system.
-* **Human-Centered Design Thinking**: Engineered through systematic user discovery (*Empathize → Persona → Define → Ideate → Prototype*), replacing overwhelming data spreadsheets with intuitive physical size comparisons (*e.g., Monas 132m, Eiffel Tower 330m, Boeing 747 70m*).
-* **Enterprise-Grade AI Integration**: Demonstrates the real-world power of **IBM Bob** and **IBM Granite** in accelerating scientific software engineering, complex mathematical modeling, and conversational user interfaces.
-* **Universal Web Accessibility**: Operates natively in any modern web browser via WebGL with zero installation barriers.
+**Cakrapala** is a browser-native, WebGL-powered 3D space observatory and mission control cockpit that delivers real-time astronomical intelligence through five integrated modules:
+
+* **Real-Time Near-Earth Object (NEO) Radar**: Live tracking of asteroids ingested directly from NASA JPL NeoWs, displaying close-approach velocity, minimum miss distance, DEFCON threat status, and intuitive real-world physical size comparisons (e.g., Monas, Eiffel Tower, Boeing 747).
+* **Multi-Satellite Fleet Orbit Tracker**: High-precision SGP4 propagation of active space assets (ISS, Tiangong CSS, Hubble Space Telescope, NOAA-19, Terra, Starlink) over CesiumJS 3D geospatial globes.
+* **Topocentric IAU Ground Sky Dome**: Stellarium-style interactive sky view from any observer coordinate on Earth, rendering 9,000+ stars from the Yale Bright Star Catalog (BSC5) and 88 official IAU constellation vectors.
+* **Heliocentric 3D Solar System Orrery**: Multi-body Keplerian planetary simulator modeling orbital periods, eccentricities, and semi-major axes across all 8 major solar system planets.
+* **AI Mission Control Workspace (SYS-05)**: Physics-grounded decision-support cockpit for orbital satellite launches and Apollo-style Lunar Free-Return transfers with interactive 3D spatial flight paths and automated AI post-analysis.
+
+---
+
+## 🏆 3. Selected Challenge Theme
+
+* **Challenge Theme**: **AI for Science, Space Exploration & Open Data Innovation**
+* **Core Alignment**:
+  * **Open Government Data Utility**: Transforms complex, raw scientific APIs (NASA Open Data, NASA Horizons, CelesTrak NORAD, IAU) into high-impact public safety intelligence.
+  * **Human-Centered STEM Visualization**: Replaces overwhelming raw data spreadsheets with intuitive 3D graphics, color-coded trajectory phases, and physical scale comparisons.
+  * **Universal Web Accessibility**: Operates natively in any modern web browser via WebGL/WebAudio with zero installation barriers or hardware dependencies.
+
+---
+
+## 🤖 4. AI Approach & Technical Architecture
+
+```
+┌────────────────────────────────────────────────────────────────────────────────┐
+│                        CAKRAPALA AI & SYSTEM ARCHITECTURE                      │
+└────────────────────────────────────────────────────────────────────────────────┘
+                                        │
+    ┌───────────────────────────────────┼───────────────────────────────────┐
+    ▼                                   ▼                                   ▼
+┌───────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐
+│   DATA INGESTION      │   │  ASTRODYNAMICS SOLVER │   │   AI REASONING LAYER  │
+│  • NASA JPL NeoWs API │   │  • SGP4 Propagator    │   │  • IBM Granite Copilot│
+│  • CelesTrak TLEs     │   │  • Tsiolkovsky Engine │   │  • Gemini AI Analysis │
+│  • IAU Star Catalog   │   │  • Lambert Solver     │   │  • Voice Command HUD  │
+└───────────┬───────────┘   └───────────┬───────────┘   └───────────┬───────────┘
+            │                           │                           │
+            └───────────────────────────┼───────────────────────────┘
+                                        ▼
+    ┌───────────────────────────────────────────────────────────────────┐
+    │                 3D SPATIAL ENGINE (Three.js & CesiumJS)            │
+    │  • 360° Full Daylight Earth (NASA 4K Blue Marble, Zero Shadow)    │
+    │  • Exact Launch Site Pinning (Geodetic WGS-84 → ECI Coordinates)   │
+    │  • Apollo Figure-8 Free-Return Hyperbolic Slingshot Splines       │
+    │  • Interactive Flight Phase & Altitude Profile Visualizer         │
+    └───────────────────────────────────────────────────────────────────┘
+```
+
+1. **Embedded AI Assistant (IBM Granite Space AI Co-Pilot)**:
+   * Conversational natural language interface tuned for orbital mechanics, asteroid threat evaluation, and astronomical inquiries.
+   * Hands-free tactical voice recognition and audio telemetry feedback.
+2. **AI Mission Post-Analysis**:
+   * Automated synthesis of mission feasibility, Delta-V margin risks, key flight events, and mission recommendations.
+3. **Deterministic Pre-Flight Gatekeeper**:
+   * All trajectory paths are verified by physics solvers before 3D rendering to ensure mathematical precision and zero numerical clipping.
+
+---
+
+## 🛠️ 5. How IBM Bob Was Used
+
+**IBM Bob** served as the core enterprise AI software engineering and architecture copilot throughout the development lifecycle of Cakrapala:
+
+1. **Software Architecture & Modular Decomposition**:
+   * Guided the end-to-end Next.js 16 (App Router) + React 19 architecture, separating deterministic physics solvers (`lib/mission-control/`) from 3D WebGL rendering components (`components/mission-control/`).
+2. **High-Precision Algorithmic Synthesis**:
+   * Accelerated the mathematical implementation of complex coordinate transformations (Geodetic WGS-84 ⇄ ECEF ⇄ ECI ⇄ Three.js WebGL coordinates).
+   * Formulated the Tsiolkovsky rocket equation, circular orbit velocity equations, Lambert universal-variable transfer solver, and Patched-Conic hyperbolic flyby geometry.
+3. **Astrodynamic Figure-8 Trajectory Formulation**:
+   * Engineered the seamless Apollo Figure-8 retrograde lunar loop, guaranteeing continuous 3D tube geometry without mesh clipping or visual breaks.
+4. **Code Quality, Type Safety & Zero-Regression Verification**:
+   * Enforced strict TypeScript interfaces across all data contracts.
+   * Formulated automated Vitest unit test suites (`tests/mission-control/`) covering coordinate transforms, trajectory validation, AI analysis, and orbital planners (14/14 tests passing).
 
 ---
 
@@ -64,15 +106,8 @@ Despite billions of dollars invested in space exploration, global astronomical l
 
 ## 🛰️ Deep-Dive: AI Mission Control Engine (SYS-05)
 
-### 1. The Problem
-Space mission design and trajectory planning traditionally require proprietary, expensive desktop toolchains (e.g., STK, GMAT) that create an **accessibility and comprehension barrier**:
-* **Complex Multi-Constraint Trade-Offs**: Calculating whether a launch vehicle can reach a target orbit or return safely from the Moon involves intricate relationships between payload mass, specific impulse (Isp), gravitational assist, and orbital plane inclination.
-* **Information Disconnect**: Theoretical Delta-V spreadsheets lack intuitive, real-time 3D spatial representations, making it difficult for students, aerospace engineers, and decision-makers to immediately grasp trajectory geometry, launch site positioning, and Earth-Moon spatial relationships.
-
----
-
-### 2. The Solution
-**AI Mission Control** provides a lightweight, browser-native, physics-grounded decision-support cockpit:
+### 1. The Core Innovation
+**AI Mission Control** provides an intuitive, browser-native decision-support workspace:
 1. **Interactive Mission Briefing**: Rapid configuration of launch sites (Cape Canaveral / Florida, Guiana, Tanegashima, Kourou, Mahia, etc.), vehicle classes, payload mass, target altitudes, and flight windows.
 2. **Deterministic Physics Solver**: Real-time evaluation of launch vehicle capabilities, orbit insertions, and lunar flybys using verified astrodynamics equations.
 3. **Photorealistic 3D Spatial Theater**:
@@ -89,7 +124,7 @@ Space mission design and trajectory planning traditionally require proprietary, 
 
 ---
 
-### 3. Astrodynamics & Mathematical Formulation
+### 2. Astrodynamics & Mathematical Formulation
 
 #### A. Rocket Performance & Delta-V Capacity (Tsiolkovsky Rocket Equation)
 The vehicle's available velocity increment (Δv_avail) is calculated via the Tsiolkovsky equation:
