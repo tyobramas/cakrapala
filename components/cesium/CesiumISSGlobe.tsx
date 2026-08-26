@@ -157,7 +157,6 @@ export default function CesiumISSGlobe({
       setCesiumBaseUrl();
 
       const Cesium = await import("cesium");
-      await import("cesium/Build/Cesium/Widgets/widgets.css");
 
       if (destroyed || !containerRef.current) return;
 
