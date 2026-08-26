@@ -13,6 +13,7 @@
  */
 
 import type {
+  LaunchSite,
   LunarFreeReturnInput,
   MissionAnalysisResult,
   MissionCandidate,
