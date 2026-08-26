@@ -37,6 +37,7 @@ import { validateTrajectory } from "@/lib/mission-control/trajectoryValidation";
 import { generateDeterministicMissionAnalysis } from "@/lib/mission-control/aiMissionAnalysis";
 import MissionBriefPanel from "./MissionBriefPanel";
 import DecisionPanel from "./DecisionPanel";
+import ModelLimitationsNotice from "./ModelLimitationsNotice";
 import Link from "next/link";
 import {
   Rocket,
