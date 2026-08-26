@@ -62,7 +62,7 @@ export default function AsteroidTrackerLayout() {
             href="/"
             className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors"
           >
-            <span className="font-bold tracking-widest text-sm bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent">
+            <span className="font-orbitron font-black tracking-[0.2em] text-sm bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent">
               CAKRAPALA
             </span>
           </Link>

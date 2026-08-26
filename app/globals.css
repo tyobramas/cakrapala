@@ -10,6 +10,11 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+  --font-orbitron: var(--font-orbitron);
+}
+
+.font-orbitron {
+  font-family: var(--font-orbitron), system-ui, -apple-system, sans-serif;
 }
 
 html {

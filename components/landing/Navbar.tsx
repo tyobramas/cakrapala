@@ -135,10 +135,10 @@ export default function Navbar() {
           </div>
           <div>
             <div className="flex items-center gap-1.5">
-              <span className="font-mono font-black tracking-[0.18em] text-sm sm:text-base text-white uppercase bg-clip-text bg-gradient-to-r from-white via-slate-100 to-cyan-200">
+              <span className="font-orbitron font-black tracking-[0.22em] text-sm sm:text-base text-white uppercase bg-clip-text bg-gradient-to-r from-white via-cyan-100 to-cyan-300 drop-shadow-[0_0_12px_rgba(6,182,212,0.4)]">
                 CAKRAPALA
               </span>
-              <span className="text-[8px] font-mono tracking-wider px-1 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold hidden xl:inline-block">
+              <span className="text-[8px] font-mono tracking-wider px-1.5 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold hidden xl:inline-block">
                 FLIGHT DECK
               </span>
             </div>

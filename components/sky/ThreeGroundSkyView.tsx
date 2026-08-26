@@ -1944,7 +1944,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
                 </div>
                 <div className="leading-tight">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-black text-white tracking-widest text-xs">
+                    <span className="font-orbitron font-black text-white tracking-[0.2em] text-xs">
                       CAKRAPALA
                     </span>
                     <span className="px-1.5 py-0.5 rounded text-[8px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-bold">

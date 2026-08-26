@@ -399,7 +399,7 @@ export default function MissionControlDashboard() {
               <span className="text-[10px] font-bold text-emerald-300">SYS-05</span>
             </div>
             <div>
-              <h1 className="text-sm font-black tracking-wider uppercase text-white flex items-center gap-2">
+              <h1 className="text-sm font-orbitron font-black tracking-wider uppercase text-white flex items-center gap-2">
                 <span>AI MISSION CONTROL</span>
               </h1>
               <p className="text-[9px] text-slate-500">

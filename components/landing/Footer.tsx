@@ -43,7 +43,7 @@ export default function Footer() {
                 />
               </div>
               <div>
-                <span className="font-black text-lg text-white tracking-[0.2em] block">
+                <span className="font-orbitron font-black text-lg text-white tracking-[0.22em] block">
                   CAKRAPALA
                 </span>
                 <span className="text-[9px] text-cyan-400 font-bold tracking-widest block">
