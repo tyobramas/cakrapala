@@ -55,13 +55,13 @@ export default function Navbar() {
       desc: "3D Keplerian Planetary Orrery",
     },
     {
-      id: "trajectories",
-      label: "FLIGHT PLANNER",
-      shortLabel: "TRAJECTORY",
-      href: "/trajectories",
+      id: "mission-control",
+      label: "AI MISSION CONTROL",
+      shortLabel: "MISSION",
+      href: "/mission-control",
       code: "SYS-02",
       icon: Rocket,
-      desc: "Orbital Trajectory & Lunar Flight Path",
+      desc: "AI-Assisted Mission Planning & Analysis",
     },
     {
       id: "sky",

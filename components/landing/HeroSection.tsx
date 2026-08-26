@@ -367,7 +367,7 @@ export default function HeroSection() {
             <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-[#080d1a]/60 border border-slate-800/50 backdrop-blur-2xl">
               {[
                 { icon: Orbit, label: "SOLAR", href: "/solar-system", color: "text-indigo-400 hover:text-indigo-300", glow: "hover:shadow-[0_0_15px_rgba(99,102,241,0.3)]" },
-                { icon: Rocket, label: "LAUNCH", href: "/trajectories", color: "text-amber-400 hover:text-amber-300", glow: "hover:shadow-[0_0_15px_rgba(245,158,11,0.3)]" },
+                { icon: Rocket, label: "MISSION CTRL", href: "/mission-control", color: "text-amber-400 hover:text-amber-300", glow: "hover:shadow-[0_0_15px_rgba(245,158,11,0.3)]" },
                 { icon: Sparkles, label: "SKY", href: "/sky", color: "text-emerald-400 hover:text-emerald-300", glow: "hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]" },
                 { icon: Crosshair, label: "NEO", href: "/explore", color: "text-red-400 hover:text-red-300", glow: "hover:shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
                 { icon: Satellite, label: "SAT", href: "/iss", color: "text-cyan-400 hover:text-cyan-300", glow: "hover:shadow-[0_0_15px_rgba(6,182,212,0.3)]" },

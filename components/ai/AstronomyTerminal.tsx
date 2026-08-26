@@ -49,9 +49,9 @@ interface AstronomyTerminalProps {
 
 const QUICK_COMMANDS = [
   {
-    label: "> /orbital-trajectories",
+    label: "> /mission-planning",
     prompt:
-      "Explain how Hohmann Transfer orbits and Lunar Free-Return trajectories calculate Delta-V burns to reach the Moon.",
+      "Explain how Lambert's problem solver and patched-conic approximations are used to plan lunar free-return trajectories, including Delta-V budget calculations.",
   },
   {
     label: "> /asteroid-defense",

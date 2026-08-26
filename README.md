@@ -58,15 +58,87 @@ Despite billions of dollars invested in space exploration, global astronomical l
 | **SYS-02** | **IAU Sky Dome** | Astronomy-Engine & BSC5 Catalog | Topocentric Stellarium-style ground sky view with 9,000+ stars & IAU constellations. |
 | **SYS-03** | **Asteroid Defense Radar** | NASA JPL NeoWs & Three.js | Real-time NEO proximity radar, DEFCON threat monitoring, and physical size scaling. |
 | **SYS-04** | **Satellite Fleet Radar** | SGP4 Propagator & CesiumJS | Live multi-satellite tracking with ground tracks and sensor footprint cones. |
+| **SYS-05** | **AI Mission Control** | Three.js & Astrodynamics Physics | Deterministic decision-support workspace for orbital satellite launch and Apollo-style Lunar Free-Return transfers with AI post-analysis. |
+
+---
+
+## 🛰️ Deep-Dive: AI Mission Control Engine (SYS-05)
+
+### 1. The Problem
+Space mission design and trajectory planning traditionally require proprietary, expensive desktop toolchains (e.g., STK, GMAT) that create an **accessibility and comprehension barrier**:
+* **Complex Multi-Constraint Trade-Offs**: Calculating whether a launch vehicle can reach a target orbit or return safely from the Moon involves intricate relationships between payload mass, specific impulse ($I_{sp}$), gravitational assist, and orbital plane inclination.
+* **Information Disconnect**: Theoretical $\Delta v$ spreadsheets lack intuitive, real-time 3D spatial representations, making it difficult for students, aerospace engineers, and decision-makers to immediately grasp trajectory geometry, launch site positioning, and Earth-Moon spatial relationships.
+
+---
+
+### 2. The Solution
+**AI Mission Control** provides a lightweight, browser-native, physics-grounded decision-support cockpit:
+1. **Interactive Mission Briefing**: Rapid configuration of launch sites (Cape Canaveral / Florida, Guiana, Tanegashima, Kourou, Mahia, etc.), vehicle classes, payload mass, target altitudes, and flight windows.
+2. **Deterministic Physics Solver**: Real-time evaluation of launch vehicle capabilities, orbit insertions, and lunar flybys using verified astrodynamics equations.
+3. **Photorealistic 3D Spatial Theater**:
+   * **Full 360° Daytime Earth (NASA 4K Blue Marble)**: Eliminates dark shadows so all global launch sites, continents, and trajectory ground tracks remain crystal-clear from any camera angle.
+   * **Exact Florida / Launch Site Pinning**: Precise geodetic-to-ECI coordinate alignment anchoring the liftoff point directly to the physical spaceport on Earth's surface.
+   * **Apollo Figure-8 Lunar Free-Return Loop**: Continuous, gap-free retrograde hyperbolic trajectory that wraps gracefully around the far side of the Moon at perilune and returns directly to Earth's atmospheric entry interface ($120\text{ km}$).
+4. **Focused Decision Output & AI Post-Analysis**: Single-mode optimization (*Fastest Feasible / Shortest Time*) delivering an instantaneous feasibility verdict, $\Delta v$ budget breakdown, flight timelines, and AI-driven mission risk assessment.
+
+---
+
+### 3. Astrodynamics & Mathematical Formulation
+
+#### A. Rocket Performance & Delta-V Capacity (Tsiolkovsky Rocket Equation)
+The vehicle's available velocity increment $\Delta v_{\text{avail}}$ is governed by the Tsiolkovsky equation:
+$$\Delta v_{\text{avail}} = I_{\text{sp}} \cdot g_0 \cdot \ln\left(\frac{m_{\text{wet}}}{m_{\text{dry}} + m_{\text{payload}}}\right)$$
+* Where $I_{\text{sp}}$ is the vacuum specific impulse $(\text{s})$, $g_0 = 9.80665\text{ m/s}^2$ is standard gravity, $m_{\text{wet}}$ is total vehicle mass, $m_{\text{dry}}$ is structural mass, and $m_{\text{payload}}$ is the payload mass.
+
+---
+
+#### B. Satellite Launch Orbit Mechanics (LEO Insertion & Plane Change)
+1. **Circular Orbital Velocity at Target Altitude ($h$)**:
+   $$v_{\text{circ}} = \sqrt{\frac{\mu_E}{R_E + h}}$$
+   * Where $\mu_E = 3.986004418 \times 10^{14}\text{ m}^3/\text{s}^2$ and $R_E = 6,378.137\text{ km}$.
+
+2. **Earth Rotation Boost from Launch Site Latitude ($\phi$)**:
+   $$v_{\text{rot}} = \omega_E \cdot (R_E + h_{\text{elev}}) \cdot \cos(\phi)$$
+   * Where $\omega_E = 7.2921159 \times 10^{-5}\text{ rad/s}$.
+
+3. **Total Launch Delta-V Requirement**:
+   $$\Delta v_{\text{req}} = v_{\text{circ}} - v_{\text{rot}} + \Delta v_{\text{grav}} + \Delta v_{\text{drag}} + \Delta v_{\text{steering}} + \Delta v_{\text{plane}}$$
+   * Where aerodynamic and gravity losses are modeled as $\approx 1,250\text{ m/s} \cdot \left(\frac{h}{200}\right)^{0.05}$, and orbital plane inclination penalty is:
+   $$\Delta v_{\text{plane}} = 2 \cdot v_{\text{circ}} \cdot \sin\left(\frac{|\Delta i|}{2}\right) \quad \text{if } i < |\phi|$$
+
+---
+
+#### C. Lunar Free-Return Mechanics (Lambert Solver & Patched-Conic Slingshot)
+1. **Trans-Lunar Injection (TLI) from Parking Orbit ($r_0 = R_E + h_{\text{park}}$)**:
+   $$v_{\text{TLI}} = \sqrt{\frac{2\mu_E}{r_0} - \frac{2\mu_E}{r_0 + r_{\text{Moon}}}}$$
+   $$\Delta v_{\text{TLI}} = v_{\text{TLI}} - \sqrt{\frac{\mu_E}{r_0}}$$
+
+2. **Hyperbolic Flyby & Retrograde Gravity Slingshot**:
+   The spacecraft approaches the Moon's leading edge with hyperbolic excess velocity $\mathbf{v}_\infty$. The Moon's gravitational parameter $\mu_M = 4.9048695 \times 10^{12}\text{ m}^3/\text{s}^2$ bends the trajectory by turn angle $\delta$:
+   $$\sin\left(\frac{\delta}{2}\right) = \frac{1}{1 + \frac{r_{\text{peri}} \cdot v_\infty^2}{\mu_M}}$$
+   * Where $r_{\text{peri}} = R_{\text{Moon}} + h_{\text{perilune}}$ is the perilune radius from the Moon's center ($R_{\text{Moon}} = 1,737.4\text{ km}$).
+
+3. **Continuous 3D Figure-8 Coordinate Synthesis**:
+   In Moon-centered orbital coordinates defined by radial unit vector $\hat{\mathbf{u}}_{\text{rad}} = \frac{\mathbf{r}_M}{\|\mathbf{r}_M\|}$ and tangential velocity unit vector $\hat{\mathbf{u}}_{\text{tan}}$:
+   $$\mathbf{r}_{\text{flyby}}(\theta) = \mathbf{r}_M + r_M(\theta) \left[\cos(\theta)\,\hat{\mathbf{u}}_{\text{rad}} - \sin(\theta)\,\hat{\mathbf{u}}_{\text{tan}}\right], \quad \theta \in \left[-\frac{\pi}{2}, +\frac{\pi}{2}\right]$$
+   This guarantees that the spacecraft sweeps smoothly behind the Moon's far side at perilune ($\theta = 0$) without clipping through the lunar surface, directly routing the return vector toward Earth's atmospheric entry interface ($h = 120\text{ km}$).
+
+---
+
+#### D. Mission Feasibility & Margin Classification
+$$\text{Margin } (\Delta v_{\text{margin}}) = \Delta v_{\text{avail}} - \Delta v_{\text{req}}$$
+* **Feasible** ($\Delta v_{\text{margin}} \ge 500\text{ m/s}$): Green indicator; mission possesses nominal safety reserves.
+* **Marginal** ($0 \le \Delta v_{\text{margin}} < 500\text{ m/s}$): Amber indicator; high risk of mission failure without precision midcourse trimming.
+* **Infeasible** ($\Delta v_{\text{margin}} < 0\text{ m/s}$): Red indicator; vehicle propellant capacity is insufficient for the requested payload and orbit.
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **AI & Engineering Platform**: **IBM Bob** (Development & Architecture Copilot) + **IBM Granite** (Astrophysical AI Co-Pilot)
+* **AI & Engineering Platform**: **IBM Bob** (Development & Architecture Copilot) + **IBM Granite / Gemini** (Astrophysical AI Co-Pilot & Mission Post-Analysis)
 * **Framework**: [Next.js 16 (App Router)](https://nextjs.org/) + [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
 * **3D & Geospatial Engines**: [Three.js](https://threejs.org/) + [CesiumJS](https://cesium.com/) + [Babylon.js](https://www.babylonjs.com/)
-* **Astrophysics Math**: `astronomy-engine`, `satellite.js` (SGP4), WGS-84 Ellipsoid Transforms
+* **Astrophysics Math**: `astronomy-engine`, `satellite.js` (SGP4), Lambert Universal-Variable Solver, Patched-Conic Mechanics, WGS-84 Ellipsoid Transforms
 * **Styling & UI**: Tailwind CSS + Lucide Icons + Frosted Sci-Fi Glassmorphism
 * **Data Sources**: NASA JPL NeoWs, NASA Horizons, CelesTrak NORAD, Yale Bright Star Catalog (BSC5)
 
@@ -86,11 +158,14 @@ git clone https://github.com/your-username/cakrapala.git
 # Install dependencies
 npm install
 
+# Run automated tests
+npm test
+
 # Run development server
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser.
+Open [http://localhost:3000](http://localhost:3000) with your browser. Navigate to [http://localhost:3000/mission-control](http://localhost:3000/mission-control) to access **AI Mission Control**.
 
 ---
 
