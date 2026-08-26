@@ -327,22 +327,6 @@ export default function MissionBriefPanel(props: MissionBriefPanelProps) {
             <span className="text-[10px] font-bold text-white uppercase">Lunar Transfer Parameters</span>
           </div>
 
-          {/* Search window */}
-          <div>
-            <label className={labelClass}>Search Window</label>
-            <select
-              className={selectClass}
-              value={searchWindowHours}
-              onChange={(e) => onSearchWindowChange(Number(e.target.value))}
-            >
-              <option value={24}>24 hours</option>
-              <option value={48}>48 hours</option>
-              <option value={72}>72 hours</option>
-              <option value={120}>120 hours</option>
-              <option value={168}>7 days</option>
-            </select>
-          </div>
-
           {/* Parking orbit altitude */}
           <div>
             <div className="flex justify-between items-center mb-1">
@@ -360,42 +344,16 @@ export default function MissionBriefPanel(props: MissionBriefPanelProps) {
             />
           </div>
 
-          {/* Flight time range */}
-          <div className="grid grid-cols-2 gap-2">
-            <div>
-              <label className={labelClass}>Min Flight (hrs)</label>
-              <input
-                type="number"
-                className={inputClass}
-                value={minFlightTimeHours}
-                onChange={(e) => onMinFlightChange(Number(e.target.value))}
-                min={48}
-                max={maxFlightTimeHours - 6}
-              />
-            </div>
-            <div>
-              <label className={labelClass}>Max Flight (hrs)</label>
-              <input
-                type="number"
-                className={inputClass}
-                value={maxFlightTimeHours}
-                onChange={(e) => onMaxFlightChange(Number(e.target.value))}
-                min={minFlightTimeHours + 6}
-                max={240}
-              />
-            </div>
-          </div>
-
           {/* Target perilune */}
           <div>
             <div className="flex justify-between items-center mb-1">
-              <label className={labelClass}>Target Perilune Altitude (km) [100–10,000]</label>
+              <label className={labelClass}>Target Perilune Altitude (km) [100–5,000]</label>
               <span className="text-xs text-purple-300 font-bold">{targetPeriluneAltitudeKm} km</span>
             </div>
             <input
               type="range"
               min={100}
-              max={10000}
+              max={5000}
               step={50}
               value={targetPeriluneAltitudeKm}
               onChange={(e) => onPeriluneChange(Number(e.target.value))}
