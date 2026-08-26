@@ -159,19 +159,51 @@ export default function CesiumISSGlobe({
       const Cesium = await import("cesium");
       await import("cesium/Build/Cesium/Widgets/widgets.css");
 
-      if (destroyed) return;
+      if (destroyed || !containerRef.current) return;
 
       if (hasCesiumToken()) {
         Cesium.Ion.defaultAccessToken = getCesiumToken();
       }
 
-      const viewer = new Cesium.Viewer(containerRef.current!, {
-        ...buildViewerOptions(),
+      // Configure offline baseLayer if no Ion token is present
+      let baseLayer: any = undefined;
+      if (!hasCesiumToken()) {
+        try {
+          const tmsProvider = await Cesium.TileMapServiceImageryProvider.fromUrl(
+            Cesium.buildModuleUrl("Assets/Textures/NaturalEarthII")
+          );
+          baseLayer = new Cesium.ImageryLayer(tmsProvider);
+        } catch (e) {
+          console.warn("[CesiumISSGlobe] NaturalEarthII failed, trying single tile fallback:", e);
+          try {
+            const singleProvider = await Cesium.SingleTileImageryProvider.fromUrl(
+              "/textures/planets/earth.jpg"
+            );
+            baseLayer = new Cesium.ImageryLayer(singleProvider);
+          } catch (err2) {
+            console.error("[CesiumISSGlobe] Fallback imagery provider failed:", err2);
+          }
+        }
+      }
+
+      if (destroyed || !containerRef.current) return;
+
+      const viewer = new Cesium.Viewer(containerRef.current, {
+        animation: false,
+        timeline: false,
+        baseLayerPicker: false,
+        geocoder: false,
+        homeButton: false,
+        infoBox: false,
+        sceneModePicker: false,
+        selectionIndicator: false,
+        navigationHelpButton: false,
+        fullscreenButton: false,
+        vrButton: false,
         requestRenderMode: false,
         skyBox: false,
-        skyAtmosphere: new Cesium.SkyAtmosphere(),
-        globe: new Cesium.Globe(Cesium.Ellipsoid.WGS84),
         shadows: false,
+        ...(baseLayer ? { baseLayer } : {}),
         contextOptions: {
           webgl: { alpha: true, antialias: true },
         },
@@ -188,25 +220,10 @@ export default function CesiumISSGlobe({
       const credit = viewer.cesiumWidget.creditContainer as HTMLElement;
       if (credit) credit.style.display = "none";
 
-      // Globe space aesthetics
+      // Globe aesthetics: visible, crisp dark-themed orbital lighting
       viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#020713");
-      viewer.scene.globe.enableLighting = true;
-      viewer.scene.globe.atmosphereLightIntensity = 8.0;
-      viewer.scene.globe.atmosphereBrightnessShift = 0.05;
-      viewer.scene.globe.showGroundAtmosphere = true;
-      viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#020713");
-
-      if (!hasCesiumToken()) {
-        try {
-          const imgProvider = new Cesium.SingleTileImageryProvider({
-            url: "/textures/planets/earth.jpg",
-          });
-          viewer.imageryLayers.removeAll();
-          viewer.imageryLayers.addImageryProvider(imgProvider);
-        } catch {
-          // fallback
-        }
-      }
+      viewer.scene.globe.enableLighting = false; // Keep globe illuminated from all angles
+      viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#0a192f");
 
       const p = propsRef.current;
       const altM = p.altitude * 1000;
@@ -291,18 +308,20 @@ export default function CesiumISSGlobe({
 
       // ── 4. Footprint Circle (Red Dashed) ─────────────────────────────────────
       const fpPositions = computeFootprintCircle(p.latitude, p.longitude, p.altitude);
-      footprintRef.current = viewer.entities.add({
-        name: "Coverage Footprint",
-        polyline: {
-          positions: Cesium.Cartesian3.fromDegreesArray(fpPositions),
-          width: 2.2,
-          material: new Cesium.PolylineDashMaterialProperty({
-            color: Cesium.Color.fromCssColorString("#ef4444"),
-            dashLength: 16,
-          }),
-          clampToGround: true,
-        },
-      });
+      if (fpPositions.length >= 4) {
+        footprintRef.current = viewer.entities.add({
+          name: "Coverage Footprint",
+          polyline: {
+            positions: Cesium.Cartesian3.fromDegreesArray(fpPositions),
+            width: 2.2,
+            material: new Cesium.PolylineDashMaterialProperty({
+              color: Cesium.Color.fromCssColorString("#ef4444"),
+              dashLength: 16,
+            }),
+            clampToGround: false,
+          },
+        });
+      }
 
       // ── 5. Observer Marker ("YOU") ───────────────────────────────────────────
       observerRef.current = viewer.entities.add({
@@ -313,7 +332,6 @@ export default function CesiumISSGlobe({
           color: Cesium.Color.fromCssColorString("#38bdf8"),
           outlineColor: Cesium.Color.WHITE,
           outlineWidth: 2,
-          heightReference: Cesium.HeightReference.CLAMP_TO_GROUND,
           disableDepthTestDistance: Number.POSITIVE_INFINITY,
         },
         label: {
@@ -372,23 +390,29 @@ export default function CesiumISSGlobe({
       if (pastTrailRef.current) {
         const pastCoords = [...(orbitTrail || []), { lat: latitude, lon: longitude }];
         const pos = pastCoords.flatMap((pt) => [pt.lon, pt.lat, altM]);
-        pastTrailRef.current.polyline.positions =
-          Cesium.Cartesian3.fromDegreesArrayHeights(pos);
+        if (pos.length >= 6) {
+          pastTrailRef.current.polyline.positions =
+            Cesium.Cartesian3.fromDegreesArrayHeights(pos);
+        }
       }
 
       // Update Future Trail
       if (futureTrailRef.current) {
         const futureCoords = [{ lat: latitude, lon: longitude }, ...(futureOrbit || [])];
         const pos = futureCoords.flatMap((pt) => [pt.lon, pt.lat, altM]);
-        futureTrailRef.current.polyline.positions =
-          Cesium.Cartesian3.fromDegreesArrayHeights(pos);
+        if (pos.length >= 6) {
+          futureTrailRef.current.polyline.positions =
+            Cesium.Cartesian3.fromDegreesArrayHeights(pos);
+        }
       }
 
       // Update Footprint
       if (footprintRef.current) {
         const fp = computeFootprintCircle(latitude, longitude, altitude);
-        footprintRef.current.polyline.positions =
-          Cesium.Cartesian3.fromDegreesArray(fp);
+        if (fp.length >= 4) {
+          footprintRef.current.polyline.positions =
+            Cesium.Cartesian3.fromDegreesArray(fp);
+        }
       }
 
       // Update Observer
