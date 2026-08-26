@@ -290,6 +290,7 @@ export default function MissionControlDashboard() {
         const lunarInput = {
           missionType: "lunar_free_return" as const,
           departureDateUtc: launchDateUtc,
+          departureSite: effectiveSite,
           searchWindowHours,
           departureStepHours: 6,
           parkingOrbitAltitudeKm,

@@ -204,7 +204,7 @@ export default function MissionTheater({
 
   // ── Trajectory & Scene Builder ─────────────────────────────────────────
   const renderMissionTrajectory = useCallback(
-    (cand: MissionCandidate | null, type: MissionType, moonKm?: Vec3) => {
+    (cand: MissionCandidate | null, type: MissionType, moonKm?: Vec3, site?: LaunchSite) => {
       const scene = sceneRef.current;
       const trajGroup = trajectoryGroupRef.current;
       if (!scene || !trajGroup) return;
@@ -228,6 +228,66 @@ export default function MissionTheater({
       const existingMoon = scene.getObjectByName("moonGroup");
       if (existingMoon) scene.remove(existingMoon);
       moonGroupRef.current = null;
+
+      // 1.5 Render Dedicated 3D Launch Site / Departure Pad Surface Beacon
+      if (site) {
+        const latRad = (site.latitudeDeg * Math.PI) / 180;
+        const lonRad = (site.longitudeDeg * Math.PI) / 180;
+        const siteEciKm = {
+          x: 6378.137 * Math.cos(latRad) * Math.cos(lonRad),
+          y: 6378.137 * Math.cos(latRad) * Math.sin(lonRad),
+          z: 6378.137 * Math.sin(latRad),
+        };
+        const sPos = eciKmToRendererPosition(siteEciKm);
+        const sVec = new THREE.Vector3(sPos.x, sPos.y, sPos.z);
+        const sNorm = sVec.clone().normalize();
+
+        // A. Surface Pad Ring Target
+        const padRingGeo = new THREE.RingGeometry(0.12, 0.32, 32);
+        const padRingMat = new THREE.MeshBasicMaterial({
+          color: 0x00f0ff,
+          side: THREE.DoubleSide,
+          transparent: true,
+          opacity: 0.95,
+        });
+        const padRing = new THREE.Mesh(padRingGeo, padRingMat);
+        padRing.position.copy(sVec.clone().add(sNorm.clone().multiplyScalar(0.03)));
+        padRing.lookAt(sVec.clone().add(sNorm));
+        trajGroup.add(padRing);
+
+        // B. Glowing Vertical Departure Beacon Beam
+        const beamLen = 0.85;
+        const beamGeo = new THREE.CylinderGeometry(0.02, 0.04, beamLen, 16);
+        const beamMat = new THREE.MeshBasicMaterial({
+          color: 0x38bdf8,
+          transparent: true,
+          opacity: 0.85,
+          blending: THREE.AdditiveBlending,
+        });
+        const beam = new THREE.Mesh(beamGeo, beamMat);
+        beam.position.copy(sVec.clone().add(sNorm.clone().multiplyScalar(beamLen * 0.5)));
+        beam.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), sNorm);
+        trajGroup.add(beam);
+
+        // C. Top Pulsing Beacon Tip
+        const tipGeo = new THREE.SphereGeometry(0.08, 16, 16);
+        const tipMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+        const tip = new THREE.Mesh(tipGeo, tipMat);
+        tip.position.copy(sVec.clone().add(sNorm.clone().multiplyScalar(beamLen)));
+        trajGroup.add(tip);
+
+        const tipAuraGeo = new THREE.SphereGeometry(0.22, 16, 16);
+        const tipAuraMat = new THREE.MeshBasicMaterial({
+          color: 0x00f0ff,
+          transparent: true,
+          opacity: 0.65,
+          blending: THREE.AdditiveBlending,
+        });
+        const tipAura = new THREE.Mesh(tipAuraGeo, tipAuraMat);
+        tipAura.position.copy(tip.position);
+        trajGroup.add(tipAura);
+        pulseMarkersRef.current.push(tipAura);
+      }
 
       // ── CLEAN STANDBY STATE (Before Running Analysis) ─────────────────────
       if (!cand || cand.trajectory.length < 2) {
@@ -796,8 +856,8 @@ export default function MissionTheater({
 
   // ── Sync Trajectory Updates ────────────────────────────────────────────
   useEffect(() => {
-    renderMissionTrajectory(candidate, missionType, moonPositionKm);
-  }, [candidate, missionType, moonPositionKm, renderMissionTrajectory]);
+    renderMissionTrajectory(candidate, missionType, moonPositionKm, launchSite);
+  }, [candidate, missionType, moonPositionKm, launchSite, renderMissionTrajectory]);
 
   return (
     <div className="w-full h-full min-h-[420px] lg:min-h-[500px] rounded-2xl overflow-hidden border border-slate-800/80 bg-[#020617] relative select-none shadow-2xl">

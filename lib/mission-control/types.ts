@@ -60,6 +60,7 @@ export interface SatelliteLaunchInput {
 export interface LunarFreeReturnInput {
   missionType: "lunar_free_return";
   departureDateUtc: string;
+  departureSite?: LaunchSite;
   searchWindowHours: number;
   departureStepHours: number;
   parkingOrbitAltitudeKm: number;

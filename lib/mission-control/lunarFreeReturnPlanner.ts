@@ -33,7 +33,7 @@ import {
   REENTRY_CORRIDOR_MIN_M,
   REENTRY_CORRIDOR_MAX_M,
 } from "./constants";
-import { kmToM, mToKm, hoursToSeconds, secondsToHours } from "./units";
+import { kmToM, mToKm, hoursToSeconds, secondsToHours, degToRad } from "./units";
 import { vec3, magnitude, sub, scale, add, normalize, cross, dot, rotateAroundAxis } from "./vector3";
 import { getMoonPositionEciM, getMoonVelocityEciMps } from "./ephemeris";
 import { solveLambert } from "./lambertSolver";
@@ -72,9 +72,19 @@ function computeDeparturePosition(
   parkingAltKm: number,
   moonPosM: Vec3,
   moonVelMps: Vec3,
+  departureSite?: LaunchSite,
   transferAngleRad: number = Math.PI * 0.90 // ~162°
 ): Vec3 {
   const rPark = EARTH_RADIUS_M + kmToM(parkingAltKm);
+  if (departureSite && departureSite.id !== "equatorial") {
+    const latRad = degToRad(departureSite.latitudeDeg);
+    const lonRad = degToRad(departureSite.longitudeDeg);
+    return vec3(
+      rPark * Math.cos(latRad) * Math.cos(lonRad),
+      rPark * Math.cos(latRad) * Math.sin(lonRad),
+      rPark * Math.sin(latRad)
+    );
+  }
   const moonDir = normalize(moonPosM);
   // Normal to Moon's orbital plane
   let moonNormal = normalize(cross(moonPosM, moonVelMps));
@@ -349,7 +359,8 @@ export function planLunarFreeReturn(
       const depPosM = computeDeparturePosition(
         input.parkingOrbitAltitudeKm,
         moonPosM,
-        moonVelMps
+        moonVelMps,
+        input.departureSite
       );
 
       // Solve Lambert boundary value problem
