@@ -91,26 +91,37 @@ export default function FlightPhaseGraphic({
       // Satellite launch phases
       const defaultSatPhases: ParsedPhase[] = [
         {
-          title: "Ascent Gravity Turn",
+          title: "Pad Liftoff & Ascent",
+          colorName: "Red",
+          hex: "#ef4444",
+          bgHex: "rgba(239, 68, 68, 0.12)",
+          borderHex: "rgba(239, 68, 68, 0.35)",
+          textHex: "text-red-400",
+          description:
+            "Initial vertical liftoff from launch pad penetrating through the dense lower atmosphere.",
+          durationPercent: 20,
+        },
+        {
+          title: "Gravity Turn Pitch",
+          colorName: "Amber",
+          hex: "#f59e0b",
+          bgHex: "rgba(245, 158, 11, 0.12)",
+          borderHex: "rgba(245, 158, 11, 0.35)",
+          textHex: "text-amber-400",
+          description:
+            "Pitch-over maneuver transitioning to horizontal velocity through upper atmosphere.",
+          durationPercent: 45,
+        },
+        {
+          title: "Circular Insertion Orbit",
           colorName: "Cyan",
           hex: "#06b6d4",
           bgHex: "rgba(6, 182, 212, 0.12)",
           borderHex: "rgba(6, 182, 212, 0.35)",
           textHex: "text-cyan-300",
           description:
-            "Initial vertical liftoff transitioning smoothly to a gravity turn pitching toward target launch azimuth.",
+            `Target circular orbit ring at ${candidate.trajectory?.[candidate.trajectory.length - 1]?.altitudeKm || 550} km altitude maintaining continuous orbital speed.`,
           durationPercent: 35,
-        },
-        {
-          title: "Orbit Insertion & Circularization",
-          colorName: "Blue",
-          hex: "#38bdf8",
-          bgHex: "rgba(56, 189, 248, 0.12)",
-          borderHex: "rgba(56, 189, 248, 0.35)",
-          textHex: "text-sky-400",
-          description:
-            "Upper-stage burn circularizing into target orbit altitude maintaining continuous velocity.",
-          durationPercent: 65,
         },
       ];
 

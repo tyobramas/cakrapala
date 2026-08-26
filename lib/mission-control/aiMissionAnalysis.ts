@@ -65,10 +65,13 @@ export function generateDeterministicMissionAnalysis(
   const routeExplanation: string[] = [];
   if (isSatellite) {
     routeExplanation.push(
-      "Ascent Gravity Turn (Cyan): Initial vertical liftoff transitioning smoothly to a gravity turn pitching toward the target launch azimuth."
+      "Pad Liftoff & Ascent (Red): Initial vertical launch from pad climbing through dense lower atmosphere."
     );
     routeExplanation.push(
-      `Circular Insertion Orbit (Light Blue): Target circular orbit ring at ${satInput?.targetAltitudeKm} km altitude maintaining continuous orbital speed.`
+      "Gravity Turn Pitch (Amber): Gravity-turn pitch maneuver transitioning to horizontal velocity through upper atmosphere."
+    );
+    routeExplanation.push(
+      `Circular Insertion Orbit (Cyan): Target circular orbit ring at ${satInput?.targetAltitudeKm} km altitude maintaining continuous orbital speed.`
     );
   } else {
     routeExplanation.push(

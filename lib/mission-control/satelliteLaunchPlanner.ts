@@ -253,17 +253,12 @@ function generateAscentTrajectory(
     let pitchFromVertical: number; // 0 = vertical, π/2 = horizontal
     let phase: TrajectoryPoint["phase"];
 
-    if (t < 0.05) {
-      // Phase 1: Vertical ascent
-      altFraction = t / 0.05 * 0.02; // slow altitude gain
-      pitchFromVertical = 0;
-      phase = "launch";
-    } else if (t < 0.15) {
-      // Phase 2: Pitch-over
-      const pt = (t - 0.05) / 0.10;
-      altFraction = 0.02 + pt * 0.08;
+    if (t < 0.15) {
+      // Phase 1: Vertical ascent & initial pitch-over
+      const pt = t / 0.15;
+      altFraction = pt * 0.10;
       pitchFromVertical = pt * 0.4; // gradual tilt
-      phase = "ascent";
+      phase = "launch";
 
       if (i === Math.floor(0.10 * N)) {
         const pitchPos = add(launchPos, scale(radialDir, targetAltM * altFraction));

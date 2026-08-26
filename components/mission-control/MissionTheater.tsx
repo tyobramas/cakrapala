@@ -53,14 +53,14 @@ interface MissionTheaterProps {
 
 // ── Color map by trajectory phase ────────────────────────────────────────────
 const PHASE_COLORS: Record<string, { color: number; hex: string; label: string }> = {
-  launch: { color: 0x00f0ff, hex: "#00f0ff", label: "Launch & Ascent" },
-  ascent: { color: 0x00f0ff, hex: "#00f0ff", label: "Ascent Gravity Turn" },
-  parking_orbit: { color: 0x38bdf8, hex: "#38bdf8", label: "Target Orbit (LEO)" },
-  tli: { color: 0xf59e0b, hex: "#f59e0b", label: "TLI Burn" },
+  launch: { color: 0xef4444, hex: "#ef4444", label: "Pad Liftoff & Atmospheric Ascent" }, // Red (0km Liftoff)
+  ascent: { color: 0xf59e0b, hex: "#f59e0b", label: "Gravity Turn Pitch" },               // Amber (120km Pitchover)
+  parking_orbit: { color: 0x06b6d4, hex: "#06b6d4", label: "Circular Target Orbit" },    // Cyan (550km Circular Orbit)
+  tli: { color: 0xf97316, hex: "#f97316", label: "TLI Burn" },
   outbound: { color: 0xf97316, hex: "#f97316", label: "Outbound TLI Transfer" },
-  lunar_flyby: { color: 0xd946ef, hex: "#d946ef", label: "Perilune Lunar Flyby" },
-  return: { color: 0x6366f1, hex: "#6366f1", label: "Earth Free-Return Leg" },
-  reentry_interface: { color: 0xef4444, hex: "#ef4444", label: "Reentry Corridor" },
+  lunar_flyby: { color: 0xc084fc, hex: "#c084fc", label: "Perilune Lunar Flyby" },
+  return: { color: 0x38bdf8, hex: "#38bdf8", label: "Earth Free-Return Leg" },
+  reentry_interface: { color: 0x60a5fa, hex: "#60a5fa", label: "Reentry Corridor" },
 };
 
 const EARTH_RADIUS_VIS = 6.378137; // 6,378 km in Scene units (1 unit = 1,000 km)
@@ -125,8 +125,26 @@ export default function MissionTheater({
           camera.position.set(0, 26, 0.1);
           controls.target.set(0, 0, 0);
         } else {
-          camera.position.set(190, 500, 0.1);
-          controls.target.set(190, 0, 0);
+          // Lunar polar view: compute bounding center and look down from above
+          const pts: THREE.Vector3[] = [new THREE.Vector3(0, 0, 0)];
+          if (cand && cand.trajectory.length > 0) {
+            cand.trajectory.forEach((pt) => {
+              const rp = eciKmToRendererPosition(pt.positionEciKm);
+              pts.push(new THREE.Vector3(rp.x, rp.y, rp.z));
+            });
+          }
+          if (moonGroupRef.current) {
+            pts.push(moonGroupRef.current.position.clone());
+          }
+          const box = new THREE.Box3().setFromPoints(pts);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z, 60);
+
+          camera.position.set(center.x, center.y + maxDim * 1.5, center.z + 0.1);
+          controls.target.copy(center);
         }
       } else if (mode === "Focus Moon Encounter" && moonGroupRef.current) {
         const mPos = moonGroupRef.current.position;
@@ -154,13 +172,27 @@ export default function MissionTheater({
           }
           controls.target.set(0, 0, 0);
         } else {
-          // Lunar mission framing
-          const moonDist = moonKm
-            ? Math.sqrt(moonKm.x ** 2 + moonKm.y ** 2 + moonKm.z ** 2) * RENDERER_SCALE
-            : 384;
-          const midX = moonDist * 0.5;
-          camera.position.set(midX, moonDist * 0.55, moonDist * 0.95);
-          controls.target.set(midX, 0, 0);
+          // Lunar mission framing: dynamically calculate bounding center of Earth + Moon + Trajectory
+          const pts: THREE.Vector3[] = [new THREE.Vector3(0, 0, 0)];
+          if (cand && cand.trajectory.length > 0) {
+            cand.trajectory.forEach((pt) => {
+              const rp = eciKmToRendererPosition(pt.positionEciKm);
+              pts.push(new THREE.Vector3(rp.x, rp.y, rp.z));
+            });
+          }
+          if (moonGroupRef.current) {
+            pts.push(moonGroupRef.current.position.clone());
+          }
+          const box = new THREE.Box3().setFromPoints(pts);
+          const center = new THREE.Vector3();
+          box.getCenter(center);
+          const size = new THREE.Vector3();
+          box.getSize(size);
+          const maxDim = Math.max(size.x, size.y, size.z, 60);
+
+          // Position camera pulled back at an elevated angle to frame Earth, Moon, and entire Figure-8 loop perfectly
+          camera.position.set(center.x, center.y + maxDim * 0.60, center.z + maxDim * 1.10);
+          controls.target.copy(center);
         }
       }
 
