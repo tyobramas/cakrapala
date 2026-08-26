@@ -92,6 +92,18 @@ Despite billions of dollars invested in global space exploration and orbital inf
 
 ---
 
+## ⚖️ 6. Judging Criteria Alignment & Evaluation
+
+| Judging Criterion | Submissions Evaluation & Implementation Evidence |
+| :--- | :--- |
+| **Technical Execution** | • **Full-Stack Excellence**: Built on Next.js 16 (App Router), React 19, and strict TypeScript.<br>• **Multi-Engine 3D Graphics**: Three.js (Mission Control & Asteroids), CesiumJS (Satellite Fleets), and Babylon.js (Planetary Orrery).<br>• **Rigorous Closed-Form Astrodynamics**: Real-world Tsiolkovsky rocket equations, Vis-Viva orbital speed, Earth rotational boost ($v_{\text{rot}} = \omega_E R_E \cos\phi$), Lambert transfer solver, and Patched-Conic Apollo Figure-8 flybys.<br>• **High Reliability**: 14/14 automated Vitest unit tests passing and 100% successful Next.js production builds. |
+| **Innovation** | • **Spatial 3D Intelligence**: Replaces static $\Delta v$ spreadsheets with an interactive 3D theater, featuring 360° full daylight Earth, exact Florida spaceport pinning, and non-clipping lunar retrograde loops.<br>• **Interactive Flight Phase Graphic**: Multi-color timeline profile bar and dynamic SVG altitude geometry sparklines.<br>• **Human-Scale Scale Comparisons**: Compares asteroid dimensions to tangible landmarks (Monas 132m, Eiffel Tower 330m, Boeing 747 70m).<br>• **Bidirectional Voice HUD**: Voice-command cockpit navigation. |
+| **Challenge Fit** | • **100% Aligned with AI for Science & Open Data**: Directly ingests open scientific data from NASA JPL NeoWs, NASA Horizons, NORAD/CelesTrak TLEs, and the Yale Bright Star Catalog (BSC5).<br>• **Scientific Rigor**: Merges generative AI insights with deterministic physical constraints. |
+| **Feasibility** | • **100% Browser-Native & Zero-Install**: Accessible globally without requiring $10,000+ desktop aerospace software licenses (STK/GMAT) or specialized GPU hardware.<br>• **Hallucination-Free Gatekeeper**: Physics engine calculates all $\Delta v$ budgets and orbit geometries deterministically prior to rendering.<br>• **Optimized Performance**: Server-side API caching and disciplined WebGL memory management. |
+| **Real-World Impact** | • **Mitigating Media Panic & Disinformation**: Delivers a transparent, zero-bias visual radar for asteroid close-approaches to counter sensationalist media claims.<br>• **Democratizing Aerospace Education**: Empowers students, educators, and researchers worldwide to simulate orbital launches and lunar transfers interactively for free. |
+
+---
+
 ## 🚀 Key Modules (System Cockpit)
 
 | Module Code | Module Name | Core Technology | Primary Functionality |
