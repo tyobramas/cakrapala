@@ -21,6 +21,7 @@ import {
   formatDistanceKm,
 } from "@/lib/mission-control/formatters";
 import ModelLimitationsNotice from "./ModelLimitationsNotice";
+import FlightPhaseGraphic from "./FlightPhaseGraphic";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -442,11 +443,15 @@ export default function DecisionPanel({
         </div>
 
         {postAnalysis ? (
-          <div className="space-y-2 text-[9px] leading-relaxed text-slate-300">
+          <div className="space-y-3 text-[9px] leading-relaxed text-slate-300">
             <p className="font-bold text-cyan-200">{postAnalysis.headline || postAnalysis.summary}</p>
-            {postAnalysis.routeExplanation && postAnalysis.routeExplanation.length > 0 && (
-              <p className="text-slate-400">{postAnalysis.routeExplanation.join(" ")}</p>
-            )}
+            
+            {/* Visual Flight Phase & Trajectory Progression Graphic */}
+            <FlightPhaseGraphic
+              missionType={missionType}
+              candidate={selectedCandidate}
+              routeExplanation={postAnalysis.routeExplanation}
+            />
 
             {postAnalysis.keyEvents && postAnalysis.keyEvents.length > 0 && (
               <div className="pt-2 border-t border-slate-800/60 space-y-1">
