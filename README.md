@@ -1,8 +1,35 @@
 # 🌌 Cakrapala — 3D Aerospace Space Observatory & Planetary Defense Radar
 
+<p align="center">
+  <a href="https://cakrapala.vercel.app"><strong>🚀 Launch Live Observatory</strong></a>
+  ·
+  <a href="https://cakrapala.vercel.app/mission-control"><strong>🛰️ Open Mission Control</strong></a>
+  ·
+  <a href="https://github.com/tyobramas/cakrapala"><strong>⭐ Star the Project</strong></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Next.js-16-black?logo=next.js" alt="Next.js 16">
+  <img src="https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black" alt="React 19">
+  <img src="https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white" alt="TypeScript">
+  <img src="https://img.shields.io/badge/WebGL-3D%20Observatory-00C7B7" alt="WebGL 3D Observatory">
+  <img src="https://img.shields.io/badge/Deployment-Vercel-black?logo=vercel" alt="Vercel">
+</p>
+
 ![Cakrapala Project Banner](./public/banner.png)
 
 > **An interactive, AI-augmented 3D space observatory and real-time planetary defense cockpit transforming raw NASA, NORAD, and IAU telemetry into intuitive spatial intelligence.**
+
+> **From tracking near-Earth asteroids and orbital satellites to planning lunar trajectories—Cakrapala turns complex space telemetry into an interactive mission-control experience directly in your browser.**
+
+### ✨ Explore the Universe
+
+- ☄️ Inspect real-world near-Earth asteroid approaches
+- 🛰️ Track orbital assets over an interactive 3D Earth
+- 🌠 Explore 9,000+ stars and official IAU constellations
+- 🪐 Navigate a heliocentric Solar System orrery
+- 🚀 Simulate satellite launches and lunar free-return trajectories
+- 🤖 Interact with an AI astronomy and mission-analysis co-pilot
 
 ---
 
@@ -119,7 +146,9 @@ Despite billions of dollars invested in global space exploration and orbital inf
 ## 🛰️ Deep-Dive: AI Mission Control Engine (SYS-05)
 
 ### 1. The Core Innovation
+
 **AI Mission Control** provides an intuitive, browser-native decision-support workspace:
+
 1. **Interactive Mission Briefing**: Rapid configuration of launch sites (Cape Canaveral / Florida, Guiana, Tanegashima, Kourou, Mahia, etc.), vehicle classes, payload mass, target altitudes, and flight windows.
 2. **Deterministic Physics Solver**: Real-time evaluation of launch vehicle capabilities, orbit insertions, and lunar flybys using verified astrodynamics equations.
 3. **Photorealistic 3D Spatial Theater**:
@@ -139,6 +168,7 @@ Despite billions of dollars invested in global space exploration and orbital inf
 ### 2. Astrodynamics & Mathematical Formulation
 
 #### A. Rocket Performance & Delta-V Capacity (Tsiolkovsky Rocket Equation)
+
 The vehicle's available velocity increment (Δv_avail) is calculated via the Tsiolkovsky equation:
 
 ```
@@ -155,26 +185,33 @@ The vehicle's available velocity increment (Δv_avail) is calculated via the Tsi
 #### B. Satellite Launch Orbit Mechanics (LEO Insertion & Plane Change)
 
 1. **Circular Orbital Velocity at Target Altitude (h)**:
+
    ```
    v_circ = √( μ_E / (R_E + h) )
    ```
+
    * **μ_E**: Earth gravitational parameter (398,600.44 km³/s²)
    * **R_E**: Earth mean equatorial radius (6,378.137 km)
    * **h**: Target orbital altitude above mean sea level
 
 2. **Earth Rotation Boost from Launch Site Latitude (φ)**:
+
    ```
    v_rot = ω_E · (R_E + h_elev) · cos(φ)
    ```
+
    * **ω_E**: Earth angular rotation rate (7.2921159 × 10⁻⁵ rad/s)
    * **h_elev**: Launch site elevation above sea level
 
 3. **Total Launch Delta-V Requirement**:
+
    ```
    Δv_req = v_circ - v_rot + Δv_grav + Δv_drag + Δv_steering + Δv_plane
    ```
+
    * **Atmospheric & Gravity Losses**: Modeled as `≈ 1,250 m/s · (h / 200)^0.05`
    * **Orbital Plane Change Penalty**:
+
      ```
      Δv_plane = 2 · v_circ · sin( |Δi| / 2 )   [if target inclination < launch latitude]
      ```
@@ -184,27 +221,33 @@ The vehicle's available velocity increment (Δv_avail) is calculated via the Tsi
 #### C. Lunar Free-Return Mechanics (Lambert Transfer & Patched-Conic Slingshot)
 
 1. **Trans-Lunar Injection (TLI) from Parking Orbit (r₀ = R_E + h_park)**:
+
    ```
    v_TLI = √( 2·μ_E / r₀ - 2·μ_E / (r₀ + r_Moon) )
    Δv_TLI = v_TLI - √( μ_E / r₀ )
    ```
+
    * **r₀**: Earth circular parking orbit radius (6,578 km for 200 km LEO)
    * **r_Moon**: Distance to Moon at intercept epoch (~384,400 km)
 
 2. **Hyperbolic Flyby & Retrograde Gravity Slingshot**:
+
    The spacecraft approaches the Moon's leading edge with hyperbolic excess velocity (v_inf). The Moon's gravitational parameter (μ_M = 4,904.87 km³/s²) bends the trajectory by turn angle (δ):
 
    ```
    sin( δ / 2 ) = 1 / ( 1 + (r_peri · v_inf² / μ_M) )
    ```
+
    * **r_peri**: Perilune radius from Moon center = R_Moon (1,737.4 km) + h_perilune (200 km)
 
 3. **Continuous 3D Figure-8 Coordinate Synthesis**:
+
    In Moon-centered orbital coordinates defined by radial unit vector (u_rad) and tangential flight velocity unit vector (u_tan):
 
    ```
    r_flyby(θ) = r_Moon + r_M(θ) · [ cos(θ) · u_rad - sin(θ) · u_tan ],   θ ∈ [-π/2, +π/2]
    ```
+
    * Sweeps continuously behind the Moon's far side at perilune (θ = 0) without clipping through the lunar surface, directly routing the return vector toward Earth's atmospheric entry interface (h = 120 km).
 
 ---
@@ -235,16 +278,23 @@ Margin (Δv_margin) = Δv_avail - Δv_req
 ## 💻 Getting Started
 
 ### Prerequisites
-* Node.js 18+ or 20+
+
+* Node.js 20.9.0 or newer
 * npm, pnpm, or yarn
+* A modern browser with WebGL support
 
 ### Installation
+
 ```bash
 # Clone repository
-git clone https://github.com/your-username/cakrapala.git
+git clone https://github.com/tyobramas/cakrapala.git
+cd cakrapala
 
 # Install dependencies
 npm install
+
+# Create local environment configuration
+cp .env.local.example .env.local
 
 # Run automated tests
 npm test
@@ -253,9 +303,58 @@ npm test
 npm run dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser. Navigate to [http://localhost:3000/mission-control](http://localhost:3000/mission-control) to access **AI Mission Control**.
+For Windows Command Prompt, create the environment file with:
+
+```bat
+copy .env.local.example .env.local
+```
+
+Configure the required credentials inside `.env.local`:
+
+```env
+# NASA JPL API
+NASA_API_KEY=your_nasa_api_key_here
+
+# Cesium ion
+NEXT_PUBLIC_CESIUM_ION_TOKEN=your_cesium_token_here
+
+# AI Router
+NARA_ROUTER_BASE_URL=https://router.bynara.id/v1
+NARA_ROUTER_API_KEY=your_nara_api_key_here
+NARA_ROUTER_MODEL=agnes-2.5-flash
+```
+
+> [!IMPORTANT]
+> Never commit `.env.local` or expose server-side API keys in client-side code. Variables prefixed with `NEXT_PUBLIC_` are included in the browser bundle.
+
+Open [http://localhost:3000](http://localhost:3000) with your browser.
+
+Navigate to [http://localhost:3000/mission-control](http://localhost:3000/mission-control) to access **AI Mission Control**.
+
+### Available Commands
+
+```bash
+# Start development server
+npm run dev
+
+# Run automated tests
+npm test
+
+# Run ESLint
+npm run lint
+
+# Run TypeScript validation
+npx tsc --noEmit
+
+# Create a production build
+npm run build
+
+# Start the production server
+npm start
+```
 
 ---
 
 ## 📜 License
-This project is open-source under the MIT License.
+
+This project is intended to be released under the MIT License. A `LICENSE` file still needs to be added to the repository before the license is formally included.
