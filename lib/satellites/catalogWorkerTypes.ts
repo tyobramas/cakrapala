@@ -10,9 +10,18 @@ export interface CatalogWorkerPropagateMessage {
     timestamp: number;
 }
 
+export interface AnalyzeSelectedSatelliteMessage {
+    type: "analyze-selected";
+    requestId: number;
+    noradId: number;
+    startTimestamp: number;
+    sampleCount: number;
+}
+
 export type CatalogWorkerInboundMessage =
     | CatalogWorkerInitializeMessage
-    | CatalogWorkerPropagateMessage;
+    | CatalogWorkerPropagateMessage
+    | AnalyzeSelectedSatelliteMessage;
 
 export interface CatalogWorkerReadyMessage {
     type: "ready";
@@ -40,13 +49,28 @@ export interface CatalogWorkerPositionMessage {
     valid: Uint8Array;
 }
 
+export interface SelectedSatelliteAnalysisMessage {
+    type: "selected-analysis";
+    requestId: number;
+    noradId: number;
+    elementEpoch: string;
+    timestamps: Float64Array;
+    positionsEcfKm: Float64Array;
+    altitudesKm: Float32Array;
+    speedsKmS: Float32Array;
+    latitudesDeg: Float32Array;
+    longitudesDeg: Float32Array;
+    valid: Uint8Array;
+}
+
 export interface CatalogWorkerErrorMessage {
     type: "error";
-    code: "NOT_INITIALIZED" | "PROPAGATION_FAILED";
+    code: "NOT_INITIALIZED" | "PROPAGATION_FAILED" | "ANALYSIS_FAILED";
     message: string;
 }
 
 export type CatalogWorkerOutboundMessage =
     | CatalogWorkerReadyMessage
     | CatalogWorkerPositionMessage
+    | SelectedSatelliteAnalysisMessage
     | CatalogWorkerErrorMessage;

@@ -28,10 +28,20 @@ const nextConfig: NextConfig = {
 
   // Keep the webpack config for environments that explicitly use webpack
   // (e.g. `next build --webpack`).  Turbopack ignores this block.
-  webpack: (config, { isServer }) => {
+  webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
-      // Cesium relies on several Node.js built-ins that are not available in
-      // the browser bundle.  Tell webpack to stub them out.
+      // Handle node: protocol imports (e.g. from satellite.js wasm runtimes)
+      config.plugins = config.plugins ?? [];
+      config.plugins.push(
+        new webpack.NormalModuleReplacementPlugin(
+          /^node:/,
+          (resource: { request: string }) => {
+            resource.request = resource.request.replace(/^node:/, "");
+          }
+        )
+      );
+
+      // Cesium & satellite.js rely on Node.js built-ins that are not available in browser bundles.
       config.resolve = config.resolve ?? {};
       config.resolve.fallback = {
         ...(config.resolve.fallback as Record<string, boolean> | undefined),
@@ -39,6 +49,11 @@ const nextConfig: NextConfig = {
         path: false,
         os: false,
         crypto: false,
+        module: false,
+        worker_threads: false,
+        url: false,
+        stream: false,
+        buffer: false,
       };
     }
     return config;

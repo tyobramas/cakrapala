@@ -33,8 +33,9 @@ export function setCesiumBaseUrl(): void {
       process.env.NEXT_PUBLIC_CESIUM_BASE_URL) ||
     "/cesium";
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (window as any).CESIUM_BASE_URL = base;
+  if (typeof window !== "undefined") {
+    (window as unknown as { CESIUM_BASE_URL?: string }).CESIUM_BASE_URL = base;
+  }
 }
 
 /**
@@ -68,6 +69,8 @@ export type ViewerOptions = {
   requestRenderMode?: boolean;
   /** Minimum number of frames per second before a render is triggered. */
   maximumRenderTimeChange?: number;
+  /** DOM element to host Cesium credits */
+  creditContainer?: HTMLElement | string;
 };
 
 /**

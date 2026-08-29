@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import SatelliteModeTabs from "@/components/space/SatelliteModeTabs";
 import OrbitalCatalogClient from "@/components/satellites/catalog/OrbitalCatalogClient";
 

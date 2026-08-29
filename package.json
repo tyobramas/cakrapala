@@ -8,8 +8,8 @@
     "generate-star-catalog": "node scripts/generate-star-catalog.mjs",
     "generate-constellation-lines": "node scripts/generate-constellation-lines.mjs",
     "generate-data": "npm run generate-star-catalog && npm run generate-constellation-lines",
-    "prebuild": "npm run copy-cesium-assets && npm run generate-data",
-    "build": "next build",
+    "prebuild": "npm run copy-cesium-assets",
+    "build": "next build --webpack",
     "start": "next start",
     "test": "vitest run",
     "lint": "eslint"

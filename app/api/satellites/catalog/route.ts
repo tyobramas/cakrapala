@@ -7,6 +7,10 @@ import type {
     SatelliteCatalogResponse,
     SatelliteOmmRecord,
 } from "@/lib/satellites/catalogTypes";
+import {
+    getSatcatMap,
+    joinOmmWithSatcat,
+} from "@/lib/satellites/satcatService";
 import fallbackCatalogRaw from "@/lib/satellites/active_catalog_fallback.json";
 
 export const runtime = "nodejs";
@@ -136,6 +140,10 @@ export async function GET(request: NextRequest) {
 
     const selectedRecords = validRecords.slice(0, limit);
 
+    // 4. Enrich with SATCAT metadata in O(n) time
+    const { map: satcatMap, sourceInfo: metadataSource } = await getSatcatMap();
+    const enrichedSatellites = joinOmmWithSatcat(selectedRecords, satcatMap);
+
     const payload: SatelliteCatalogResponse = {
         source: {
             name: "CelesTrak",
@@ -144,12 +152,13 @@ export async function GET(request: NextRequest) {
                 ? CELESTRAK_ACTIVE_OMM_URL
                 : "https://celestrak.org/NORAD/elements/gp.php (Snapshot Fallback)",
         },
+        metadataSource,
         group: "active",
         generatedAt: new Date().toISOString(),
         refreshIntervalSeconds: REFRESH_INTERVAL_SECONDS,
-        count: selectedRecords.length,
+        count: enrichedSatellites.length,
         totalAvailable: validRecords.length,
-        satellites: selectedRecords,
+        satellites: enrichedSatellites,
     };
 
     return NextResponse.json(payload, {
@@ -159,4 +168,3 @@ export async function GET(request: NextRequest) {
         },
     });
 }
-

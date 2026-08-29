@@ -1,6 +1,7 @@
 import {
     prepareSatelliteCatalog,
     propagateSatelliteCatalog,
+    propagateSatelliteProfile,
     type PreparedSatellite,
 } from "../lib/satellites/catalogPropagation";
 import type {
@@ -21,9 +22,10 @@ interface CatalogWorkerScope {
 const workerScope = self as unknown as CatalogWorkerScope;
 
 let preparedSatellites: PreparedSatellite[] | null = null;
+let satelliteMap: Map<number, PreparedSatellite> | null = null;
 
 function sendError(
-    code: "NOT_INITIALIZED" | "PROPAGATION_FAILED",
+    code: "NOT_INITIALIZED" | "PROPAGATION_FAILED" | "ANALYSIS_FAILED",
     message: string
 ): void {
     workerScope.postMessage({
@@ -42,6 +44,11 @@ workerScope.onmessage = (
         preparedSatellites = prepareSatelliteCatalog(
             message.satellites
         );
+
+        satelliteMap = new Map();
+        for (const prepared of preparedSatellites) {
+            satelliteMap.set(prepared.noradId, prepared);
+        }
 
         const validSatrecCount = preparedSatellites.reduce(
             (count, satellite) =>
@@ -96,6 +103,54 @@ workerScope.onmessage = (
                     : "Unknown SGP4 propagation error";
 
             sendError("PROPAGATION_FAILED", errorMessage);
+        }
+        return;
+    }
+
+    if (message.type === "analyze-selected") {
+        if (!satelliteMap) {
+            sendError(
+                "NOT_INITIALIZED",
+                "Catalog worker has not received orbital records"
+            );
+            return;
+        }
+
+        const prepared = satelliteMap.get(message.noradId);
+        if (!prepared) {
+            sendError(
+                "ANALYSIS_FAILED",
+                `Satellite NORAD #${message.noradId} not found in prepared catalog`
+            );
+            return;
+        }
+
+        try {
+            const profile = propagateSatelliteProfile(
+                prepared,
+                message.startTimestamp,
+                message.sampleCount,
+                message.requestId
+            );
+
+            workerScope.postMessage(
+                profile,
+                [
+                    profile.timestamps.buffer,
+                    profile.positionsEcfKm.buffer,
+                    profile.altitudesKm.buffer,
+                    profile.speedsKmS.buffer,
+                    profile.latitudesDeg.buffer,
+                    profile.longitudesDeg.buffer,
+                    profile.valid.buffer,
+                ]
+            );
+        } catch (err: unknown) {
+            const errorMsg =
+                err instanceof Error
+                    ? err.message
+                    : "Unknown SGP4 analysis error";
+            sendError("ANALYSIS_FAILED", errorMsg);
         }
     }
 };

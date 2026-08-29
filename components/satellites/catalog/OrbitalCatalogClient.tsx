@@ -1,29 +1,19 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
     Search,
     X,
-    Compass,
-    Globe2,
-    Eye,
     Sun,
-    Satellite as SatIcon,
     Layers,
-    Activity,
-    Maximize2,
-    RotateCcw,
-    Zap,
-    ExternalLink,
     ChevronDown,
     ChevronUp,
-    Sparkles,
 } from "lucide-react";
 import {
     prepareSatelliteCatalog,
     propagateSatelliteCatalog,
+    propagateSatelliteProfile,
     type PreparedSatellite,
 } from "@/lib/satellites/catalogPropagation";
 import type {
@@ -34,9 +24,12 @@ import type {
     CatalogWorkerInboundMessage,
     CatalogWorkerOutboundMessage,
     CatalogWorkerPositionMessage,
+    SelectedSatelliteAnalysisMessage,
 } from "@/lib/satellites/catalogWorkerTypes";
+import { getSatelliteMedia } from "@/lib/satellites/satelliteMedia";
 import type { OrbitalRegimeFilter } from "./OrbitalCatalogGlobe";
 import { getSatelliteRegime } from "./OrbitalCatalogGlobe";
+import SatelliteDetailPanel from "./SatelliteDetailPanel";
 
 const PROPAGATION_INTERVAL_MS = 5_000;
 
@@ -161,26 +154,101 @@ const FOCUS_FLAGSHIP_NORAD_MAP: Record<number, string> = {
     48274: "tiangong",
     20580: "hubble",
     33591: "noaa19",
+    25994: "terra",
+    53883: "starlink",
 };
 
 export default function OrbitalCatalogClient() {
     const workerRef = useRef<Worker | null>(null);
     const fallbackPreparedRef = useRef<PreparedSatellite[] | null>(null);
     const propagationTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const catalogRef = useRef<SatelliteCatalogResponse | null>(null);
+    const analysisRequestIdRef = useRef<number>(0);
+    const selectedNoradIdRef = useRef<number | null>(null);
 
     const [catalog, setCatalog] = useState<SatelliteCatalogResponse | null>(null);
     const [positionFrame, setPositionFrame] = useState<CatalogWorkerPositionMessage | null>(null);
     const [workerReady, setWorkerReady] = useState(false);
     const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-    // Interactive UI states
     const [selectedNoradId, setSelectedNoradId] = useState<number | null>(null);
+    const [analysisCache, setAnalysisCache] = useState<Record<string, SelectedSatelliteAnalysisMessage>>({});
+    const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+    const [recenterCounter, setRecenterCounter] = useState(0);
     const [filterRegime, setFilterRegime] = useState<OrbitalRegimeFilter>("all");
     const [searchQuery, setSearchQuery] = useState("");
     const [cameraPreset, setCameraPreset] = useState("global");
     const [showLighting, setShowLighting] = useState(true);
     const [showFleetBrowser, setShowFleetBrowser] = useState(false);
     const [calculationLatencyMs, setCalculationLatencyMs] = useState(1.8);
+
+    // Synchronize selectedNoradId to ref
+    useEffect(() => {
+        selectedNoradIdRef.current = selectedNoradId;
+    }, [selectedNoradId]);
+
+    // Handle single-satellite SGP4 analytics request
+    useEffect(() => {
+        if (!selectedNoradId || !catalog) {
+            return;
+        }
+
+        const selectedSat = catalog.satellites.find(
+            (s) => s.NORAD_CAT_ID === selectedNoradId
+        );
+
+        if (!selectedSat) {
+            return;
+        }
+
+        const cacheKey = `${selectedNoradId}_${selectedSat.EPOCH}`;
+        if (analysisCache[cacheKey]) {
+            return;
+        }
+
+        const reqId = ++analysisRequestIdRef.current;
+        const worker = workerRef.current;
+
+        if (worker && workerReady) {
+            const message: CatalogWorkerInboundMessage = {
+                type: "analyze-selected",
+                requestId: reqId,
+                noradId: selectedNoradId,
+                startTimestamp: Date.now(),
+                sampleCount: 120,
+            };
+            worker.postMessage(message);
+        } else if (fallbackPreparedRef.current) {
+            // Main thread calculation fallback
+            const prepared = fallbackPreparedRef.current.find(
+                (s) => s.noradId === selectedNoradId
+            );
+
+            if (prepared) {
+                const profile = propagateSatelliteProfile(
+                    prepared,
+                    Date.now(),
+                    120,
+                    reqId
+                );
+                setAnalysisCache((prev) => ({
+                    ...prev,
+                    [cacheKey]: profile,
+                }));
+            }
+        }
+    }, [selectedNoradId, catalog, workerReady, analysisCache]);
+
+    const currentAnalysis = useMemo(() => {
+        if (!selectedNoradId || !catalog) return null;
+        const selectedSat = catalog.satellites.find(
+            (s) => s.NORAD_CAT_ID === selectedNoradId
+        );
+        if (!selectedSat) return null;
+        const cacheKey = `${selectedNoradId}_${selectedSat.EPOCH}`;
+        return analysisCache[cacheKey] ?? null;
+    }, [selectedNoradId, catalog, analysisCache]);
 
     useEffect(() => {
         const abortController = new AbortController();
@@ -291,10 +359,26 @@ export default function OrbitalCatalogClient() {
                     return;
                 }
 
+                if (message.type === "selected-analysis") {
+                    // Check if response corresponds to the currently active selection
+                    if (
+                        message.requestId === analysisRequestIdRef.current &&
+                        message.noradId === selectedNoradIdRef.current
+                    ) {
+                        const cacheKey = `${message.noradId}_${message.elementEpoch}`;
+                        setAnalysisCache((prev) => ({
+                            ...prev,
+                            [cacheKey]: message,
+                        }));
+                        setIsAnalyzing(false);
+                    }
+                    return;
+                }
+
                 if (message.type === "error") {
                     console.warn("[OrbitalCatalogClient] Worker reported error, using fallback:", message.message);
-                    if (catalog) {
-                        setupFallback(catalog.satellites);
+                    if (catalogRef.current) {
+                        setupFallback(catalogRef.current.satellites);
                     }
                 }
             };
@@ -306,8 +390,8 @@ export default function OrbitalCatalogClient() {
                     workerRef.current = null;
                     worker = null;
                 }
-                if (catalog) {
-                    setupFallback(catalog.satellites);
+                if (catalogRef.current) {
+                    setupFallback(catalogRef.current.satellites);
                 }
             };
         }
@@ -341,6 +425,7 @@ export default function OrbitalCatalogClient() {
                     return;
                 }
 
+                catalogRef.current = payload;
                 setCatalog(payload);
 
                 if (worker) {
@@ -451,6 +536,11 @@ export default function OrbitalCatalogClient() {
         };
     }, [selectedNoradId, catalog, positionFrame]);
 
+    // Selected satellite media
+    const selectedMedia = useMemo(() => {
+        return getSatelliteMedia(selectedNoradId);
+    }, [selectedNoradId]);
+
     // Filtered satellites for fleet list
     const filteredSatellites = useMemo(() => {
         if (!catalog) return [];
@@ -541,6 +631,11 @@ export default function OrbitalCatalogClient() {
                         <span className="rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.5 font-mono text-[9px] text-cyan-300">
                             1,000+ SATELLITES
                         </span>
+                        {catalog?.metadataSource?.available && (
+                            <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-1.5 py-0.5 font-mono text-[9px] text-emerald-300">
+                                SATCAT ENRICHED
+                            </span>
+                        )}
                     </div>
 
                     <h2 className="mt-1 font-mono text-lg font-bold tracking-tight text-white sm:text-xl">
@@ -745,113 +840,32 @@ export default function OrbitalCatalogClient() {
                             positionsEcfKm={positionFrame.positionsEcfKm}
                             valid={positionFrame.valid}
                             selectedNoradId={selectedNoradId}
+                            selectedAnalysis={currentAnalysis}
                             onSelectSatellite={(norad) => setSelectedNoradId(norad)}
                             filterRegime={filterRegime}
                             searchQuery={searchQuery}
                             cameraPreset={cameraPreset}
                             showLighting={showLighting}
+                            recenterCounter={recenterCounter}
                         />
 
-                        {/* Floating Selected Satellite Telemetry Inspector Card */}
+                        {/* Floating Selected Satellite Detail Panel (Tahap 9 Inspection Console) */}
                         {selectedSatelliteData && (
-                            <div className="absolute left-4 top-4 z-20 w-[340px] sm:w-[380px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-cyan-400/40 bg-slate-950/90 p-5 shadow-[0_20px_50px_rgba(0,0,0,0.8),0_0_30px_rgba(6,182,212,0.15)] backdrop-blur-2xl transition-all">
-                                <div className="flex items-start justify-between gap-3 border-b border-cyan-500/20 pb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-cyan-400/30 bg-cyan-500/10 shadow-[0_0_15px_rgba(6,182,212,0.3)]">
-                                            <SatIcon className="h-5 w-5 text-cyan-300" />
-                                        </div>
-                                        <div>
-                                            <h3 className="font-mono text-sm font-bold tracking-wide text-white">
-                                                {selectedSatelliteData.record.OBJECT_NAME}
-                                            </h3>
-                                            <p className="font-mono text-[10px] text-cyan-400">
-                                                NORAD #{selectedSatelliteData.record.NORAD_CAT_ID} • {selectedSatelliteData.record.OBJECT_ID || "COSPAR"}
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <button
-                                        type="button"
-                                        onClick={() => setSelectedNoradId(null)}
-                                        className="rounded-lg border border-slate-800 p-1 text-slate-400 hover:border-slate-700 hover:text-white"
-                                    >
-                                        <X className="h-4 w-4" />
-                                    </button>
-                                </div>
-
-                                {/* Telemetry Grid */}
-                                <div className="mt-3.5 grid grid-cols-2 gap-2 font-mono text-[11px]">
-                                    <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5">
-                                        <span className="block text-[10px] text-slate-500">ALTITUDE</span>
-                                        <strong className="mt-0.5 block text-sm text-cyan-300">
-                                            {selectedSatelliteData.altKm ? `${selectedSatelliteData.altKm.toLocaleString()} km` : "—"}
-                                        </strong>
-                                    </div>
-
-                                    <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5">
-                                        <span className="block text-[10px] text-slate-500">SPEED (SGP4)</span>
-                                        <strong className="mt-0.5 block text-sm text-emerald-300">
-                                            {selectedSatelliteData.speedKmS ? `${selectedSatelliteData.speedKmS.toFixed(2)} km/s` : "—"}
-                                        </strong>
-                                        <span className="block text-[9px] text-slate-500">
-                                            {selectedSatelliteData.speedKmH ? `${selectedSatelliteData.speedKmH.toLocaleString()} km/h` : ""}
-                                        </span>
-                                    </div>
-
-                                    <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5">
-                                        <span className="block text-[10px] text-slate-500">ORBITAL REGIME</span>
-                                        <strong className="mt-0.5 block uppercase text-amber-300">
-                                            {selectedSatelliteData.regime} ORBIT
-                                        </strong>
-                                    </div>
-
-                                    <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5">
-                                        <span className="block text-[10px] text-slate-500">PERIOD</span>
-                                        <strong className="mt-0.5 block text-slate-200">
-                                            {selectedSatelliteData.periodMin} min
-                                        </strong>
-                                    </div>
-
-                                    <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5">
-                                        <span className="block text-[10px] text-slate-500">INCLINATION</span>
-                                        <strong className="mt-0.5 block text-slate-300">
-                                            {selectedSatelliteData.record.INCLINATION.toFixed(2)}°
-                                        </strong>
-                                    </div>
-
-                                    <div className="rounded-lg border border-slate-800/80 bg-slate-900/60 p-2.5">
-                                        <span className="block text-[10px] text-slate-500">ECCENTRICITY</span>
-                                        <strong className="mt-0.5 block text-slate-300">
-                                            {selectedSatelliteData.record.ECCENTRICITY.toFixed(6)}
-                                        </strong>
-                                    </div>
-                                </div>
-
-                                {/* Actions */}
-                                <div className="mt-4 flex items-center gap-2">
-                                    {selectedSatelliteData.focusId && (
-                                        <Link
-                                            href={`/iss?sat=${selectedSatelliteData.focusId}`}
-                                            className="flex flex-1 items-center justify-center gap-2 rounded-xl border border-cyan-400/50 bg-cyan-500/20 py-2 font-mono text-xs font-bold text-cyan-200 transition-all hover:bg-cyan-500/30 hover:shadow-[0_0_20px_rgba(6,182,212,0.3)]"
-                                        >
-                                            <ExternalLink className="h-3.5 w-3.5" />
-                                            <span>FOCUS CONSOLE</span>
-                                        </Link>
-                                    )}
-
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const id = selectedNoradId;
-                                            setSelectedNoradId(null);
-                                            setTimeout(() => setSelectedNoradId(id), 50);
-                                        }}
-                                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/90 py-2 font-mono text-xs font-semibold text-slate-300 transition-all hover:border-slate-700 hover:text-white"
-                                    >
-                                        <Compass className="h-3.5 w-3.5 text-cyan-400" />
-                                        <span>RE-CENTER CAMERA</span>
-                                    </button>
-                                </div>
+                            <div className="absolute left-4 top-4 z-20">
+                                <SatelliteDetailPanel
+                                    satellite={selectedSatelliteData.record}
+                                    livePosition={{
+                                        altKm: selectedSatelliteData.altKm,
+                                        speedKmS: selectedSatelliteData.speedKmS,
+                                        speedKmH: selectedSatelliteData.speedKmH,
+                                    }}
+                                    analysis={currentAnalysis}
+                                    isAnalyzing={isAnalyzing && !currentAnalysis}
+                                    media={selectedMedia}
+                                    focusId={selectedSatelliteData.focusId}
+                                    onClose={() => setSelectedNoradId(null)}
+                                    onRecenterCamera={() => setRecenterCounter((c) => c + 1)}
+                                />
                             </div>
                         )}
 
@@ -1007,4 +1021,3 @@ function TelemetryBadge({
         </div>
     );
 }
-

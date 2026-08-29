@@ -2,6 +2,12 @@
 
 import { useEffect, useRef } from "react";
 import type { SatelliteOmmRecord } from "@/lib/satellites/catalogTypes";
+import type { SelectedSatelliteAnalysisMessage } from "@/lib/satellites/catalogWorkerTypes";
+import {
+    extractFirstValidSatellitePick,
+    parseCatalogSatellitePick,
+    type CatalogSatellitePickMetadata,
+} from "@/lib/satellites/catalogPicking";
 import {
     buildViewerOptions,
     getCesiumToken,
@@ -16,11 +22,13 @@ export interface OrbitalCatalogGlobeProps {
     positionsEcfKm: Float64Array;
     valid: Uint8Array;
     selectedNoradId?: number | null;
+    selectedAnalysis?: SelectedSatelliteAnalysisMessage | null;
     onSelectSatellite?: (noradId: number | null) => void;
     filterRegime?: OrbitalRegimeFilter;
     searchQuery?: string;
     cameraPreset?: string;
     showLighting?: boolean;
+    recenterCounter?: number;
 }
 
 interface LatestPositionFrame {
@@ -131,12 +139,12 @@ function applyPositionFrame(
             zMeters
         );
 
-        point.pixelSize = isSelected ? 8 : 4;
+        point.pixelSize = isSelected ? 11 : 4.5;
         point.color = getPointColor(Cesium, satellite.MEAN_MOTION, isSelected);
         point.outlineColor = isSelected
             ? Cesium.Color.fromCssColorString("#38bdf8")
             : Cesium.Color.fromCssColorString("#020617");
-        point.outlineWidth = isSelected ? 2 : 1;
+        point.outlineWidth = isSelected ? 2.5 : 1;
         point.show = true;
     }
 
@@ -152,13 +160,16 @@ export default function OrbitalCatalogGlobe({
     positionsEcfKm,
     valid,
     selectedNoradId = null,
+    selectedAnalysis = null,
     onSelectSatellite,
     filterRegime = "all",
     searchQuery = "",
     cameraPreset = "global",
     showLighting = true,
+    recenterCounter = 0,
 }: OrbitalCatalogGlobeProps) {
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const creditContainerRef = useRef<HTMLDivElement | null>(null);
     const viewerRef = useRef<import("cesium").Viewer | null>(null);
     const pointCollectionRef = useRef<import("cesium").PointPrimitiveCollection | null>(null);
     const handlerRef = useRef<import("cesium").ScreenSpaceEventHandler | null>(null);
@@ -169,12 +180,43 @@ export default function OrbitalCatalogGlobe({
     });
 
     const satellitesRef = useRef(satellites);
-    satellitesRef.current = satellites;
-
+    const validNoradIdsSetRef = useRef<Set<number>>(new Set());
     const onSelectSatelliteRef = useRef(onSelectSatellite);
-    onSelectSatelliteRef.current = onSelectSatellite;
+    const filterRegimeRef = useRef(filterRegime);
+    const searchQueryRef = useRef(searchQuery);
+    const selectedNoradIdRef = useRef(selectedNoradId);
+    const showLightingRef = useRef(showLighting);
+    const lastHoveredNoradRef = useRef<number | null>(null);
+    const lastFlownNoradIdRef = useRef<number | null>(null);
+    const prevRecenterCounterRef = useRef<number>(recenterCounter);
 
-    // Update positions & filters
+    // Synchronize latest props into refs without mutating during render
+    useEffect(() => {
+        satellitesRef.current = satellites;
+        validNoradIdsSetRef.current = new Set(satellites.map((s) => s.NORAD_CAT_ID));
+    }, [satellites]);
+
+    useEffect(() => {
+        onSelectSatelliteRef.current = onSelectSatellite;
+    }, [onSelectSatellite]);
+
+    useEffect(() => {
+        filterRegimeRef.current = filterRegime;
+    }, [filterRegime]);
+
+    useEffect(() => {
+        searchQueryRef.current = searchQuery;
+    }, [searchQuery]);
+
+    useEffect(() => {
+        selectedNoradIdRef.current = selectedNoradId;
+    }, [selectedNoradId]);
+
+    useEffect(() => {
+        showLightingRef.current = showLighting;
+    }, [showLighting]);
+
+    // Update positions & filters on point collection
     useEffect(() => {
         latestFrameRef.current = {
             positionsEcfKm,
@@ -205,6 +247,81 @@ export default function OrbitalCatalogGlobe({
             );
         });
     }, [positionsEcfKm, valid, filterRegime, searchQuery, selectedNoradId, satellites]);
+
+    // Render/update 3D orbit track polyline when selectedAnalysis / selectedNoradId changes
+    useEffect(() => {
+        const viewer = viewerRef.current;
+        if (!viewer || viewer.isDestroyed()) {
+            return;
+        }
+
+        void import("cesium").then((Cesium) => {
+            if (viewer.isDestroyed()) return;
+
+            const existingTrack = viewer.entities.getById("selected-satellite-orbit-track");
+
+            if (!selectedNoradId || !selectedAnalysis || selectedAnalysis.noradId !== selectedNoradId) {
+                if (existingTrack) {
+                    viewer.entities.remove(existingTrack);
+                    viewer.scene.requestRender();
+                }
+                return;
+            }
+
+            const positions: import("cesium").Cartesian3[] = [];
+            const sampleCount = selectedAnalysis.valid.length;
+
+            for (let i = 0; i < sampleCount; i += 1) {
+                if (selectedAnalysis.valid[i] === 1) {
+                    const offset = i * 3;
+                    const x = selectedAnalysis.positionsEcfKm[offset] * 1000;
+                    const y = selectedAnalysis.positionsEcfKm[offset + 1] * 1000;
+                    const z = selectedAnalysis.positionsEcfKm[offset + 2] * 1000;
+
+                    if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z)) {
+                        positions.push(new Cesium.Cartesian3(x, y, z));
+                    }
+                }
+            }
+
+            if (positions.length < 2) {
+                if (existingTrack) {
+                    viewer.entities.remove(existingTrack);
+                    viewer.scene.requestRender();
+                }
+                return;
+            }
+
+            const selectedSat = satellitesRef.current.find((s) => s.NORAD_CAT_ID === selectedNoradId);
+            const regime = selectedSat ? getSatelliteRegime(selectedSat.MEAN_MOTION) : "leo";
+            const glowColorHex = regime === "leo" ? "#06b6d4" : regime === "meo" ? "#f59e0b" : "#c084fc";
+
+            if (existingTrack) {
+                existingTrack.polyline!.positions = new Cesium.ConstantProperty(positions);
+                existingTrack.polyline!.material = new Cesium.PolylineGlowMaterialProperty({
+                    glowPower: 0.25,
+                    taperPower: 1.0,
+                    color: Cesium.Color.fromCssColorString(glowColorHex).withAlpha(0.85),
+                });
+            } else {
+                viewer.entities.add({
+                    id: "selected-satellite-orbit-track",
+                    polyline: {
+                        positions: positions,
+                        width: 2.5,
+                        material: new Cesium.PolylineGlowMaterialProperty({
+                            glowPower: 0.25,
+                            taperPower: 1.0,
+                            color: Cesium.Color.fromCssColorString(glowColorHex).withAlpha(0.85),
+                        }),
+                        arcType: Cesium.ArcType.NONE,
+                    },
+                });
+            }
+
+            viewer.scene.requestRender();
+        });
+    }, [selectedNoradId, selectedAnalysis]);
 
     // Handle lighting toggle
     useEffect(() => {
@@ -294,9 +411,22 @@ export default function OrbitalCatalogGlobe({
         });
     }, [cameraPreset]);
 
-    // Fly to selected satellite
+    // Fly to selected satellite — strictly guarded against recurring position updates
     useEffect(() => {
-        if (!selectedNoradId) return;
+        if (selectedNoradId === null || selectedNoradId === undefined) {
+            lastFlownNoradIdRef.current = null;
+            return;
+        }
+
+        const isNewSelection = selectedNoradId !== lastFlownNoradIdRef.current;
+        const isExplicitRecenter = recenterCounter !== prevRecenterCounterRef.current;
+
+        if (!isNewSelection && !isExplicitRecenter) {
+            return;
+        }
+
+        lastFlownNoradIdRef.current = selectedNoradId;
+        prevRecenterCounterRef.current = recenterCounter;
 
         const viewer = viewerRef.current;
         if (!viewer || viewer.isDestroyed()) return;
@@ -304,15 +434,19 @@ export default function OrbitalCatalogGlobe({
         const satelliteIndex = satellites.findIndex((s) => s.NORAD_CAT_ID === selectedNoradId);
         if (satelliteIndex === -1) return;
 
+        const frame = latestFrameRef.current;
         const offset = satelliteIndex * 3;
-        const xKm = positionsEcfKm[offset];
-        const yKm = positionsEcfKm[offset + 1];
-        const zKm = positionsEcfKm[offset + 2];
+        const xKm = frame.positionsEcfKm[offset];
+        const yKm = frame.positionsEcfKm[offset + 1];
+        const zKm = frame.positionsEcfKm[offset + 2];
 
         if (!Number.isFinite(xKm) || !Number.isFinite(yKm) || !Number.isFinite(zKm)) return;
 
         void import("cesium").then((Cesium) => {
             if (viewer.isDestroyed()) return;
+
+            viewer.camera.cancelFlight();
+
             const targetPos = new Cesium.Cartesian3(xKm * 1000, yKm * 1000, zKm * 1000);
             const cartographic = Cesium.Cartographic.fromCartesian(targetPos);
             const latDeg = Cesium.Math.toDegrees(cartographic.latitude);
@@ -325,12 +459,13 @@ export default function OrbitalCatalogGlobe({
                     latDeg,
                     Math.max(altMeters * 2.2, 4_000_000)
                 ),
-                duration: 1.6,
+                duration: 1.5,
             });
+            viewer.scene.requestRender();
         });
-    }, [selectedNoradId, satellites, positionsEcfKm]);
+    }, [selectedNoradId, recenterCounter, satellites]);
 
-    // Initialize Cesium Viewer & Event Handling
+    // Initialize Cesium Viewer & ScreenSpaceEventHandler
     useEffect(() => {
         const container = containerRef.current;
         if (!container || viewerRef.current) {
@@ -367,9 +502,12 @@ export default function OrbitalCatalogGlobe({
                     baseLayer = new Cesium.ImageryLayer(imageryProvider);
                 }
 
+                const creditContainer = creditContainerRef.current ?? undefined;
+
                 const viewer = new Cesium.Viewer(container, {
                     ...buildViewerOptions(),
                     ...(baseLayer ? { baseLayer } : {}),
+                    ...(creditContainer ? { creditContainer } : {}),
                 });
 
                 createdViewer = viewer;
@@ -377,7 +515,7 @@ export default function OrbitalCatalogGlobe({
 
                 viewer.scene.backgroundColor = Cesium.Color.fromCssColorString("#01040d");
                 viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString("#07111f");
-                viewer.scene.globe.enableLighting = showLighting;
+                viewer.scene.globe.enableLighting = showLightingRef.current;
                 viewer.scene.globe.depthTestAgainstTerrain = true;
                 viewer.scene.fog.enabled = true;
 
@@ -391,22 +529,23 @@ export default function OrbitalCatalogGlobe({
 
                 for (let index = 0; index < satellitesRef.current.length; index += 1) {
                     const satellite = satellitesRef.current[index];
+                    const pickId: CatalogSatellitePickMetadata = {
+                        kind: "catalog-satellite",
+                        index,
+                        noradId: satellite.NORAD_CAT_ID,
+                    };
 
                     pointCollection.add({
-                        id: {
-                            kind: "catalog-satellite",
-                            index,
-                            noradId: satellite.NORAD_CAT_ID,
-                        },
+                        id: pickId,
                         position: Cesium.Cartesian3.ZERO,
                         show: false,
-                        pixelSize: 4,
+                        pixelSize: 4.5,
                         color: getPointColor(Cesium, satellite.MEAN_MOTION, false),
                         outlineColor: Cesium.Color.fromCssColorString("#020617"),
                         outlineWidth: 1,
                         scaleByDistance: new Cesium.NearFarScalar(
                             2_000_000,
-                            1.6,
+                            1.5,
                             80_000_000,
                             0.65
                         ),
@@ -419,9 +558,9 @@ export default function OrbitalCatalogGlobe({
                     pointCollection,
                     satellitesRef.current,
                     latestFrameRef.current,
-                    filterRegime,
-                    searchQuery,
-                    selectedNoradId
+                    filterRegimeRef.current,
+                    searchQueryRef.current,
+                    selectedNoradIdRef.current
                 );
 
                 // Initial camera view
@@ -434,24 +573,76 @@ export default function OrbitalCatalogGlobe({
                     },
                 });
 
-                // Setup Click Handler for Picking Satellites
+                // ScreenSpaceEventHandler for accurate Picking & Hover Pointer
                 const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
                 handlerRef.current = handler;
 
-                handler.setInputAction((movement: { position: import("cesium").Cartesian2 }) => {
-                    const pickedObject = viewer.scene.pick(movement.position);
-                    if (
-                        Cesium.defined(pickedObject) &&
-                        pickedObject.id &&
-                        typeof pickedObject.id === "object" &&
-                        pickedObject.id.kind === "catalog-satellite"
-                    ) {
-                        const pickedNorad = pickedObject.id.noradId;
-                        if (typeof pickedNorad === "number" && onSelectSatelliteRef.current) {
-                            onSelectSatelliteRef.current(pickedNorad);
+                // Left click picking with drillPick tolerance
+                handler.setInputAction(
+                    (movement: { position: import("cesium").Cartesian2 }) => {
+                        const drillResults = viewer.scene.drillPick(
+                            movement.position,
+                            10,
+                            12,
+                            12
+                        );
+                        const validSet = validNoradIdsSetRef.current;
+                        let picked = extractFirstValidSatellitePick(drillResults, validSet);
+
+                        if (!picked) {
+                            const singlePick = viewer.scene.pick(movement.position);
+                            const parsedSingle = parseCatalogSatellitePick(singlePick);
+                            if (parsedSingle && (!validSet || validSet.has(parsedSingle.noradId))) {
+                                picked = parsedSingle;
+                            }
                         }
-                    }
-                }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+                        if (picked) {
+                            onSelectSatelliteRef.current?.(picked.noradId);
+                        } else {
+                            onSelectSatelliteRef.current?.(null);
+                        }
+                    },
+                    Cesium.ScreenSpaceEventType.LEFT_CLICK
+                );
+
+                // Mouse move hover detection with drillPick tolerance
+                handler.setInputAction(
+                    (movement: { endPosition: import("cesium").Cartesian2 }) => {
+                        if (!movement.endPosition) return;
+
+                        const drillResults = viewer.scene.drillPick(
+                            movement.endPosition,
+                            8,
+                            10,
+                            10
+                        );
+                        const validSet = validNoradIdsSetRef.current;
+                        let hovered = extractFirstValidSatellitePick(drillResults, validSet);
+
+                        if (!hovered) {
+                            const singlePick = viewer.scene.pick(movement.endPosition);
+                            const parsedSingle = parseCatalogSatellitePick(singlePick);
+                            if (parsedSingle && (!validSet || validSet.has(parsedSingle.noradId))) {
+                                hovered = parsedSingle;
+                            }
+                        }
+
+                        const canvas = viewer.scene.canvas;
+                        if (!canvas) return;
+
+                        if (hovered) {
+                            if (lastHoveredNoradRef.current !== hovered.noradId) {
+                                lastHoveredNoradRef.current = hovered.noradId;
+                                canvas.style.cursor = "pointer";
+                            }
+                        } else if (lastHoveredNoradRef.current !== null) {
+                            lastHoveredNoradRef.current = null;
+                            canvas.style.cursor = "";
+                        }
+                    },
+                    Cesium.ScreenSpaceEventType.MOUSE_MOVE
+                );
 
                 viewer.scene.requestRender();
             })
@@ -467,12 +658,17 @@ export default function OrbitalCatalogGlobe({
                 handlerRef.current = null;
             }
 
-            pointCollectionRef.current = null;
-            viewerRef.current = null;
-
             if (createdViewer && !createdViewer.isDestroyed()) {
+                if (createdViewer.scene?.canvas) {
+                    createdViewer.scene.canvas.style.cursor = "";
+                }
                 createdViewer.destroy();
             }
+
+            pointCollectionRef.current = null;
+            viewerRef.current = null;
+            lastHoveredNoradRef.current = null;
+            lastFlownNoradIdRef.current = null;
         };
     }, []);
 
@@ -482,6 +678,11 @@ export default function OrbitalCatalogGlobe({
                 ref={containerRef}
                 className="orbital-catalog-cesium h-[640px] w-full bg-[#01040d] sm:h-[720px] lg:h-[780px]"
                 aria-label="Interactive 3D active satellite orbital catalog"
+            />
+
+            <div
+                ref={creditContainerRef}
+                className="cesium-credit-dock absolute bottom-1.5 right-2 z-10 max-w-[80vw] font-mono text-[9px] text-slate-400 pointer-events-auto"
             />
 
             <style jsx global>{`
@@ -494,12 +695,24 @@ export default function OrbitalCatalogGlobe({
                     height: 100%;
                 }
 
-                .orbital-catalog-cesium .cesium-widget-credits {
+                .cesium-credit-dock {
                     font-size: 9px;
-                    opacity: 0.65;
+                    opacity: 0.8;
+                    pointer-events: auto;
+                }
+
+                .cesium-credit-dock a {
+                    color: #38bdf8;
+                    text-decoration: underline;
+                    pointer-events: auto;
+                }
+
+                .cesium-credit-dock img {
+                    display: inline-block;
+                    vertical-align: middle;
+                    max-height: 16px;
                 }
             `}</style>
         </div>
     );
 }
-

@@ -1,3 +1,5 @@
+import type { SatelliteSatcatRecord, SatcatSourceInfo } from "./satcatTypes";
+
 /**
  * CelesTrak GP data represented using Orbit Mean-Elements
  * Message JSON field names.
@@ -29,10 +31,12 @@ export interface SatelliteOmmRecord {
     MEAN_MOTION_DDOT: number;
 
     /**
-     * OMM may contain additional metadata fields.
-     *
-     * This index signature also makes this interface compatible
-     * with satellite.js OMMJsonObject.
+     * Optional SATCAT metadata joined via NORAD_CAT_ID.
+     */
+    SATCAT?: SatelliteSatcatRecord | null;
+
+    /**
+     * Index signature for compatibility with satellite.js OMMJsonObject.
      */
     [key: string]: unknown;
 }
@@ -43,6 +47,7 @@ export interface SatelliteCatalogResponse {
         format: "OMM JSON";
         url: string;
     };
+    metadataSource?: SatcatSourceInfo;
     group: "active";
     generatedAt: string;
     refreshIntervalSeconds: number;
