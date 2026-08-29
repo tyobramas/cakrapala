@@ -75,6 +75,33 @@ function applyPositionFrame(
     searchQuery: string,
     selectedNoradId: number | null
 ): void {
+    // Ensure point collection has enough PointPrimitives
+    while (points.length < satellites.length) {
+        const index = points.length;
+        const satellite = satellites[index];
+        const pickId: CatalogSatellitePickMetadata = {
+            kind: "catalog-satellite",
+            index,
+            noradId: satellite.NORAD_CAT_ID,
+        };
+
+        points.add({
+            id: pickId,
+            position: Cesium.Cartesian3.ZERO,
+            show: false,
+            pixelSize: 4.5,
+            color: getPointColor(Cesium, satellite.MEAN_MOTION, false),
+            outlineColor: Cesium.Color.fromCssColorString("#020617"),
+            outlineWidth: 1,
+            scaleByDistance: new Cesium.NearFarScalar(
+                2_000_000,
+                1.5,
+                80_000_000,
+                0.65
+            ),
+        });
+    }
+
     const availablePositions = Math.floor(
         frame.positionsEcfKm.length / 3
     );
@@ -95,6 +122,20 @@ function applyPositionFrame(
         if (frame.valid[index] !== 1 || !satellite) {
             point.show = false;
             continue;
+        }
+
+        // Sync pick ID
+        const currentPickId = point.id as CatalogSatellitePickMetadata | undefined;
+        if (
+            !currentPickId ||
+            currentPickId.noradId !== satellite.NORAD_CAT_ID ||
+            currentPickId.index !== index
+        ) {
+            point.id = {
+                kind: "catalog-satellite",
+                index,
+                noradId: satellite.NORAD_CAT_ID,
+            };
         }
 
         // Apply regime filter
@@ -526,31 +567,6 @@ export default function OrbitalCatalogGlobe({
                 );
 
                 pointCollectionRef.current = pointCollection;
-
-                for (let index = 0; index < satellitesRef.current.length; index += 1) {
-                    const satellite = satellitesRef.current[index];
-                    const pickId: CatalogSatellitePickMetadata = {
-                        kind: "catalog-satellite",
-                        index,
-                        noradId: satellite.NORAD_CAT_ID,
-                    };
-
-                    pointCollection.add({
-                        id: pickId,
-                        position: Cesium.Cartesian3.ZERO,
-                        show: false,
-                        pixelSize: 4.5,
-                        color: getPointColor(Cesium, satellite.MEAN_MOTION, false),
-                        outlineColor: Cesium.Color.fromCssColorString("#020617"),
-                        outlineWidth: 1,
-                        scaleByDistance: new Cesium.NearFarScalar(
-                            2_000_000,
-                            1.5,
-                            80_000_000,
-                            0.65
-                        ),
-                    });
-                }
 
                 applyPositionFrame(
                     Cesium,
