@@ -30,6 +30,11 @@ const nextConfig: NextConfig = {
   // (e.g. `next build --webpack`).  Turbopack ignores this block.
   webpack: (config, { isServer, webpack }) => {
     if (!isServer) {
+      config.experiments = {
+        ...(config.experiments ?? {}),
+        topLevelAwait: true,
+      };
+
       // Handle node: protocol imports (e.g. from satellite.js wasm runtimes)
       config.plugins = config.plugins ?? [];
       config.plugins.push(
@@ -43,6 +48,11 @@ const nextConfig: NextConfig = {
 
       // Cesium & satellite.js rely on Node.js built-ins that are not available in browser bundles.
       config.resolve = config.resolve ?? {};
+      config.resolve.alias = {
+        ...(config.resolve.alias as Record<string, boolean | string> | undefined),
+        "@spz-loader/core": false,
+        "@cesium/wasm-splats": false,
+      };
       config.resolve.fallback = {
         ...(config.resolve.fallback as Record<string, boolean> | undefined),
         fs: false,
