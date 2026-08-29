@@ -12,6 +12,8 @@ import Link from "next/link";
 import { ArrowLeft, Satellite as SatIcon } from "lucide-react";
 import { SATELLITE_CATALOG } from "@/lib/satellites/satelliteCatalog";
 import { CURRENT_ISS_CREW } from "@/lib/iss/issService";
+import SatelliteModeTabs from "@/components/space/SatelliteModeTabs";
+
 
 // Dynamic import — NO SSR, with full loading screen
 const RealtimeISSTracker = dynamic(
@@ -98,6 +100,7 @@ export default function ISSMissionConsole() {
 
       {/* Main Satellite Tracker Dashboard */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-8">
+        <SatelliteModeTabs active="focus" />
         {/* Real-Time Tracker Component with Satellite Switcher & 2D/3D Globe */}
         <RealtimeISSTracker />
 
