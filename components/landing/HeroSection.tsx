@@ -40,7 +40,7 @@ import { SATELLITE_CATALOG } from "@/lib/satellites/satelliteCatalog";
 const CommandCenterGlobe = dynamic(
   () => import("./CommandCenterGlobe"),
   { ssr: false, loading: () => (
-    <div className="w-full h-full flex items-center justify-center">
+    <div className="w-full h-full flex items-center justify-center bg-[#020617]/80">
       <div className="text-cyan-400/60 font-mono text-xs animate-pulse tracking-widest">
         INITIALIZING EARTH VIEWPORT...
       </div>
@@ -418,7 +418,7 @@ export default function HeroSection() {
               </div>
             </div>
             <div className="flex items-center justify-between text-[9px] text-emerald-400 font-bold mt-3 pt-2 border-t border-slate-800/60">
-              <span>EXPLORE SKY DOME</span>
+              <span>EXPLORE SKY MAP</span>
               <ChevronRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
             </div>
           </Link>

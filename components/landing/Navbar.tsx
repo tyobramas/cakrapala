@@ -66,11 +66,11 @@ export default function Navbar() {
     {
       id: "sky",
       label: "SKY MAP",
-      shortLabel: "SKY DOME",
+      shortLabel: "SKY MAP",
       href: "/sky",
       code: "SYS-03",
       icon: Sparkles,
-      desc: "IAU Sky Dome & Earth Observatory",
+      desc: "IAU Sky Map & Earth Observatory",
     },
     {
       id: "globe",
