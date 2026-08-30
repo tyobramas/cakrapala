@@ -32,6 +32,35 @@ export interface LaunchSite {
   elevationM?: number;
 }
 
+export interface StagePreset {
+  name: string;
+  /** Fuelled mass of this stage alone, excluding stages above and payload (kg). */
+  grossMassKg: number;
+  /** Inert mass of this stage after propellant depletion (kg). */
+  dryMassKg: number;
+  /** Vacuum specific impulse (s). */
+  ispVacuumS: number;
+  /** Sea-level specific impulse (s). Define only for atmospheric first stages. */
+  ispSeaLevelS?: number;
+  /** Vacuum thrust (N). Display only. */
+  thrustVacuumN?: number;
+}
+
+export interface VehiclePreset {
+  id: string;
+  name: string;
+  wetMassKg: number;
+  dryMassKg: number;
+  payloadCapacityKg: number;
+  propellantMassKg: number;
+  specificImpulseS: number;
+  thrustN?: number;
+  notes?: string;
+  /** Ordered first-fired to last-fired. When present, staged delta-v is used. */
+  stages?: StagePreset[];
+}
+
+
 export interface VehiclePreset {
   id: string;
   name: string;

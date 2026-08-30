@@ -9,10 +9,14 @@
  *
  * Formulas implemented:
  *   A. Circular orbital speed:  v = √(μ/r)
- *   B. Tsiolkovsky equation:   Δv = Isp · g₀ · ln(m₀/mf)
- *   C. Earth rotation assist:  v_rot = ω · R · cos(φ)
- *   D. Delta-v budget:         Δv_req = v_circ + losses - v_rot
- *   E. Parametric 3D gravity-turn ascent path
+ *   B. Tsiolkovsky equation:    Δv = Isp · g₀ · ln(m₀/mf)
+ *   C. Launch azimuth:          sin(A) = cos(i) / cos(φ)
+ *   D. Rotation assist:         v_rot = ω · R · cos(φ) · sin(A)
+ *   E. Hohmann orbit raising:   Δv₁ = v_p − v₁ , Δv₂ = v₂ − v_a
+ *   F. Plane change:            Δv = 2 · v · sin(Δi/2)
+ *   G. Delta-v budget:          Δv_req = v_park + Δv_hohmann + losses
+ *                                        + Δv_plane − v_rot
+ *   H. Parametric 3D gravity-turn ascent path, ECI-placed via GMST
  */
 
 import type {
@@ -29,17 +33,26 @@ import {
   EARTH_MU_M3_S2,
   EARTH_RADIUS_M,
   EARTH_ROTATION_RATE_RAD_S,
-  DEFAULT_GRAVITY_LOSS_MPS,
-  DEFAULT_DRAG_LOSS_MPS,
-  DEFAULT_STEERING_LOSS_MPS,
   FEASIBILITY_MARGIN_FEASIBLE_MPS,
   MODEL_VERSION,
 } from "./constants";
 import { kmToM, mToKm, degToRad, validatePositiveFinite, validateRange } from "./units";
 import { vec3, normalize, scale, add, sub, rotateAroundAxis, cross, magnitude } from "./vector3";
 import { assessRisk } from "./riskAssessment";
-import { formatDurationHours } from "./formatters";
 import { enforceTrajectoryValidation } from "./trajectoryValidation";
+import {
+  REFERENCE_PARKING_ALTITUDE_KM,
+  hohmannTransfer,
+  solveLaunchAzimuth,
+  rotationAssistMps,
+  planeChangeDeltaVMps,
+  gravityLossMps,
+  dragLossMps,
+  steeringLossMps,
+  launchSiteEciM,
+} from "./ascentModel";
+
+import { vehicleDeltaVMps } from "./stagingModel";
 
 // ── Core Physics ──────────────────────────────────────────────────────────────
 
@@ -83,87 +96,113 @@ export function tsiolkovskyDeltaVMps(
 }
 
 /**
- * Earth rotation assist at a given latitude.
+ * Maximum Earth rotation assist at a given latitude (due-east launch).
  * v_rot = ω · R · cos(φ)
  *
- * For eastward launch, this is subtracted from required delta-v.
+ * NOTE: retained for backward compatibility and reference. The delta-v budget
+ * uses the azimuth-aware `rotationAssistMps()` from ascentModel instead, which
+ * correctly reduces the assist for polar and retrograde launches.
  */
 export function earthRotationAssistMps(latitudeDeg: number): number {
   const latRad = degToRad(latitudeDeg);
   return EARTH_ROTATION_RATE_RAD_S * EARTH_RADIUS_M * Math.cos(latRad);
 }
 
-/**
- * Estimate inclination penalty delta-v.
- * Simplified: if target inclination < launch latitude, a plane change is needed.
- * Uses approximation: Δv_plane ≈ 2 · v_circ · sin(Δi/2) but capped conservatively.
- */
-function inclinationPenaltyMps(
-  targetIncDeg: number,
-  launchLatDeg: number,
-  vCircMps: number
-): number {
-  const minInclination = Math.abs(launchLatDeg);
-
-  if (targetIncDeg >= minInclination) {
-    return 0; // No penalty: inclination is achievable directly
-  }
-
-  // Plane change needed — expensive
-  const deltaIDeg = minInclination - targetIncDeg;
-  const deltaIRad = degToRad(deltaIDeg);
-  return 2 * vCircMps * Math.sin(deltaIRad / 2);
-}
-
 // ── Delta-V Budget ────────────────────────────────────────────────────────────
 
 interface DeltaVBreakdown {
+  parkingAltitudeKm: number;
   vCircularMps: number;
+  hohmannMps: number;
+  hohmannBurn1Mps: number;
+  hohmannBurn2Mps: number;
   gravityLossMps: number;
   dragLossMps: number;
   steeringLossMps: number;
   inclinationPenaltyMps: number;
   rotationAssistMps: number;
+  azimuthDeg: number;
   totalRequiredMps: number;
   availableMps: number;
   marginMps: number;
+  notes: string[];
 }
 
 function computeDeltaVBudget(input: SatelliteLaunchInput): DeltaVBreakdown {
-  const targetRadiusM = EARTH_RADIUS_M + kmToM(input.targetAltitudeKm);
-  const vCirc = circularOrbitalSpeedMps(targetRadiusM);
-  const vRotAssist = earthRotationAssistMps(input.launchSite.latitudeDeg);
-  const incPenalty = inclinationPenaltyMps(
-    input.targetInclinationDeg,
-    input.launchSite.latitudeDeg,
-    vCirc
+  const notes: string[] = [];
+  const lat = input.launchSite.latitudeDeg;
+
+  // Ascent delivers to a low parking orbit; anything higher is reached by a
+  // Hohmann transfer rather than by an (incorrectly cheaper) direct insertion.
+  const parkingAltKm = Math.min(
+    input.targetAltitudeKm,
+    REFERENCE_PARKING_ALTITUDE_KM
   );
+  const parkingRadiusM = EARTH_RADIUS_M + kmToM(parkingAltKm);
+  const targetRadiusM = EARTH_RADIUS_M + kmToM(input.targetAltitudeKm);
+
+  const vCirc = circularOrbitalSpeedMps(parkingRadiusM);
+  const vCircTarget = circularOrbitalSpeedMps(targetRadiusM);
+
+  // ── Orbit raising ───────────────────────────────────────────────────────
+  const hohmann = hohmannTransfer(parkingRadiusM, targetRadiusM);
+  if (hohmann.totalMps > 0) {
+    notes.push(
+      `Orbit raising ${Math.round(parkingAltKm)} → ${Math.round(
+        input.targetAltitudeKm
+      )} km via Hohmann transfer (${Math.round(
+        hohmann.burn1Mps
+      )} + ${Math.round(hohmann.burn2Mps)} m/s).`
+    );
+  }
+
+  // ── Azimuth, rotation assist, plane change ──────────────────────────────
+  const az = solveLaunchAzimuth(input.targetInclinationDeg, lat);
+  const vRotAssist = rotationAssistMps(lat, az.azimuthRad);
+
+  let incPenalty = 0;
+  if (!az.achievable) {
+    // Plane change is cheapest at the largest radius — perform it at target.
+    incPenalty = planeChangeDeltaVMps(vCircTarget, az.residualPlaneChangeDeg);
+    notes.push(
+      `Target inclination ${input.targetInclinationDeg}° is below site latitude ` +
+      `${Math.abs(lat).toFixed(1)}°. Plane change of ` +
+      `${az.residualPlaneChangeDeg.toFixed(1)}° required at target altitude.`
+    );
+  }
+
+  if (vRotAssist < 0) {
+    notes.push(
+      "Retrograde/near-polar azimuth: Earth rotation acts as a penalty, not an assist."
+    );
+  }
+
+  // ── Vehicle-dependent losses ────────────────────────────────────────────
+  const gLoss = gravityLossMps(input.vehicle.wetMassKg, input.vehicle.thrustN);
+  const dLoss = dragLossMps(input.vehicle.wetMassKg);
+  const sLoss = steeringLossMps(az.azimuthRad);
 
   const totalRequired =
-    vCirc +
-    DEFAULT_GRAVITY_LOSS_MPS +
-    DEFAULT_DRAG_LOSS_MPS +
-    DEFAULT_STEERING_LOSS_MPS +
-    incPenalty -
-    vRotAssist;
+    vCirc + hohmann.totalMps + gLoss + dLoss + sLoss + incPenalty - vRotAssist;
 
-  const available = tsiolkovskyDeltaVMps(
-    input.vehicle.specificImpulseS,
-    input.vehicle.wetMassKg,
-    input.vehicle.dryMassKg,
-    input.payloadMassKg
-  );
+  const available = vehicleDeltaVMps(input.vehicle, input.payloadMassKg);
 
   return {
+    parkingAltitudeKm: parkingAltKm,
     vCircularMps: vCirc,
-    gravityLossMps: DEFAULT_GRAVITY_LOSS_MPS,
-    dragLossMps: DEFAULT_DRAG_LOSS_MPS,
-    steeringLossMps: DEFAULT_STEERING_LOSS_MPS,
+    hohmannMps: hohmann.totalMps,
+    hohmannBurn1Mps: hohmann.burn1Mps,
+    hohmannBurn2Mps: hohmann.burn2Mps,
+    gravityLossMps: gLoss,
+    dragLossMps: dLoss,
+    steeringLossMps: sLoss,
     inclinationPenaltyMps: incPenalty,
     rotationAssistMps: vRotAssist,
+    azimuthDeg: (az.azimuthRad * 180) / Math.PI,
     totalRequiredMps: totalRequired,
     availableMps: available,
     marginMps: available - totalRequired,
+    notes,
   };
 }
 
@@ -178,7 +217,8 @@ function computeDeltaVBudget(input: SatelliteLaunchInput): DeltaVBreakdown {
  * 3. Gravity turn ascent (15–85%)
  * 4. Orbit insertion (85–100%)
  *
- * Uses smooth easing and realistic altitude profile.
+ * The launch site is placed in ECI using GMST, so the launch DATE rotates
+ * the whole trajectory — previously the site was effectively fixed in ECEF.
  */
 function generateAscentTrajectory(
   input: SatelliteLaunchInput,
@@ -188,18 +228,17 @@ function generateAscentTrajectory(
   const points: TrajectoryPoint[] = [];
   const events: MissionEvent[] = [];
 
-  const launchLatRad = degToRad(input.launchSite.latitudeDeg);
-  const launchLonRad = degToRad(input.launchSite.longitudeDeg);
   const targetAltM = kmToM(input.targetAltitudeKm);
-  const incRad = degToRad(input.targetInclinationDeg);
+  const launchDate = new Date(input.launchDateUtc);
 
-  // Launch position on Earth surface (ECI at launch time)
-  const launchR = EARTH_RADIUS_M;
-  const launchPos = vec3(
-    launchR * Math.cos(launchLatRad) * Math.cos(launchLonRad),
-    launchR * Math.cos(launchLatRad) * Math.sin(launchLonRad),
-    launchR * Math.sin(launchLatRad)
+  // Launch position in ECI — rotated by GMST so launch date matters.
+  const sitePos = launchSiteEciM(
+    input.launchSite.latitudeDeg,
+    input.launchSite.longitudeDeg,
+    launchDate,
+    input.launchSite.elevationM ?? 0
   );
+  const launchPos = vec3(sitePos.x, sitePos.y, sitePos.z);
 
   // Radial direction (up from surface)
   const radialDir = normalize(launchPos);
@@ -211,14 +250,11 @@ function generateAscentTrajectory(
     eastDir = vec3(0, 1, 0); // fallback at poles
   }
 
-  // Launch azimuth direction (accounting for inclination)
-  // sin(azimuth) = cos(i) / cos(lat)
-  const cosLat = Math.cos(launchLatRad);
-  let azimuthRad = Math.PI / 2; // default due east
-  if (cosLat > 0.001) {
-    const sinAz = Math.min(1, Math.max(-1, Math.cos(incRad) / cosLat));
-    azimuthRad = Math.asin(sinAz);
-  }
+  // Launch azimuth from the shared ascent model (handles i < latitude).
+  const azimuthRad = solveLaunchAzimuth(
+    input.targetInclinationDeg,
+    input.launchSite.latitudeDeg
+  ).azimuthRad;
 
   // Downrange direction (rotated from north by azimuth)
   const northDir = normalize(cross(radialDir, eastDir));
@@ -228,8 +264,6 @@ function generateAscentTrajectory(
       scale(eastDir, Math.sin(azimuthRad))
     )
   );
-
-  const launchDate = new Date(input.launchDateUtc);
 
   // Liftoff event
   events.push({
@@ -434,19 +468,27 @@ export function planSatelliteLaunch(
     feasibility = "marginal";
     warnings.push(
       `Delta-v margin is only ${Math.round(budget.marginMps)} m/s. ` +
-        `Less than ${FEASIBILITY_MARGIN_FEASIBLE_MPS} m/s recommended minimum.`
+      `Less than ${FEASIBILITY_MARGIN_FEASIBLE_MPS} m/s recommended minimum.`
     );
   } else {
     feasibility = "infeasible";
     warnings.push(
       `Delta-v deficit of ${Math.round(Math.abs(budget.marginMps))} m/s. ` +
-        `Vehicle lacks sufficient capability for this mission.`
+      `Vehicle lacks sufficient capability for this mission.`
     );
   }
 
   // ── Estimate time to orbit ──────────────────────────────────────────────
-  // Simplified: ~8–10 min for LEO
-  const estimatedTimeToOrbitS = 480 + (input.targetAltitudeKm / 2000) * 120;
+  // Ascent to parking orbit (~8–10 min) plus the Hohmann coast to target.
+  const ascentS = 480 + (budget.parkingAltitudeKm / 2000) * 120;
+  const coastS =
+    budget.hohmannMps > 0
+      ? hohmannTransfer(
+        EARTH_RADIUS_M + kmToM(budget.parkingAltitudeKm),
+        EARTH_RADIUS_M + kmToM(input.targetAltitudeKm)
+      ).transferTimeS
+      : 0;
+  const estimatedTimeToOrbitS = ascentS + coastS;
   const durationHours = estimatedTimeToOrbitS / 3600;
 
   // ── Generate 3D trajectory ──────────────────────────────────────────────
@@ -489,14 +531,36 @@ export function planSatelliteLaunch(
     requiredMps: Math.round(budget.totalRequiredMps),
     marginMps: Math.round(budget.marginMps),
     components: [
-      { label: "Circular orbit speed", valueMps: Math.round(budget.vCircularMps) },
-      { label: "Gravity loss (est.)", valueMps: budget.gravityLossMps },
-      { label: "Drag loss (est.)", valueMps: budget.dragLossMps },
-      { label: "Steering loss (est.)", valueMps: budget.steeringLossMps },
-      ...(budget.inclinationPenaltyMps > 0
-        ? [{ label: "Inclination penalty (est.)", valueMps: Math.round(budget.inclinationPenaltyMps) }]
+      {
+        label: `Circular speed @ ${Math.round(budget.parkingAltitudeKm)} km parking`,
+        valueMps: Math.round(budget.vCircularMps),
+      },
+      ...(budget.hohmannMps > 0
+        ? [
+          {
+            label: `Hohmann raise to ${Math.round(input.targetAltitudeKm)} km`,
+            valueMps: Math.round(budget.hohmannMps),
+          },
+        ]
         : []),
-      { label: "Earth rotation assist", valueMps: -Math.round(budget.rotationAssistMps) },
+      { label: "Gravity loss (TWR-scaled)", valueMps: Math.round(budget.gravityLossMps) },
+      { label: "Drag loss (mass-scaled)", valueMps: Math.round(budget.dragLossMps) },
+      { label: "Steering loss (dogleg)", valueMps: Math.round(budget.steeringLossMps) },
+      ...(budget.inclinationPenaltyMps > 0
+        ? [
+          {
+            label: "Plane change penalty",
+            valueMps: Math.round(budget.inclinationPenaltyMps),
+          },
+        ]
+        : []),
+      {
+        label:
+          budget.rotationAssistMps >= 0
+            ? `Earth rotation assist (az ${budget.azimuthDeg.toFixed(0)}°)`
+            : `Earth rotation penalty (az ${budget.azimuthDeg.toFixed(0)}°)`,
+        valueMps: -Math.round(budget.rotationAssistMps),
+      },
     ],
   };
 
@@ -526,11 +590,18 @@ export function planSatelliteLaunch(
     assumptions: [
       "Simplified gravity-turn and delta-v feasibility model.",
       "Visualized simplified ascent — not 6-DOF launch guidance.",
-      `Gravity loss: ${DEFAULT_GRAVITY_LOSS_MPS} m/s (range 1,200–1,800 m/s).`,
-      `Drag loss: ${DEFAULT_DRAG_LOSS_MPS} m/s (range 100–300 m/s).`,
-      `Steering loss: ${DEFAULT_STEERING_LOSS_MPS} m/s.`,
+      `Ascent targets a ${Math.round(budget.parkingAltitudeKm)} km parking orbit; ` +
+      "higher targets add a two-impulse Hohmann transfer.",
+      `Gravity loss ${Math.round(budget.gravityLossMps)} m/s, scaled by liftoff ` +
+      "thrust-to-weight ratio (bounded 1,000–2,400 m/s).",
+      `Drag loss ${Math.round(budget.dragLossMps)} m/s, scaled by vehicle wet mass ` +
+      "as a ballistic-coefficient proxy (bounded 120–320 m/s).",
+      `Launch azimuth ${budget.azimuthDeg.toFixed(1)}° from sin(A) = cos(i)/cos(φ); ` +
+      "rotation assist scaled by sin(A).",
+      "Launch site placed in ECI via GMST — launch date rotates the trajectory.",
       "Single-body Earth gravity model (no J2 perturbation).",
       "Simplified physics model — requires high-fidelity verification for operational use.",
+      ...budget.notes,
     ],
   };
 

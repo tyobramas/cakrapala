@@ -21,7 +21,7 @@ export const EARTH_ROTATION_RATE_RAD_S = 7.2921159e-5;
 
 // ── Moon parameters ───────────────────────────────────────────────────────────
 /** Moon gravitational parameter μ_M (m³/s²). Source: NASA GMAT. */
-export const MOON_MU_M3_S2 = 4.9048695e12;
+export const MOON_MU_M3_S2 = 4.9028695e12;
 
 /** Moon mean radius (m). */
 export const MOON_RADIUS_M = 1_737_400;
