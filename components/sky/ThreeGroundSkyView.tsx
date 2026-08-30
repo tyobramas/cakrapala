@@ -36,6 +36,7 @@ import {
   Camera,
   Layers,
   Radio,
+  Palette,
 } from "lucide-react";
 import {
   computeSunPosition,
@@ -55,6 +56,10 @@ import {
   computeTopocentricSatellites,
   type TopocentricSatellite,
 } from "@/lib/astronomy/topocentricSatellites";
+import {
+  computeTopocentricConstellationArtworks,
+  type ComputedConstellationArt,
+} from "@/lib/astronomy/constellationArtworks";
 import {
   STAR_PROFILES,
   BODY_PROFILES,
@@ -424,6 +429,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   // Toggles
   const [showConstellations, setShowConstellations] = useState(true);
   const [showConstellationNames, setShowConstellationNames] = useState(true);
+  const [showConstellationArt, setShowConstellationArt] = useState(true);
   const [showMilkyWay, setShowMilkyWay] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showBodies, setShowBodies] = useState(true);
@@ -460,6 +466,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   const togglesRef = useRef({
     showConstellations: true,
     showConstellationNames: true,
+    showConstellationArt: true,
     showMilkyWay: true,
     showLabels: true,
     showBodies: true,
@@ -471,13 +478,14 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     togglesRef.current = {
       showConstellations,
       showConstellationNames,
+      showConstellationArt,
       showMilkyWay,
       showLabels,
       showBodies,
       showNebulae,
       showSatellites,
     };
-  }, [showConstellations, showConstellationNames, showMilkyWay, showLabels, showBodies, showNebulae, showSatellites]);
+  }, [showConstellations, showConstellationNames, showConstellationArt, showMilkyWay, showLabels, showBodies, showNebulae, showSatellites]);
 
   // ── Astronomical Calculations ──────────────────────────────────────────────
   const observationDate = useMemo(() => {
@@ -1436,6 +1444,11 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     satellitesGroup.name = "dynamicSatellites";
     scene.add(satellitesGroup);
 
+    // 5. Classical Mythological Constellation Artworks Group
+    const constellationArtGroup = new THREE.Group();
+    constellationArtGroup.name = "constellationArtworks";
+    scene.add(constellationArtGroup);
+
     // ═════════════════════════════════════════════════════════════════════════
     // RENDER FRAME LOOP
     // ═════════════════════════════════════════════════════════════════════════
@@ -1627,6 +1640,11 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         constelGroup.remove(obj);
         if (obj.geometry) obj.geometry.dispose();
       }
+      while (constellationArtGroup.children.length > 0) {
+        const obj = constellationArtGroup.children[0] as THREE.Mesh;
+        constellationArtGroup.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+      }
       while (nebulaeGroup.children.length > 0) {
         const obj = nebulaeGroup.children[0];
         nebulaeGroup.remove(obj);
@@ -1727,6 +1745,39 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           });
           const constelLines = new THREE.LineSegments(lGeom, lMat);
           constelGroup.add(constelLines);
+        }
+      }
+
+      // ── 3. CLASSICAL MYTHOLOGICAL CONSTELLATION ARTWORKS (Hevelius & Uranometria) ──
+      if (toggles.showConstellationArt) {
+        const arts = computeTopocentricConstellationArtworks(obsDate, obsLoc.latitude, obsLoc.longitude, 478);
+        for (const art of arts) {
+          const geom = new THREE.PlaneGeometry(art.widthWorld, art.heightWorld);
+          const mat = new THREE.MeshBasicMaterial({
+            map: art.texture,
+            transparent: true,
+            opacity: isDay ? 0.16 : 0.38,
+            depthWrite: false,
+            blending: THREE.AdditiveBlending,
+            side: THREE.DoubleSide,
+          });
+          const mesh = new THREE.Mesh(geom, mat);
+          mesh.position.copy(art.worldPos);
+          mesh.lookAt(0, 0, 0);
+
+          // Align with Celestial North Up Vector
+          const normal = art.normalVec;
+          const desiredUp = art.upVec;
+          const currentUp = new THREE.Vector3(0, 1, 0).applyQuaternion(mesh.quaternion);
+          const angle = currentUp.angleTo(desiredUp);
+          const cross = new THREE.Vector3().crossVectors(currentUp, desiredUp);
+          if (cross.dot(normal) < 0) {
+            mesh.rotateZ(-angle);
+          } else {
+            mesh.rotateZ(angle);
+          }
+
+          constellationArtGroup.add(mesh);
         }
       }
 
@@ -3315,6 +3366,16 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             variant="blue"
             icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="5" cy="5" r="1.5" fill="currentColor"/><circle cx="19" cy="4" r="1.5" fill="currentColor"/><circle cx="12" cy="11" r="1.5" fill="currentColor"/><circle cx="7" cy="19" r="1.5" fill="currentColor"/><circle cx="18" cy="17" r="1.5" fill="currentColor"/><line x1="5" y1="5" x2="12" y2="11"/><line x1="19" y1="4" x2="12" y2="11"/><line x1="12" y1="11" x2="7" y2="19"/><line x1="12" y1="11" x2="18" y2="17"/></svg>}
             label="CSTL"
+          />
+
+          {/* Classical Mythological Constellation Artwork */}
+          <SciFi3DButton
+            onClick={() => setShowConstellationArt((p) => !p)}
+            title="Toggle Classical Mythological Constellation Artwork (Johannes Hevelius & Uranometria Figures)"
+            isActive={showConstellationArt}
+            variant="blue"
+            icon={<Palette className="w-4 h-4" />}
+            label="ART"
           />
 
           {/* Star & Constellation Names */}
