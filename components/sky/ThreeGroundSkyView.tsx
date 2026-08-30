@@ -3173,86 +3173,164 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         </div>
       )}
 
-      {/* ── Bottom HUD Dock (Aerospace Tactical Command Flight Deck) ──────── */}
+      {/* ── Bottom HUD Dock (3D Sci-Fi Neumorphic Beveled Command Deck) ──── */}
       <div
         onMouseDown={(e) => e.stopPropagation()}
         onMouseMove={(e) => e.stopPropagation()}
         onMouseUp={(e) => e.stopPropagation()}
         onClick={(e) => e.stopPropagation()}
-        className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 max-w-[96vw] overflow-x-auto custom-scrollbar flex items-center gap-2 p-1.5 sm:p-2 rounded-2xl bg-[#020617]/94 border border-cyan-500/35 backdrop-blur-2xl shadow-[0_8px_32px_rgba(0,0,0,0.85),0_0_20px_rgba(6,182,212,0.15)] pointer-events-auto font-mono select-none"
+        className="fixed bottom-4 sm:bottom-6 left-1/2 -translate-x-1/2 z-30 max-w-[98vw] overflow-x-auto custom-scrollbar flex items-center gap-2 sm:gap-2.5 p-2 sm:p-2.5 rounded-2xl bg-[#030712]/95 border-2 border-slate-700/60 backdrop-blur-2xl shadow-[0_12px_40px_rgba(0,0,0,0.9),0_0_25px_rgba(6,182,212,0.15)] pointer-events-auto select-none"
       >
-        {/* Left: Tactical Layer Toggle Switchdeck */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
-          {/* Constellations */}
+        {/* Left: 3D Tactical Layer Toggle Buttons */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {/* Constellation Lines */}
           <button
             type="button"
             onClick={() => setShowConstellations((p) => !p)}
             title="Toggle Constellation Lines (IAU Boundaries)"
-            className={`group flex flex-col items-center justify-center min-w-[42px] sm:min-w-[48px] h-11 px-1.5 rounded-xl border transition-all ${
-              showConstellations
-                ? "bg-cyan-950/40 border-cyan-500/60 text-cyan-300 shadow-[0_0_12px_rgba(6,182,212,0.25)]"
-                : "bg-[#060b18]/60 border-slate-800/80 text-slate-500 hover:text-slate-300 hover:border-slate-700"
-            }`}
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <div className="flex items-center justify-center">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><circle cx="5" cy="5" r="1.5" fill="currentColor"/><circle cx="19" cy="4" r="1.5" fill="currentColor"/><circle cx="12" cy="11" r="1.5" fill="currentColor"/><circle cx="7" cy="19" r="1.5" fill="currentColor"/><circle cx="18" cy="17" r="1.5" fill="currentColor"/><line x1="5" y1="5" x2="12" y2="11"/><line x1="19" y1="4" x2="12" y2="11"/><line x1="12" y1="11" x2="7" y2="19"/><line x1="12" y1="11" x2="18" y2="17"/></svg>
+            {/* Outer Beveled 3D Frame */}
+            <div
+              className={`h-12 min-w-[50px] sm:min-w-[56px] px-2 flex flex-col items-center justify-center transition-all ${
+                showConstellations
+                  ? "bg-gradient-to-b from-[#1e4766] via-[#0f283d] to-[#081826] border-t border-l border-cyan-300/60 border-b-2 border-r-2 border-black shadow-[0_4px_0_#040d14,0_6px_12px_rgba(0,0,0,0.85)]"
+                  : "bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              }`}
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              {/* Inner Embossed Plate with Hex Grid Texture */}
+              <div
+                className={`w-full h-full flex flex-col items-center justify-center py-1 px-1 transition-all ${
+                  showConstellations
+                    ? "bg-gradient-to-b from-[#0284c7] via-[#0369a1] to-[#075985] border-2 border-[#38bdf8] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.6)] text-white"
+                    : "bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-400"
+                }`}
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <svg className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><circle cx="5" cy="5" r="1.5" fill="currentColor"/><circle cx="19" cy="4" r="1.5" fill="currentColor"/><circle cx="12" cy="11" r="1.5" fill="currentColor"/><circle cx="7" cy="19" r="1.5" fill="currentColor"/><circle cx="18" cy="17" r="1.5" fill="currentColor"/><line x1="5" y1="5" x2="12" y2="11"/><line x1="19" y1="4" x2="12" y2="11"/><line x1="12" y1="11" x2="7" y2="19"/><line x1="12" y1="11" x2="18" y2="17"/></svg>
+                <span className="text-[9px] font-orbitron font-extrabold tracking-wider mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">CSTL</span>
+              </div>
             </div>
-            <span className="text-[8.5px] font-bold tracking-wider mt-0.5">CSTL</span>
-            <div className={`w-3.5 h-0.5 rounded-full mt-0.5 transition-all ${showConstellations ? "bg-cyan-400 shadow-[0_0_6px_#22d3ee]" : "bg-slate-800"}`} />
           </button>
 
           {/* Star & Constellation Names */}
           <button
             type="button"
             onClick={() => setShowConstellationNames((p) => !p)}
-            title="Toggle Celestial Typography & Star Catalog Names"
-            className={`group flex flex-col items-center justify-center min-w-[42px] sm:min-w-[48px] h-11 px-1.5 rounded-xl border transition-all ${
-              showConstellationNames
-                ? "bg-blue-950/40 border-blue-500/60 text-blue-300 shadow-[0_0_12px_rgba(59,130,246,0.25)]"
-                : "bg-[#060b18]/60 border-slate-800/80 text-slate-500 hover:text-slate-300 hover:border-slate-700"
-            }`}
+            title="Toggle Star & Constellation Names"
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <div className="flex items-center justify-center">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round"><path d="M4 7h6M4 12h8M4 17h5"/><path d="M16 5l2 6 2-6" strokeLinejoin="round"/><circle cx="17" cy="17" r="2.5"/></svg>
+            <div
+              className={`h-12 min-w-[50px] sm:min-w-[56px] px-2 flex flex-col items-center justify-center transition-all ${
+                showConstellationNames
+                  ? "bg-gradient-to-b from-[#1e4766] via-[#0f283d] to-[#081826] border-t border-l border-cyan-300/60 border-b-2 border-r-2 border-black shadow-[0_4px_0_#040d14,0_6px_12px_rgba(0,0,0,0.85)]"
+                  : "bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              }`}
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className={`w-full h-full flex flex-col items-center justify-center py-1 px-1 transition-all ${
+                  showConstellationNames
+                    ? "bg-gradient-to-b from-[#0284c7] via-[#0369a1] to-[#075985] border-2 border-[#38bdf8] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.6)] text-white"
+                    : "bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-400"
+                }`}
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <svg className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 7h6M4 12h8M4 17h5"/><path d="M16 5l2 6 2-6" strokeLinejoin="round"/><circle cx="17" cy="17" r="2.5"/></svg>
+                <span className="text-[9px] font-orbitron font-extrabold tracking-wider mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">NAME</span>
+              </div>
             </div>
-            <span className="text-[8.5px] font-bold tracking-wider mt-0.5">NAME</span>
-            <div className={`w-3.5 h-0.5 rounded-full mt-0.5 transition-all ${showConstellationNames ? "bg-blue-400 shadow-[0_0_6px_#60a5fa]" : "bg-slate-800"}`} />
           </button>
 
           {/* Milky Way Galaxy */}
           <button
             type="button"
             onClick={() => setShowMilkyWay((p) => !p)}
-            title="Toggle ESO Photometric Milky Way Galactic Plane"
-            className={`group flex flex-col items-center justify-center min-w-[42px] sm:min-w-[48px] h-11 px-1.5 rounded-xl border transition-all ${
-              showMilkyWay
-                ? "bg-indigo-950/40 border-indigo-500/60 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.25)]"
-                : "bg-[#060b18]/60 border-slate-800/80 text-slate-500 hover:text-slate-300 hover:border-slate-700"
-            }`}
+            title="Toggle ESO Photometric Milky Way Galaxy"
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <div className="flex items-center justify-center">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><ellipse cx="12" cy="12" rx="9" ry="3.5" transform="rotate(-35 12 12)"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+            <div
+              className={`h-12 min-w-[50px] sm:min-w-[56px] px-2 flex flex-col items-center justify-center transition-all ${
+                showMilkyWay
+                  ? "bg-gradient-to-b from-[#1e4766] via-[#0f283d] to-[#081826] border-t border-l border-cyan-300/60 border-b-2 border-r-2 border-black shadow-[0_4px_0_#040d14,0_6px_12px_rgba(0,0,0,0.85)]"
+                  : "bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              }`}
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className={`w-full h-full flex flex-col items-center justify-center py-1 px-1 transition-all ${
+                  showMilkyWay
+                    ? "bg-gradient-to-b from-[#0284c7] via-[#0369a1] to-[#075985] border-2 border-[#38bdf8] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.6)] text-white"
+                    : "bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-400"
+                }`}
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <svg className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><ellipse cx="12" cy="12" rx="9" ry="3.5" transform="rotate(-35 12 12)"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg>
+                <span className="text-[9px] font-orbitron font-extrabold tracking-wider mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">GALAXY</span>
+              </div>
             </div>
-            <span className="text-[8.5px] font-bold tracking-wider mt-0.5">GALAXY</span>
-            <div className={`w-3.5 h-0.5 rounded-full mt-0.5 transition-all ${showMilkyWay ? "bg-indigo-400 shadow-[0_0_6px_#818cf8]" : "bg-slate-800"}`} />
           </button>
 
           {/* Nebulae & DSO */}
           <button
             type="button"
             onClick={() => setShowNebulae((p) => !p)}
-            title="Toggle Nebulae & Deep Sky Messier Objects"
-            className={`group flex flex-col items-center justify-center min-w-[42px] sm:min-w-[48px] h-11 px-1.5 rounded-xl border transition-all ${
-              showNebulae
-                ? "bg-pink-950/40 border-pink-500/60 text-pink-300 shadow-[0_0_12px_rgba(236,72,153,0.25)]"
-                : "bg-[#060b18]/60 border-slate-800/80 text-slate-500 hover:text-slate-300 hover:border-slate-700"
-            }`}
+            title="Toggle Nebulae & Deep Sky Objects"
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <div className="flex items-center justify-center">
-              <Sparkles className="w-4 h-4" />
+            <div
+              className={`h-12 min-w-[50px] sm:min-w-[56px] px-2 flex flex-col items-center justify-center transition-all ${
+                showNebulae
+                  ? "bg-gradient-to-b from-[#1e4766] via-[#0f283d] to-[#081826] border-t border-l border-cyan-300/60 border-b-2 border-r-2 border-black shadow-[0_4px_0_#040d14,0_6px_12px_rgba(0,0,0,0.85)]"
+                  : "bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              }`}
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className={`w-full h-full flex flex-col items-center justify-center py-1 px-1 transition-all ${
+                  showNebulae
+                    ? "bg-gradient-to-b from-[#0284c7] via-[#0369a1] to-[#075985] border-2 border-[#38bdf8] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.6)] text-white"
+                    : "bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-400"
+                }`}
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <Sparkles className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />
+                <span className="text-[9px] font-orbitron font-extrabold tracking-wider mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">DSO</span>
+              </div>
             </div>
-            <span className="text-[8.5px] font-bold tracking-wider mt-0.5">DSO</span>
-            <div className={`w-3.5 h-0.5 rounded-full mt-0.5 transition-all ${showNebulae ? "bg-pink-400 shadow-[0_0_6px_#f472b6]" : "bg-slate-800"}`} />
           </button>
 
           {/* Celestial Bodies */}
@@ -3260,76 +3338,154 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             type="button"
             onClick={() => setShowBodies((p) => !p)}
             title="Toggle Solar System Planets, Sun & Moon"
-            className={`group flex flex-col items-center justify-center min-w-[42px] sm:min-w-[48px] h-11 px-1.5 rounded-xl border transition-all ${
-              showBodies
-                ? "bg-amber-950/40 border-amber-500/60 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.25)]"
-                : "bg-[#060b18]/60 border-slate-800/80 text-slate-500 hover:text-slate-300 hover:border-slate-700"
-            }`}
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <div className="flex items-center justify-center">
-              <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6"><circle cx="10" cy="10" r="5"/><path d="M14 6a5 5 0 0 1 0 8" strokeDasharray="2 2"/><circle cx="18" cy="16" r="2.5"/></svg>
+            <div
+              className={`h-12 min-w-[50px] sm:min-w-[56px] px-2 flex flex-col items-center justify-center transition-all ${
+                showBodies
+                  ? "bg-gradient-to-b from-[#1e4766] via-[#0f283d] to-[#081826] border-t border-l border-cyan-300/60 border-b-2 border-r-2 border-black shadow-[0_4px_0_#040d14,0_6px_12px_rgba(0,0,0,0.85)]"
+                  : "bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              }`}
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className={`w-full h-full flex flex-col items-center justify-center py-1 px-1 transition-all ${
+                  showBodies
+                    ? "bg-gradient-to-b from-[#0284c7] via-[#0369a1] to-[#075985] border-2 border-[#38bdf8] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.6)] text-white"
+                    : "bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-400"
+                }`}
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <svg className="w-4 h-4 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="10" cy="10" r="5"/><path d="M14 6a5 5 0 0 1 0 8" strokeDasharray="2 2"/><circle cx="18" cy="16" r="2.5"/></svg>
+                <span className="text-[9px] font-orbitron font-extrabold tracking-wider mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">SOLAR</span>
+              </div>
             </div>
-            <span className="text-[8.5px] font-bold tracking-wider mt-0.5">SOLAR</span>
-            <div className={`w-3.5 h-0.5 rounded-full mt-0.5 transition-all ${showBodies ? "bg-amber-400 shadow-[0_0_6px_#fbbf24]" : "bg-slate-800"}`} />
           </button>
 
-          {/* Active Satellites with Telemetry Badge */}
+          {/* Active Satellites (Cyber Green Theme like RESUME in reference image) */}
           <button
             type="button"
             onClick={() => setShowSatellites((p) => !p)}
-            title={`Toggle SGP4 Satellites (${topoSats.satellites.length} in Sky Dome)`}
-            className={`group relative flex flex-col items-center justify-center min-w-[54px] sm:min-w-[60px] h-11 px-1.5 rounded-xl border transition-all ${
-              showSatellites
-                ? "bg-emerald-950/40 border-emerald-500/60 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.25)]"
-                : "bg-[#060b18]/60 border-slate-800/80 text-slate-500 hover:text-slate-300 hover:border-slate-700"
-            }`}
+            title={`Toggle SGP4 Satellites (${topoSats.satellites.length} Visible)`}
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <div className="flex items-center gap-1">
-              <Radio className="w-3.5 h-3.5" />
-              <span className="text-[9px] font-bold text-emerald-400 font-mono">
-                {topoSats.satellites.length}
-              </span>
+            <div
+              className={`h-12 min-w-[62px] sm:min-w-[68px] px-2 flex flex-col items-center justify-center transition-all ${
+                showSatellites
+                  ? "bg-gradient-to-b from-[#2d4a1d] via-[#1c3012] to-[#0d1709] border-t border-l border-[#a3e635]/60 border-b-2 border-r-2 border-black shadow-[0_4px_0_#060c04,0_6px_12px_rgba(0,0,0,0.85)]"
+                  : "bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              }`}
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className={`w-full h-full flex flex-col items-center justify-center py-1 px-1 transition-all ${
+                  showSatellites
+                    ? "bg-gradient-to-b from-[#65a30d] via-[#4d7c0f] to-[#3f6212] border-2 border-[#bef264] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.6)] text-white"
+                    : "bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-400"
+                }`}
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <div className="flex items-center gap-1">
+                  <Radio className="w-3.5 h-3.5 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />
+                  <span className="text-[10px] font-orbitron font-extrabold text-[#f7fee7] tracking-wider drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
+                    {topoSats.satellites.length}
+                  </span>
+                </div>
+                <span className="text-[8.5px] font-orbitron font-extrabold tracking-wider mt-0.5 drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">SATS</span>
+              </div>
             </div>
-            <span className="text-[8px] font-bold tracking-wider mt-0.5">SATS</span>
-            <div className={`w-4 h-0.5 rounded-full mt-0.5 transition-all ${showSatellites ? "bg-emerald-400 shadow-[0_0_6px_#34d399]" : "bg-slate-800"}`} />
           </button>
         </div>
 
-        {/* Tactical Telemetry Laser Separator */}
-        <div className="h-8 w-px bg-gradient-to-b from-transparent via-cyan-500/40 to-transparent shrink-0 mx-0.5 sm:mx-1" />
+        {/* 3D Beveled Telemetry Separator Pillar */}
+        <div className="h-10 w-1.5 bg-gradient-to-b from-[#334155] via-[#0f172a] to-[#020617] border-l border-r border-slate-700/50 shadow-[inset_0_0_2px_rgba(0,0,0,0.9)] shrink-0 mx-0.5 sm:mx-1 rounded" />
 
-        {/* Right: Chronometer Flight Deck & Time Warp Engine */}
-        <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+        {/* Right: 3D Chronometer Flight Controls */}
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0 font-orbitron">
           {/* Step -1h */}
           <button
             type="button"
             onClick={() => setTimeOffsetMinutes((p) => p - 60)}
-            className="h-11 px-2.5 rounded-xl bg-[#060b18]/80 hover:bg-[#0c1a32] border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
             title="Rewind 1 Hour (-60m)"
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <Rewind className="w-3.5 h-3.5 text-cyan-400" />
-            <span className="hidden xl:inline text-[9px]">-1H</span>
+            <div
+              className="h-12 px-3 flex items-center justify-center bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className="w-full h-full flex items-center justify-center gap-1 py-1 px-1 bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-300 group-hover:text-cyan-300"
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <Rewind className="w-4 h-4 text-cyan-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />
+                <span className="hidden xl:inline text-[9px] font-extrabold tracking-wider">-1H</span>
+              </div>
+            </div>
           </button>
 
-          {/* WARP Engine Switch */}
+          {/* 3D WARP Button */}
           <button
             type="button"
             onClick={() => setTimePlaybackSpeed((p) => (p === 0 ? 6 : p === 6 ? 60 : 0))}
-            className={`h-11 px-3 rounded-xl border font-bold text-[10px] flex items-center gap-1.5 transition-all ${
-              timePlaybackSpeed === 60
-                ? "bg-rose-500/20 border-rose-500/60 text-rose-300 shadow-[0_0_15px_rgba(244,63,94,0.4)] animate-pulse"
-                : timePlaybackSpeed === 6
-                ? "bg-amber-500/20 border-amber-500/60 text-amber-300 shadow-[0_0_12px_rgba(245,158,11,0.35)]"
-                : "bg-[#060b18]/80 text-cyan-300 border-slate-800 hover:border-cyan-500/50 hover:bg-[#0c1a32]"
-            }`}
             title="Cycle Warp Playback: Realtime -> 1h/sec -> 10h/sec -> Pause"
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            {timePlaybackSpeed !== 0 ? <Pause className="w-3.5 h-3.5" /> : <Play className="w-3.5 h-3.5 text-cyan-400" />}
-            <div className="flex flex-col items-start leading-none text-left">
-              <span className="text-[9px] tracking-wider">WARP</span>
-              <span className="text-[8px] font-mono text-cyan-400/80">
-                {timePlaybackSpeed === 6 ? "1h/s" : timePlaybackSpeed === 60 ? "10h/s" : "LIVE 1x"}
-              </span>
+            <div
+              className={`h-12 px-3 sm:px-4 flex items-center justify-center transition-all ${
+                timePlaybackSpeed !== 0
+                  ? "bg-gradient-to-b from-[#1e4766] via-[#0f283d] to-[#081826] border-t border-l border-cyan-300/60 border-b-2 border-r-2 border-black shadow-[0_4px_0_#040d14,0_6px_12px_rgba(0,0,0,0.85)]"
+                  : "bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              }`}
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className={`w-full h-full flex items-center justify-center gap-2 py-1 px-1.5 transition-all ${
+                  timePlaybackSpeed !== 0
+                    ? "bg-gradient-to-b from-[#0284c7] via-[#0369a1] to-[#075985] border-2 border-[#38bdf8] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.6)] text-white"
+                    : "bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-300"
+                }`}
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                {timePlaybackSpeed !== 0 ? <Pause className="w-4 h-4 text-cyan-300 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" /> : <Play className="w-4 h-4 text-cyan-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />}
+                <div className="flex flex-col items-start leading-none text-left">
+                  <span className="text-[10px] font-orbitron font-black tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">WARP</span>
+                  <span className="text-[8px] font-mono text-cyan-200/90 font-bold">
+                    {timePlaybackSpeed === 6 ? "1H/S" : timePlaybackSpeed === 60 ? "10H/S" : "LIVE 1X"}
+                  </span>
+                </div>
+              </div>
             </div>
           </button>
 
@@ -3337,26 +3493,62 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           <button
             type="button"
             onClick={() => setTimeOffsetMinutes((p) => p + 60)}
-            className="h-11 px-2.5 rounded-xl bg-[#060b18]/80 hover:bg-[#0c1a32] border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-cyan-300 text-[10px] font-bold flex items-center justify-center gap-1 transition-all"
             title="Advance 1 Hour (+60m)"
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <span className="hidden xl:inline text-[9px]">+1H</span>
-            <FastForward className="w-3.5 h-3.5 text-cyan-400" />
+            <div
+              className="h-12 px-3 flex items-center justify-center bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className="w-full h-full flex items-center justify-center gap-1 py-1 px-1 bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-slate-300 group-hover:text-cyan-300"
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <span className="hidden xl:inline text-[9px] font-extrabold tracking-wider">+1H</span>
+                <FastForward className="w-4 h-4 text-cyan-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />
+              </div>
+            </div>
           </button>
 
           {/* Date & Time Calendar Trigger */}
           <button
             type="button"
             onClick={() => setIsTimePickerOpen(true)}
-            className="h-11 px-3 rounded-xl bg-[#060b18]/90 hover:bg-[#0c1a32] border border-cyan-500/40 hover:border-cyan-400 text-cyan-300 text-[10px] font-bold flex items-center gap-1.5 transition-all shadow-[0_0_10px_rgba(6,182,212,0.15)]"
             title="Open Mission Ephemeris Calendar & Chronometer"
+            className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+            style={{
+              clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+            }}
           >
-            <Calendar className="w-3.5 h-3.5 text-cyan-400" />
-            <div className="flex flex-col items-start leading-none text-left">
-              <span className="hidden sm:inline text-[9px] tracking-wider text-slate-300">EPOCH</span>
-              <span className="text-[9px] text-cyan-300 font-mono">
-                {observationDate.toUTCString().slice(17, 22)} UTC
-              </span>
+            <div
+              className="h-12 px-3 sm:px-4 flex items-center justify-center bg-gradient-to-b from-[#1e4766] via-[#0f283d] to-[#081826] border-t border-l border-cyan-300/60 border-b-2 border-r-2 border-black shadow-[0_4px_0_#040d14,0_6px_12px_rgba(0,0,0,0.85)]"
+              style={{
+                clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+              }}
+            >
+              <div
+                className="w-full h-full flex items-center justify-center gap-2 py-1 px-1.5 bg-gradient-to-b from-[#0284c7] via-[#0369a1] to-[#075985] border-2 border-[#38bdf8] shadow-[inset_0_1px_2px_rgba(255,255,255,0.4),inset_0_-2px_4px_rgba(0,0,0,0.6)] text-white"
+                style={{
+                  clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                  backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                }}
+              >
+                <Calendar className="w-4 h-4 text-cyan-200 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]" />
+                <div className="flex flex-col items-start leading-none text-left">
+                  <span className="hidden sm:inline text-[9px] font-orbitron font-black tracking-widest drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">EPOCH</span>
+                  <span className="text-[9px] text-cyan-100 font-mono font-bold">
+                    {observationDate.toUTCString().slice(17, 22)} UTC
+                  </span>
+                </div>
+              </div>
             </div>
           </button>
 
@@ -3368,11 +3560,29 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
                 setTimeOffsetMinutes(0);
                 setTimePlaybackSpeed(0);
               }}
-              className="h-11 px-2.5 rounded-xl bg-slate-900/90 border border-slate-700/80 text-cyan-400 hover:text-white hover:border-cyan-400 flex items-center gap-1 transition-all"
               title="Reset to Real-Time Synchronized Clock"
+              className="group relative p-[2px] transition-all cursor-pointer active:translate-y-0.5"
+              style={{
+                clipPath: "polygon(9px 0, 100% 0, 100% calc(100% - 9px), calc(100% - 9px) 100%, 0 100%, 0 9px)",
+              }}
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span className="text-[8.5px] font-bold tracking-wider hidden sm:inline">SYNC</span>
+              <div
+                className="h-12 px-3 flex items-center justify-center bg-gradient-to-b from-[#334155] via-[#1e293b] to-[#0f172a] border-t border-l border-slate-500/40 border-b-2 border-r-2 border-black shadow-[0_4px_0_#020617,0_6px_12px_rgba(0,0,0,0.75)]"
+                style={{
+                  clipPath: "polygon(8px 0, 100% 0, 100% calc(100% - 8px), calc(100% - 8px) 100%, 0 100%, 0 8px)",
+                }}
+              >
+                <div
+                  className="w-full h-full flex items-center justify-center gap-1.5 py-1 px-1 bg-gradient-to-b from-[#1e293b]/95 via-[#0f172a]/95 to-[#0b0f19] border-2 border-[#475569]/70 shadow-[inset_0_1px_1px_rgba(255,255,255,0.1),inset_0_-2px_4px_rgba(0,0,0,0.8)] text-cyan-400 hover:text-white"
+                  style={{
+                    clipPath: "polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px)",
+                    backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='24.25' viewBox='0 0 14 24.25'%3E%3Cpath d='M7 0l7 4.04v8.08L7 16.16 0 12.12V4.04L7 0zm0 24.25l7-4.04v-8.08L7 8.09 0 12.13v8.08l7 4.04z' fill='none' stroke='rgba(255,255,255,0.12)' stroke-width='0.75'/%3E%3C/svg%3E\")",
+                  }}
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span className="text-[9px] font-extrabold tracking-wider hidden sm:inline">SYNC</span>
+                </div>
+              </div>
             </button>
           )}
         </div>
