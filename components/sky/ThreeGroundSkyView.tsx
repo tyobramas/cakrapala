@@ -35,6 +35,7 @@ import {
   ExternalLink,
   Camera,
   Layers,
+  Radio,
 } from "lucide-react";
 import {
   computeSunPosition,
@@ -51,6 +52,10 @@ import {
   type Constellation3D,
 } from "@/lib/astronomy/topocentricSky";
 import {
+  computeTopocentricSatellites,
+  type TopocentricSatellite,
+} from "@/lib/astronomy/topocentricSatellites";
+import {
   STAR_PROFILES,
   BODY_PROFILES,
   type CelestialObjectInfo,
@@ -65,15 +70,20 @@ const STAR_LAYER_RADIUS = 490;
 const NEBULA_LAYER_RADIUS = 486;
 const CONSTELLATION_LAYER_RADIUS = 485;
 const BODY_LAYER_RADIUS = 475;
+const SATELLITE_LAYER_RADIUS = 472;
 const GROUND_RADIUS = 480;
 
 // Coordinate conversion: Horizontal (Az, Alt) → Three.js Vector3
+// Az=0° = North (+Z), Az=90° = East, Az=180° = South (-Z), Az=270° = West
+// In Three.js with camera at origin looking toward +Z (North):
+//   East must be on the RIGHT → negative X (viewer's perspective from inside the dome)
+//   We NEGATE sin(az) to flip East/West so the sky matches real world (Stellarium reference).
 function azAltToVec3(azDeg: number, altDeg: number, r: number): THREE.Vector3 {
   const az = (azDeg * Math.PI) / 180;
   const alt = (altDeg * Math.PI) / 180;
   const ca = Math.cos(alt);
   return new THREE.Vector3(
-    r * ca * Math.sin(az),
+    -r * ca * Math.sin(az), // Negate: East (az=90°) → negative X → appears RIGHT on screen
     r * Math.sin(alt),
     r * ca * Math.cos(az)
   );
@@ -87,18 +97,19 @@ interface Props {
 export interface SelectedTarget {
   id: string;
   name: string;
-  type: "star" | "planet" | "moon" | "sun" | "constellation" | "nebula";
+  type: "star" | "planet" | "moon" | "sun" | "constellation" | "nebula" | "satellite";
   azimuthDeg: number;
   altitudeDeg: number;
   mag: number;
   colorHex: string;
   nebulaInfo?: TopocentricNebula;
+  satelliteInfo?: TopocentricSatellite;
 }
 
 interface SearchItem {
   id: string;
   name: string;
-  category: "planet" | "constellation" | "nebula" | "star";
+  category: "planet" | "constellation" | "nebula" | "star" | "satellite";
   categoryLabel: string;
   subtitle: string;
   azimuthDeg: number;
@@ -107,6 +118,7 @@ interface SearchItem {
   colorHex?: string;
   isAboveHorizon: boolean;
   rawNebula?: TopocentricNebula;
+  rawSatellite?: TopocentricSatellite;
 }
 
 // Helper to calculate exact hours until an object rises above horizon
@@ -132,6 +144,8 @@ function calculateHoursUntilRise(
         mars: Astronomy.Body.Mars,
         jupiter: Astronomy.Body.Jupiter,
         saturn: Astronomy.Body.Saturn,
+        uranus: Astronomy.Body.Uranus,
+        neptune: Astronomy.Body.Neptune,
       };
       const b = bodyMap[target.id.toLowerCase()];
       if (b) {
@@ -209,7 +223,18 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       description: "",
     });
 
-    const searchQuery = selectedTarget.nebulaInfo?.name || selectedTarget.name.replace(/\(.*?\)/g, "").trim();
+    // For Moon: skip NASA static image, use real-time phase SVG instead
+    if (selectedTarget.id === "moon" || selectedTarget.type === "moon") {
+      setNasaImage(null);
+      return;
+    }
+
+    // For planets/sun: use the id for precise curated image lookup
+    const searchQuery =
+      selectedTarget.nebulaInfo?.name ||
+      (selectedTarget.type === "planet" || selectedTarget.type === "sun"
+        ? selectedTarget.id.toLowerCase()
+        : selectedTarget.name.replace(/\(.*?\)/g, "").trim());
 
     fetch(`/api/nasa/image?q=${encodeURIComponent(searchQuery)}`)
       .then((res) => res.json())
@@ -256,7 +281,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   // Search State
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchFilterCategory, setSearchFilterCategory] = useState<"all" | "planet" | "constellation" | "nebula" | "star">("all");
+  const [searchFilterCategory, setSearchFilterCategory] = useState<"all" | "planet" | "constellation" | "nebula" | "star" | "satellite">("all");
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   // Camera Animation Ref for Smooth Interpolated Fly-To
@@ -279,6 +304,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   const [showLabels, setShowLabels] = useState(true);
   const [showBodies, setShowBodies] = useState(true);
   const [showNebulae, setShowNebulae] = useState(true);
+  const [showSatellites, setShowSatellites] = useState(true);
   // Temporal & Time Warp States
   const [timeOffsetMinutes, setTimeOffsetMinutes] = useState(0);
   const [timePlaybackSpeed, setTimePlaybackSpeed] = useState<number>(0); // 0 = realtime, 1 = 10m/sec, 6 = 1h/sec, etc.
@@ -314,6 +340,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     showLabels: true,
     showBodies: true,
     showNebulae: true,
+    showSatellites: true,
   });
 
   useEffect(() => {
@@ -324,8 +351,9 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       showLabels,
       showBodies,
       showNebulae,
+      showSatellites,
     };
-  }, [showConstellations, showConstellationNames, showMilkyWay, showLabels, showBodies, showNebulae]);
+  }, [showConstellations, showConstellationNames, showMilkyWay, showLabels, showBodies, showNebulae, showSatellites]);
 
   // ── Astronomical Calculations ──────────────────────────────────────────────
   const observationDate = useMemo(() => {
@@ -348,6 +376,10 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     [observationDate, location]
   );
 
+  // Live moon phase degrees for real-time phase image (must come after topoMoon)
+  const liveMoonPhaseDeg = useMemo(() => topoMoon.phaseDeg ?? 0, [topoMoon]);
+  const liveMoonIllumination = useMemo(() => topoMoon.illuminationFraction ?? 0, [topoMoon]);
+
   const constellations = useMemo(
     () => computeIAUConstellations(observationDate, location.latitude, location.longitude, DOME_RADIUS),
     [observationDate, location]
@@ -358,6 +390,11 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     [observationDate, location]
   );
 
+  const topoSats = useMemo(
+    () => computeTopocentricSatellites(observationDate, location.latitude, location.longitude, 260, DOME_RADIUS, selectedTarget?.id),
+    [observationDate, location, selectedTarget?.id]
+  );
+
   const astroRef = useRef({
     solarState,
     topoStars,
@@ -365,13 +402,14 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     topoPlanets,
     constellations,
     topoNebulae,
+    topoSats,
     observationDate,
     location,
   });
 
   useEffect(() => {
-    astroRef.current = { solarState, topoStars, topoMoon, topoPlanets, constellations, topoNebulae, observationDate, location };
-  }, [solarState, topoStars, topoMoon, topoPlanets, constellations, topoNebulae, observationDate, location]);
+    astroRef.current = { solarState, topoStars, topoMoon, topoPlanets, constellations, topoNebulae, topoSats, observationDate, location };
+  }, [solarState, topoStars, topoMoon, topoPlanets, constellations, topoNebulae, topoSats, observationDate, location]);
 
   // ── Universal Celestial Search Index ───────────────────────────────────────
   const searchIndex: SearchItem[] = useMemo(() => {
@@ -472,8 +510,25 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       }
     }
 
+    // 6. Active Orbital Satellites (Above Horizon)
+    for (const sat of topoSats.satellites) {
+      items.push({
+        id: sat.id,
+        name: `🛰️ ${sat.name}`,
+        category: "satellite",
+        categoryLabel: sat.categoryLabel,
+        subtitle: `${sat.categoryLabel} • Alt: ${sat.altitudeDeg.toFixed(1)}° • ${sat.altitudeKm}km • ${sat.speedKmH.toLocaleString()} km/h`,
+        azimuthDeg: sat.azimuthDeg,
+        altitudeDeg: sat.altitudeDeg,
+        mag: 2.0,
+        colorHex: sat.colorHex,
+        isAboveHorizon: sat.altitudeDeg >= 0,
+        rawSatellite: sat,
+      });
+    }
+
     return items;
-  }, [solarState, topoMoon, topoPlanets, topoNebulae, constellations, topoStars]);
+  }, [solarState, topoMoon, topoPlanets, topoNebulae, constellations, topoStars, topoSats]);
 
   // Filtered search results
   const searchResults = useMemo(() => {
@@ -494,6 +549,29 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   // Target Inspector Info
   const targetInfo: CelestialObjectInfo | null = useMemo(() => {
     if (!selectedTarget) return null;
+
+    if (selectedTarget.type === "satellite" && selectedTarget.satelliteInfo) {
+      const sat = selectedTarget.satelliteInfo;
+      return {
+        id: sat.id,
+        name: sat.name,
+        scientificName: `NORAD #${sat.noradId} • ${sat.intlDesig || "LEO Satellite"}`,
+        type: `${sat.categoryLabel} (${sat.category.toUpperCase()})`,
+        constellation: `Altitude: ${sat.altitudeKm.toLocaleString()} km`,
+        magnitude: 2.0,
+        distanceLy: `${sat.rangeKm.toLocaleString()} km (Slant Range)`,
+        spectralType: `Orbital Speed: ${sat.speedKmH.toLocaleString()} km/h (${sat.speedKmS} km/s)`,
+        surfaceTemp: sat.isSunlit ? "Sunlit Orbital State" : "Earth Eclipse Shadow",
+        massRadius: `NORAD Catalog ID ${sat.noradId}`,
+        altitudeDeg: selectedTarget.altitudeDeg,
+        azimuthDeg: selectedTarget.azimuthDeg,
+        raDec: `${selectedTarget.azimuthDeg.toFixed(1)}° Az / ${selectedTarget.altitudeDeg.toFixed(1)}° Alt`,
+        description: `${sat.name} (NORAD ID ${sat.noradId}) is an active ${sat.categoryLabel.toLowerCase()} satellite tracked via SGP4 topocentric mechanics, currently at ${sat.altitudeKm} km altitude with a ground range of ${sat.rangeKm} km.`,
+        funFact: sat.category === "station"
+          ? "Conducts microgravity science and human spaceflight operations at ~27,600 km/h."
+          : `Live SGP4 topocentric line-of-sight tracking above observer horizon.`,
+      };
+    }
 
     if (selectedTarget.type === "nebula" && selectedTarget.nebulaInfo) {
       const neb = selectedTarget.nebulaInfo;
@@ -567,7 +645,9 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
 
   const handleSelectSearchItem = (item: SearchItem) => {
     const targetType: SelectedTarget["type"] =
-      item.category === "planet"
+      item.category === "satellite"
+        ? "satellite"
+        : item.category === "planet"
         ? item.id === "sun"
           ? "sun"
           : item.id === "moon"
@@ -588,6 +668,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       mag: item.mag ?? 0,
       colorHex: item.colorHex ?? "#ffffff",
       nebulaInfo: item.rawNebula,
+      satelliteInfo: item.rawSatellite,
     });
 
     flyToTarget(item.azimuthDeg, item.altitudeDeg);
@@ -656,6 +737,23 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     mwTexture.wrapS = THREE.RepeatWrapping;
     mwTexture.wrapT = THREE.ClampToEdgeWrapping;
 
+    // Load High-Resolution Photorealistic Planetary Textures
+    const planetTextures: Record<string, THREE.Texture> = {
+      sun: textureLoader.load("/textures/planets/sun.jpg"),
+      moon: textureLoader.load("/textures/planets/moon.jpg"),
+      mercury: textureLoader.load("/textures/planets/mercury.jpg"),
+      venus: textureLoader.load("/textures/planets/venus.jpg"),
+      mars: textureLoader.load("/textures/planets/mars.jpg"),
+      jupiter: textureLoader.load("/textures/planets/jupiter.jpg"),
+      saturn: textureLoader.load("/textures/planets/saturn.jpg"),
+      saturn_ring: textureLoader.load("/textures/planets/saturn_ring.png"),
+      uranus: textureLoader.load("/textures/planets/uranus.jpg"),
+      neptune: textureLoader.load("/textures/planets/neptune.jpg"),
+    };
+    for (const key of Object.keys(planetTextures)) {
+      planetTextures[key].colorSpace = THREE.SRGBColorSpace;
+    }
+
     // ── Atmospheric Sky Dome with High-Resolution ESO 3D Milky Way ───────────
     const skyGeom = new THREE.SphereGeometry(SKY_SPHERE_RADIUS, 96, 96);
     const skyMat = new THREE.ShaderMaterial({
@@ -719,7 +817,8 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           // 3. Exact IAU Galactic Coordinate Mapping for Realistic ESO Photographic Milky Way Panorama
           if (uShowMilkyWay > 0.5) {
             float alt = asin(clamp(n.y, -1.0, 1.0));
-            float az = atan(n.x, n.z);
+            // n.x is negated (East=-X) after coordinate fix; negate back to get true azimuth
+            float az = atan(-n.x, n.z);
             float cosAlt = cos(alt);
 
             float sinDec = sin(uLatRad) * sin(alt) + cos(uLatRad) * cosAlt * cos(az);
@@ -758,8 +857,8 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
               dayFactor = mix(1.0, 0.85, t);
             }
 
-            // Photorealistic ESO Milky Way panorama with rich exposure and high dynamic range
-            vec3 mwRGB = pow(texColor.rgb, vec3(0.92)) * 2.2;
+            // Photorealistic ESO Milky Way Panorama with Rich Cosmic Dust Lanes & Stellar Clouds
+            vec3 mwRGB = pow(texColor.rgb, vec3(0.95)) * 1.85;
             skyCol += mwRGB * mwFade * dayFactor;
           }
 
@@ -959,6 +1058,260 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     bodiesGroup.name = "dynamicBodies";
     scene.add(bodiesGroup);
 
+    // ── Persistent High-Fidelity Celestial Bodies (Photorealistic Textures & Shaders) ──
+    // 1. Sun Photosphere & Glowing Solar Corona
+    const sunGroup = new THREE.Group();
+    sunGroup.name = "sunGroup";
+    const sunInnerGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(256, "#fff3d1", "#f59e0b"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.95,
+    }));
+    sunInnerGlow.scale.set(50, 50, 1);
+    sunGroup.add(sunInnerGlow);
+
+    const sunOuterGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(256, "#f59e0b", "#d97706"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.55,
+    }));
+    sunOuterGlow.scale.set(90, 90, 1);
+    sunGroup.add(sunOuterGlow);
+
+    const sunSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(14, 32, 32),
+      new THREE.MeshBasicMaterial({ map: planetTextures.sun })
+    );
+    sunGroup.add(sunSphere);
+    bodiesGroup.add(sunGroup);
+
+    // 2. Moon with Photorealistic Texture & Physical 3D Sun-Ray Ephemeris Phase Shader
+    const moonGroup = new THREE.Group();
+    moonGroup.name = "moonGroup";
+    const moonGlowMat = new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(256, "#ffffff", "#8ab4f8"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.65,
+    });
+    const moonGlow = new THREE.Sprite(moonGlowMat);
+    moonGlow.position.set(0, 0, -1.0); // Place behind sphere so dark side stays crisp
+    moonGlow.scale.set(34, 34, 1);
+    moonGroup.add(moonGlow);
+
+    const moonShaderMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uMoonTex: { value: planetTextures.moon },
+        uSunDir: { value: new THREE.Vector3(0, -1, 0) },
+      },
+      vertexShader: `
+        varying vec2 vUv;
+        varying vec3 vWorldNormal;
+        void main() {
+          vUv = uv;
+          vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D uMoonTex;
+        uniform vec3 uSunDir;
+        varying vec2 vUv;
+        varying vec3 vWorldNormal;
+
+        void main() {
+          vec4 texCol = texture2D(uMoonTex, vUv);
+          
+          // True physical sunlight vector in world space
+          float NdotL = dot(vWorldNormal, uSunDir);
+          
+          // Crisp astronomical lunar terminator
+          float illum = smoothstep(-0.015, 0.035, NdotL);
+          
+          // Faint Earthshine on night side (craters faintly visible like in real telescope)
+          vec3 darkSide = texCol.rgb * 0.045 + vec3(0.005, 0.007, 0.010);
+          
+          // Enhanced bright sunlit regolith with brilliant silver-white lunar radiance
+          float diffuse = clamp(NdotL, 0.25, 1.0);
+          vec3 litSide = texCol.rgb * (1.50 + 0.45 * diffuse) + vec3(0.08, 0.09, 0.11);
+          
+          vec3 finalColor = mix(darkSide, litSide, illum);
+          gl_FragColor = vec4(finalColor, 1.0);
+        }
+      `,
+      transparent: false,
+    });
+    const moonSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(9.2, 32, 32),
+      moonShaderMat
+    );
+    moonGroup.add(moonSphere);
+    bodiesGroup.add(moonGroup);
+
+    // 3. Solar System Planets with Photorealistic Surface Maps & Atmospheric Halos
+    const planetGroups: Record<string, THREE.Group> = {};
+
+    // Mercury
+    const mercuryGroup = new THREE.Group();
+    const mercuryGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(128, "#cbd5e1", "#cbd5e1"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.7,
+    }));
+    mercuryGlow.scale.set(16, 16, 1);
+    mercuryGroup.add(mercuryGlow);
+    const mercurySphere = new THREE.Mesh(
+      new THREE.SphereGeometry(4.2, 32, 32),
+      new THREE.MeshBasicMaterial({ map: planetTextures.mercury })
+    );
+    mercuryGroup.add(mercurySphere);
+    bodiesGroup.add(mercuryGroup);
+    planetGroups["mercury"] = mercuryGroup;
+
+    // Venus
+    const venusGroup = new THREE.Group();
+    const venusGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(128, "#fef08a", "#fef08a"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.85,
+    }));
+    venusGlow.scale.set(22, 22, 1);
+    venusGroup.add(venusGlow);
+    const venusSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(5.4, 32, 32),
+      new THREE.MeshBasicMaterial({ map: planetTextures.venus })
+    );
+    venusGroup.add(venusSphere);
+    bodiesGroup.add(venusGroup);
+    planetGroups["venus"] = venusGroup;
+
+    // Mars
+    const marsGroup = new THREE.Group();
+    const marsGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(128, "#f87171", "#f87171"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.8,
+    }));
+    marsGlow.scale.set(18, 18, 1);
+    marsGroup.add(marsGlow);
+    const marsSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(4.8, 32, 32),
+      new THREE.MeshBasicMaterial({ map: planetTextures.mars })
+    );
+    marsGroup.add(marsSphere);
+    bodiesGroup.add(marsGroup);
+    planetGroups["mars"] = marsGroup;
+
+    // Jupiter
+    const jupiterGroup = new THREE.Group();
+    const jupiterGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(128, "#fcd34d", "#fcd34d"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.8,
+    }));
+    jupiterGlow.scale.set(28, 28, 1);
+    jupiterGroup.add(jupiterGlow);
+    const jupiterSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(7.5, 32, 32),
+      new THREE.MeshBasicMaterial({ map: planetTextures.jupiter })
+    );
+    jupiterGroup.add(jupiterSphere);
+    bodiesGroup.add(jupiterGroup);
+    planetGroups["jupiter"] = jupiterGroup;
+
+    // Saturn (Sphere + Iconic Photorealistic 3D Ring Annulus)
+    const saturnGroup = new THREE.Group();
+    const saturnGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(128, "#fed7aa", "#fed7aa"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.75,
+    }));
+    saturnGlow.scale.set(30, 30, 1);
+    saturnGroup.add(saturnGlow);
+
+    const saturnInner = new THREE.Group();
+    saturnInner.rotation.z = THREE.MathUtils.degToRad(26.7);
+    saturnInner.rotation.x = THREE.MathUtils.degToRad(18.0);
+
+    const saturnSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(6.0, 32, 32),
+      new THREE.MeshBasicMaterial({ map: planetTextures.saturn })
+    );
+    saturnInner.add(saturnSphere);
+
+    const saturnRing = new THREE.Mesh(
+      createSaturnRingGeometry(7.2, 15.0, 64),
+      new THREE.MeshBasicMaterial({
+        map: planetTextures.saturn_ring,
+        transparent: true,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      })
+    );
+    saturnInner.add(saturnRing);
+
+    saturnGroup.add(saturnInner);
+    bodiesGroup.add(saturnGroup);
+    planetGroups["saturn"] = saturnGroup;
+
+    // Uranus
+    const uranusGroup = new THREE.Group();
+    const uranusGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(128, "#7dd3fc", "#7dd3fc"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.75,
+    }));
+    uranusGlow.scale.set(20, 20, 1);
+    uranusGroup.add(uranusGlow);
+    const uranusSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(5.0, 32, 32),
+      new THREE.MeshBasicMaterial({ map: planetTextures.uranus })
+    );
+    uranusGroup.add(uranusSphere);
+    bodiesGroup.add(uranusGroup);
+    planetGroups["uranus"] = uranusGroup;
+
+    // Neptune
+    const neptuneGroup = new THREE.Group();
+    const neptuneGlow = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: createRadialGlowTexture(128, "#818cf8", "#818cf8"),
+      blending: THREE.AdditiveBlending,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.75,
+    }));
+    neptuneGlow.scale.set(20, 20, 1);
+    neptuneGroup.add(neptuneGlow);
+    const neptuneSphere = new THREE.Mesh(
+      new THREE.SphereGeometry(5.0, 32, 32),
+      new THREE.MeshBasicMaterial({ map: planetTextures.neptune })
+    );
+    neptuneGroup.add(neptuneSphere);
+    bodiesGroup.add(neptuneGroup);
+    planetGroups["neptune"] = neptuneGroup;
+
+    // 4. Dynamic Orbital Satellites & Space Stations Group
+    const satellitesGroup = new THREE.Group();
+    satellitesGroup.name = "dynamicSatellites";
+    scene.add(satellitesGroup);
+
     // ═════════════════════════════════════════════════════════════════════════
     // RENDER FRAME LOOP
     // ═════════════════════════════════════════════════════════════════════════
@@ -1154,10 +1507,6 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         const obj = nebulaeGroup.children[0];
         nebulaeGroup.remove(obj);
       }
-      while (bodiesGroup.children.length > 0) {
-        const obj = bodiesGroup.children[0];
-        bodiesGroup.remove(obj);
-      }
 
       // ── 1. PHOTOMETRIC CATALOG STARS (Authentic 2,887 Stars from Yale BSC5) ──
       const positions: number[] = [];
@@ -1277,116 +1626,104 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         }
       }
 
-      // ── 5. CELESTIAL BODIES (Moon with Phase Shader, Sun, Planets) ────────
+      // ── 5. CELESTIAL BODIES (Photorealistic Moon Phase Shader, Sun Corona, Real Planet Textures & Saturn Rings) ──
       if (toggles.showBodies) {
-        // Moon
+        bodiesGroup.visible = true;
+
+        // 1. Moon: Position & True Physical Sunlight Vector
         const moonP = azAltToVec3(moon.azimuthDeg, moon.altitudeDeg, BODY_LAYER_RADIUS);
-        const moonGlowMat = new THREE.SpriteMaterial({
-          map: createRadialGlowTexture(256, "#ffffff", "#8ab4f8"),
-          blending: THREE.AdditiveBlending,
-          transparent: true,
-          depthWrite: false,
-          opacity: 0.55 * (moon.illuminationFraction ?? 0.5),
-        });
-        const moonGlow = new THREE.Sprite(moonGlowMat);
-        moonGlow.position.copy(moonP);
-        moonGlow.scale.set(36, 36, 1);
-        bodiesGroup.add(moonGlow);
+        moonGroup.position.copy(moonP);
+        moonGroup.lookAt(0, 0, 0);
+        const sunDirVec = azAltToVec3(sol.azimuthDeg, sol.altitudeDeg, 1).normalize();
+        moonShaderMat.uniforms.uSunDir.value.copy(sunDirVec);
+        moonGlow.material.opacity = Math.max(0.12, (moon.illuminationFraction ?? 0.5) * 0.65);
 
-        const moonGeom = new THREE.SphereGeometry(8, 32, 32);
-        const moonTex = new THREE.TextureLoader().load("/textures/moons/moon.jpg");
-        moonTex.colorSpace = THREE.SRGBColorSpace;
-        const phaseDeg = moon.phaseDeg ?? 180;
-        const phaseRad = phaseDeg * (Math.PI / 180);
-
-        const moonMat = new THREE.ShaderMaterial({
-          uniforms: {
-            uMoonTex: { value: moonTex },
-            uPhaseAngle: { value: phaseRad },
-          },
-          vertexShader: `
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            void main() {
-              vUv = uv;
-              vNormal = normalize(normalMatrix * normal);
-              gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-            }
-          `,
-          fragmentShader: `
-            uniform sampler2D uMoonTex;
-            uniform float uPhaseAngle;
-            varying vec2 vUv;
-            varying vec3 vNormal;
-            void main() {
-              vec4 texCol = texture2D(uMoonTex, vUv);
-              float cosPhase = cos(uPhaseAngle);
-              float sinPhase = sin(uPhaseAngle);
-              vec3 lightDir = normalize(vec3(sinPhase, 0.0, cosPhase));
-              float NdotL = dot(normalize(vNormal), lightDir);
-              float illum = smoothstep(-0.03, 0.06, NdotL);
-              vec3 darkSide = texCol.rgb * 0.04;
-              vec3 litSide = texCol.rgb * 1.1;
-              vec3 finalColor = mix(darkSide, litSide, illum);
-              gl_FragColor = vec4(finalColor, 1.0);
-            }
-          `,
-          transparent: false,
-        });
-        const moonMesh = new THREE.Mesh(moonGeom, moonMat);
-        moonMesh.position.copy(moonP);
-        moonMesh.lookAt(0, 0, 0);
-        bodiesGroup.add(moonMesh);
-
-        // Sun
+        // 2. Sun: Position & Photosphere Corona
         const sunP = azAltToVec3(sol.azimuthDeg, sol.altitudeDeg, BODY_LAYER_RADIUS);
-        const sunGlowMat = new THREE.SpriteMaterial({
-          map: createRadialGlowTexture(256, "#fff3d1", "#f59e0b"),
-          blending: THREE.AdditiveBlending,
-          transparent: true,
-          depthWrite: false,
-          opacity: 0.95,
-        });
-        const sunGlow = new THREE.Sprite(sunGlowMat);
-        sunGlow.position.copy(sunP);
-        sunGlow.scale.set(70, 70, 1);
-        bodiesGroup.add(sunGlow);
+        sunGroup.position.copy(sunP);
+        sunGroup.lookAt(0, 0, 0);
 
-        const sunCoreGeom = new THREE.SphereGeometry(12, 32, 32);
-        const sunCoreMat = new THREE.MeshBasicMaterial({ color: 0xfffaed });
-        const sunCoreMesh = new THREE.Mesh(sunCoreGeom, sunCoreMat);
-        sunCoreMesh.position.copy(sunP);
-        bodiesGroup.add(sunCoreMesh);
-
-        // Planets
+        // 3. Solar System Planets: Real High-Resolution Textures & Tilted Rings
         for (const planet of planets) {
-          const pP = azAltToVec3(planet.azimuthDeg, planet.altitudeDeg, BODY_LAYER_RADIUS);
-          const pGlowMat = new THREE.SpriteMaterial({
-            map: createRadialGlowTexture(128, planet.colorHex, planet.colorHex),
+          const pGroup = planetGroups[planet.id];
+          if (pGroup) {
+            const pP = azAltToVec3(planet.azimuthDeg, planet.altitudeDeg, BODY_LAYER_RADIUS);
+            pGroup.position.copy(pP);
+            pGroup.lookAt(0, 0, 0);
+            pGroup.visible = true;
+          }
+        }
+      } else {
+        bodiesGroup.visible = false;
+      }
+
+      // ── 5.5 TOPOCENTRIC SATELLITES (Live SGP4 Orbiters & Space Stations) ───
+      while (satellitesGroup.children.length > 0) {
+        const obj = satellitesGroup.children[0];
+        satellitesGroup.remove(obj);
+        if ((obj as THREE.Line).geometry) (obj as THREE.Line).geometry.dispose();
+      }
+
+      if (toggles.showSatellites && astroRef.current.topoSats) {
+        satellitesGroup.visible = true;
+        for (const sat of astroRef.current.topoSats.satellites) {
+          const sP = azAltToVec3(sat.azimuthDeg, sat.altitudeDeg, SATELLITE_LAYER_RADIUS);
+          const isStation = sat.category === "station";
+          const isTelescope = sat.category === "telescope";
+          const isTargeted = currentTarget && currentTarget.id === sat.id;
+
+          // Glowing satellite marker sprite
+          const sGlowMat = new THREE.SpriteMaterial({
+            map: createRadialGlowTexture(128, sat.colorHex, sat.colorHex),
             blending: THREE.AdditiveBlending,
             transparent: true,
             depthWrite: false,
-            opacity: 0.8,
+            opacity: isStation ? 0.95 : isTelescope ? 0.9 : 0.75,
           });
-          const pGlow = new THREE.Sprite(pGlowMat);
-          pGlow.position.copy(pP);
-          const sz = Math.max(14, (4.5 - planet.mag) * 4.5);
-          pGlow.scale.set(sz, sz, 1);
-          bodiesGroup.add(pGlow);
+          const sGlow = new THREE.Sprite(sGlowMat);
+          sGlow.position.copy(sP);
+          const sz = isStation ? 20 : isTelescope ? 15 : isTargeted ? 18 : 10;
+          sGlow.scale.set(sz, sz, 1);
+          satellitesGroup.add(sGlow);
 
-          const pGeom = new THREE.SphereGeometry(3.5, 16, 16);
-          const pMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(planet.colorHex) });
-          const pMesh = new THREE.Mesh(pGeom, pMat);
-          pMesh.position.copy(pP);
-          bodiesGroup.add(pMesh);
+          // Center bright satellite core
+          const sCoreGeom = new THREE.SphereGeometry(isStation ? 1.6 : isTelescope ? 1.3 : 0.8, 8, 8);
+          const sCoreMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+          const sCoreMesh = new THREE.Mesh(sCoreGeom, sCoreMat);
+          sCoreMesh.position.copy(sP);
+          satellitesGroup.add(sCoreMesh);
+
+          // Render Orbital Pass Track Line if trail data is present
+          if (sat.trail && sat.trail.length >= 2) {
+            const linePositions: number[] = [];
+            for (let tIdx = 0; tIdx < sat.trail.length - 1; tIdx++) {
+              const pA = sat.trail[tIdx];
+              const pB = sat.trail[tIdx + 1];
+              linePositions.push(pA.x, pA.y, pA.z, pB.x, pB.y, pB.z);
+            }
+            if (linePositions.length > 0) {
+              const tGeom = new THREE.BufferGeometry();
+              tGeom.setAttribute("position", new THREE.Float32BufferAttribute(linePositions, 3));
+              const tMat = new THREE.LineBasicMaterial({
+                color: new THREE.Color(sat.colorHex),
+                transparent: true,
+                opacity: isStation || isTargeted ? 0.55 : 0.28,
+                linewidth: 1,
+              });
+              const trailLine = new THREE.LineSegments(tGeom, tMat);
+              satellitesGroup.add(trailLine);
+            }
+          }
         }
+      } else {
+        satellitesGroup.visible = false;
       }
 
       // ── Update Camera Orbit ────────────────────────────────────────────────
       const azRad = (camAzRef.current * Math.PI) / 180;
       const altRad = (camAltRef.current * Math.PI) / 180;
       const targetVec = new THREE.Vector3(
-        Math.cos(altRad) * Math.sin(azRad),
+        -Math.cos(altRad) * Math.sin(azRad), // Negate: matches azAltToVec3 East=-X convention
         Math.sin(altRad),
         Math.cos(altRad) * Math.cos(azRad)
       );
@@ -1595,6 +1932,22 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
               ctx.fillText("Sun", ps.x + 16, ps.y + 2);
             }
           }
+
+          // Satellites Live HUD Labels
+          if (toggles.showSatellites && astroRef.current.topoSats) {
+            for (const sat of astroRef.current.topoSats.satellites) {
+              if (sat.category !== "station" && sat.category !== "telescope" && sat.altitudeDeg < 12 && (!currentTarget || currentTarget.id !== sat.id)) continue;
+              const p = project(sat.azimuthDeg, sat.altitudeDeg, SATELLITE_LAYER_RADIUS);
+              if (p) {
+                ctx.font = "bold 10px font-mono, system-ui, monospace";
+                ctx.fillStyle = sat.colorHex;
+                ctx.fillText(`🛰️ ${sat.name}`, p.x + 8, p.y - 3);
+                ctx.font = "500 8.5px font-mono, monospace";
+                ctx.fillStyle = "rgba(148, 163, 184, 0.85)";
+                ctx.fillText(`${sat.altitudeKm}km · ${(sat.speedKmH / 1000).toFixed(1)}k km/h`, p.x + 8, p.y + 7);
+              }
+            }
+          }
         }
 
         // D. Cardinal Compass Headings
@@ -1717,6 +2070,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       topoPlanets: planets,
       constellations: cstl,
       topoNebulae: nebs,
+      topoSats: sats,
     } = astroRef.current;
 
     const project = (azDeg: number, altDeg: number, r: number) => {
@@ -1730,6 +2084,29 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
 
     let bestTarget: SelectedTarget | null = null;
     let bestDist = 32;
+
+    // 0. Check Active Orbital Satellites
+    if (togglesRef.current.showSatellites && sats) {
+      for (const sat of sats.satellites) {
+        const p = project(sat.azimuthDeg, sat.altitudeDeg, SATELLITE_LAYER_RADIUS);
+        if (p) {
+          const d = Math.hypot(clickX - p.x, clickY - p.y);
+          if (d < 28 && d < bestDist) {
+            bestDist = d;
+            bestTarget = {
+              id: sat.id,
+              name: `🛰️ ${sat.name}`,
+              type: "satellite",
+              azimuthDeg: sat.azimuthDeg,
+              altitudeDeg: sat.altitudeDeg,
+              mag: 2.0,
+              colorHex: sat.colorHex,
+              satelliteInfo: sat,
+            };
+          }
+        }
+      }
+    }
 
     // 1. Check Nebulae & DSO
     for (const neb of nebs) {
@@ -1873,7 +2250,8 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     lastMousePos.current = { x: e.clientX, y: e.clientY };
 
     const sens = 0.22 * (camFovRef.current / 70);
-    camAzRef.current = ((camAzRef.current + dx * sens) % 360 + 360) % 360;
+    // Natural Drag Controls: Drag Right -> Pan Right, Drag Up/Down natural grab
+    camAzRef.current = ((camAzRef.current - dx * sens) % 360 + 360) % 360;
     camAltRef.current = Math.max(-85, Math.min(90, camAltRef.current + dy * sens));
   };
 
@@ -1884,6 +2262,30 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     if (dx < 6 && dy < 6) {
       handleClick(e);
     }
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 1) {
+      isDragging.current = true;
+      lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      mouseDownPos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      cameraAnimRef.current = null;
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging.current || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - lastMousePos.current.x;
+    const dy = e.touches[0].clientY - lastMousePos.current.y;
+    lastMousePos.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+
+    const sens = 0.22 * (camFovRef.current / 70);
+    camAzRef.current = ((camAzRef.current - dx * sens) % 360 + 360) % 360;
+    camAltRef.current = Math.max(-85, Math.min(90, camAltRef.current + dy * sens));
+  };
+
+  const handleTouchEnd = () => {
+    isDragging.current = false;
   };
 
   const handleWheel = (e: React.WheelEvent) => {
@@ -1898,6 +2300,9 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       onMouseMove={handleMouseMove}
       onMouseUp={handleMouseUp}
       onMouseLeave={() => { isDragging.current = false; }}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
       onWheel={handleWheel}
       className="relative w-full h-full bg-[#060a13] text-slate-100 font-sans overflow-hidden select-none cursor-crosshair active:cursor-grabbing"
     >
@@ -2265,6 +2670,13 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
               </button>
               <button
                 type="button"
+                onClick={() => setSearchFilterCategory("satellite")}
+                className={`px-2.5 py-1 rounded-lg shrink-0 transition-all ${searchFilterCategory === "satellite" ? "bg-emerald-500/20 text-emerald-300 border border-emerald-400/40 font-bold" : "text-slate-400 hover:text-slate-200"}`}
+              >
+                🛰️ SATELLITES ({topoSats.satellites.length})
+              </button>
+              <button
+                type="button"
                 onClick={() => setSearchFilterCategory("nebula")}
                 className={`px-2.5 py-1 rounded-lg shrink-0 transition-all ${searchFilterCategory === "nebula" ? "bg-pink-500/20 text-pink-300 border border-pink-400/40 font-bold" : "text-slate-400 hover:text-slate-200"}`}
               >
@@ -2309,7 +2721,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center text-base group-hover:border-cyan-400/60 transition-all">
-                        {item.category === "nebula" ? "✨" : item.category === "planet" ? "🪐" : item.category === "constellation" ? "🌌" : "🌟"}
+                        {item.category === "satellite" ? "🛰️" : item.category === "nebula" ? "✨" : item.category === "planet" ? "🪐" : item.category === "constellation" ? "🌌" : "🌟"}
                       </div>
                       <div>
                         <div className="text-sm font-bold text-white group-hover:text-cyan-300 transition-colors">
@@ -2413,62 +2825,191 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             </button>
           </div>
 
-          {/* NASA Mission Imagery Showcase Banner (Responsive Fit & Pure Space Black Backdrop) */}
-          <div className="mt-3 relative rounded-2xl overflow-hidden bg-black border border-cyan-500/30 shadow-inner group">
-            {nasaImage?.loading ? (
-              <div className="h-48 sm:h-52 w-full flex flex-col items-center justify-center p-4 text-center bg-gradient-to-b from-[#060e22] to-[#020612] relative overflow-hidden">
-                {/* Shimmer sweep */}
-                <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent animate-pulse" />
-                <div className="w-8 h-8 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin mb-2.5 shadow-[0_0_15px_rgba(6,182,212,0.5)]" />
-                <span className="text-[10px] font-mono text-cyan-300 tracking-widest block font-bold">
-                  RETRIEVING NASA MISSION IMAGERY...
-                </span>
-                <span className="text-[9px] font-mono text-slate-500 mt-1 block">
-                  HUBBLE &bull; JWST &bull; SDO ARCHIVE
-                </span>
+          {/* Image Banner: Real-time Moon Phase OR NASA Archive Photo */}
+          {(selectedTarget?.id === "moon" || selectedTarget?.type === "moon") ? (
+            /* ── REAL-TIME MOON PHASE VISUALIZER ─────────────────────────── */
+            <div className="mt-3 relative rounded-2xl overflow-hidden bg-black border border-slate-700/50 shadow-inner">
+              <div className="h-52 w-full flex flex-col items-center justify-center bg-gradient-to-b from-[#050912] to-[#020510] relative p-3">
+                {/* Stars background */}
+                {[...Array(30)].map((_, i) => (
+                  <div
+                    key={i}
+                    className="absolute rounded-full bg-white"
+                    style={{
+                      width: Math.random() > 0.7 ? "2px" : "1px",
+                      height: Math.random() > 0.7 ? "2px" : "1px",
+                      top: `${Math.random() * 100}%`,
+                      left: `${Math.random() * 100}%`,
+                      opacity: 0.3 + Math.random() * 0.5,
+                    }}
+                  />
+                ))}
+
+                {/* Moon Phase SVG (120x120) */}
+                <svg width="120" height="120" viewBox="0 0 120 120" className="drop-shadow-[0_0_20px_rgba(200,200,220,0.5)]">
+                  <defs>
+                    <clipPath id="moonClip">
+                      <circle cx="60" cy="60" r="56" />
+                    </clipPath>
+                    <radialGradient id="moonGrad" cx="40%" cy="35%" r="65%">
+                      <stop offset="0%" stopColor="#f0f0e8" />
+                      <stop offset="40%" stopColor="#d8d8cc" />
+                      <stop offset="100%" stopColor="#888880" />
+                    </radialGradient>
+                    <radialGradient id="shadowGrad" cx="50%" cy="50%" r="50%">
+                      <stop offset="0%" stopColor="#060a14" />
+                      <stop offset="100%" stopColor="#03060e" />
+                    </radialGradient>
+                  </defs>
+
+                  {/* Outer glow ring */}
+                  <circle cx="60" cy="60" r="58" fill="none" stroke="rgba(200,210,240,0.15)" strokeWidth="2" />
+
+                  {/* Moon disc */}
+                  <circle cx="60" cy="60" r="56" fill="url(#moonGrad)" clipPath="url(#moonClip)" />
+
+                  {/* Crater details */}
+                  <g clipPath="url(#moonClip)" opacity="0.25">
+                    <circle cx="45" cy="50" r="6" fill="none" stroke="#666" strokeWidth="1" />
+                    <circle cx="75" cy="40" r="4" fill="none" stroke="#666" strokeWidth="1" />
+                    <circle cx="55" cy="70" r="8" fill="none" stroke="#666" strokeWidth="1" />
+                    <circle cx="80" cy="65" r="5" fill="none" stroke="#666" strokeWidth="1" />
+                    <circle cx="35" cy="72" r="3" fill="none" stroke="#666" strokeWidth="0.8" />
+                    <ellipse cx="60" cy="55" rx="14" ry="10" fill="#b8b8a8" opacity="0.3" />
+                  </g>
+
+                  {/* Shadow overlay — uses phase angle to draw accurate terminator */}
+                  {(() => {
+                    // phaseDeg: 0=New, 90=Q1, 180=Full, 270=Q3
+                    const ph = liveMoonPhaseDeg;
+                    const r = 56;
+                    const cx = 60, cy = 60;
+
+                    // Determine lit fraction & shadow side
+                    const illum = liveMoonIllumination; // 0..1
+                    const isWaxing = ph < 180;
+
+                    // The terminator x-offset from center (positive = terminator on right side)
+                    // At New (ph=0): illum=0, full dark. At Full (ph=180): illum=1, no dark.
+                    // Shadow is on left for waxing (ph 0→180), right for waning (ph 180→360)
+                    const terminatorX = cx + r * Math.cos(ph * Math.PI / 180);
+
+                    if (illum < 0.02) {
+                      // New Moon: completely dark
+                      return <circle cx={cx} cy={cy} r={r} fill="url(#shadowGrad)" clipPath="url(#moonClip)" />;
+                    }
+                    if (illum > 0.98) {
+                      // Full Moon: no shadow
+                      return null;
+                    }
+
+                    // Draw shadow as: dark hemisphere + elliptical terminator
+                    // shadow covers the "dark half"
+                    const ellipseRx = Math.abs(r * Math.cos(ph * Math.PI / 180));
+                    const shadowPath = isWaxing
+                      // Waxing: dark on left, lit on right
+                      ? `M ${cx} ${cy - r} A ${r} ${r} 0 0 0 ${cx} ${cy + r} A ${ellipseRx} ${r} 0 0 1 ${cx} ${cy - r} Z`
+                      // Waning: dark on right, lit on left
+                      : `M ${cx} ${cy - r} A ${r} ${r} 0 0 1 ${cx} ${cy + r} A ${ellipseRx} ${r} 0 0 0 ${cx} ${cy - r} Z`;
+
+                    return (
+                      <path
+                        d={shadowPath}
+                        fill="url(#shadowGrad)"
+                        opacity="0.92"
+                        clipPath="url(#moonClip)"
+                      />
+                    );
+                  })()}
+                </svg>
+
+                {/* Phase Info Row */}
+                <div className="mt-3 flex flex-col items-center gap-1">
+                  <div className="text-white font-bold text-sm">
+                    {liveMoonIllumination < 0.05 ? "🌑 New Moon" :
+                     liveMoonIllumination < 0.45 && liveMoonPhaseDeg < 180 ? "🌒 Waxing Crescent" :
+                     liveMoonIllumination < 0.55 && liveMoonPhaseDeg < 180 ? "🌓 First Quarter" :
+                     liveMoonIllumination < 0.95 && liveMoonPhaseDeg < 180 ? "🌔 Waxing Gibbous" :
+                     liveMoonIllumination >= 0.95 ? "🌕 Full Moon" :
+                     liveMoonIllumination < 0.55 ? "🌗 Last Quarter" :
+                     liveMoonIllumination < 0.45 ? "🌘 Waning Crescent" :
+                     "🌖 Waning Gibbous"}
+                  </div>
+                  <div className="flex items-center gap-3 text-[11px] font-mono text-slate-400">
+                    <span className="text-slate-300">
+                      <span className="text-cyan-300 font-bold">{Math.round(liveMoonIllumination * 100)}%</span> Illuminated
+                    </span>
+                    <span className="text-slate-600">·</span>
+                    <span>Phase {liveMoonPhaseDeg.toFixed(1)}°</span>
+                  </div>
+                </div>
+
+                {/* Real-time badge */}
+                <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-emerald-500/40 text-[9px] font-mono text-emerald-300 flex items-center gap-1 font-bold">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  LIVE EPHEMERIS
+                </div>
               </div>
-            ) : nasaImage?.imageUrl ? (
-              <div
-                className="relative h-48 sm:h-56 w-full flex items-center justify-center bg-black cursor-pointer group"
-                onClick={() => setIsFullscreenImageOpen(true)}
-                title="Click to expand high-resolution image"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={nasaImage.thumbnailUrl || nasaImage.imageUrl}
-                  alt={targetInfo.name}
-                  className="w-full h-full object-contain p-1.5 group-hover:scale-105 transition-transform duration-500"
-                />
-                <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
-
-                {/* NASA Archive Badge */}
-                <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-cyan-500/40 text-[9px] font-mono text-cyan-300 flex items-center gap-1 font-bold shadow-md">
-                  <Camera className="w-3 h-3 text-cyan-400" />
-                  <span>NASA ARCHIVE</span>
-                </div>
-
-                {/* Click to expand overlay */}
-                <div className="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/85 backdrop-blur-md border border-slate-700 text-slate-300 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md text-[9px] font-mono">
-                  <Maximize2 className="w-3 h-3 text-cyan-400" />
-                  <span>FULL VIEW</span>
-                </div>
-
-                {/* Photographer / Mission Credit */}
-                <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[9px] font-mono text-slate-300">
-                  <span className="truncate max-w-[280px] bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded border border-slate-800/80">
-                    {nasaImage.photographer || "NASA / Space Telescope Science Institute"}
+            </div>
+          ) : (
+            /* ── NASA ARCHIVE IMAGE (non-Moon objects) ─────────────────────── */
+            <div className="mt-3 relative rounded-2xl overflow-hidden bg-black border border-cyan-500/30 shadow-inner group">
+              {nasaImage?.loading ? (
+                <div className="h-48 sm:h-52 w-full flex flex-col items-center justify-center p-4 text-center bg-gradient-to-b from-[#060e22] to-[#020612] relative overflow-hidden">
+                  {/* Shimmer sweep */}
+                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-cyan-500/10 to-transparent animate-pulse" />
+                  <div className="w-8 h-8 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin mb-2.5 shadow-[0_0_15px_rgba(6,182,212,0.5)]" />
+                  <span className="text-[10px] font-mono text-cyan-300 tracking-widest block font-bold">
+                    RETRIEVING NASA MISSION IMAGERY...
+                  </span>
+                  <span className="text-[9px] font-mono text-slate-500 mt-1 block">
+                    HUBBLE &bull; JWST &bull; SDO ARCHIVE
                   </span>
                 </div>
-              </div>
-            ) : (
-              <div className="h-28 w-full flex flex-col items-center justify-center p-3 text-center bg-[#060e22]">
-                <Sparkles className="w-6 h-6 text-cyan-400 mb-1.5" />
-                <span className="text-[10px] font-mono text-cyan-300 font-bold">
-                  SPECTROSCOPIC TELEMETRY LOCKED
-                </span>
-              </div>
-            )}
-          </div>
+              ) : nasaImage?.imageUrl ? (
+                <div
+                  className="relative h-48 sm:h-56 w-full flex items-center justify-center bg-black cursor-pointer group"
+                  onClick={() => setIsFullscreenImageOpen(true)}
+                  title="Click to expand high-resolution image"
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={nasaImage.thumbnailUrl || nasaImage.imageUrl}
+                    alt={targetInfo.name}
+                    className="w-full h-full object-contain p-1.5 group-hover:scale-105 transition-transform duration-500"
+                  />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent pointer-events-none" />
+
+                  {/* NASA Archive Badge */}
+                  <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-black/85 backdrop-blur-md border border-cyan-500/40 text-[9px] font-mono text-cyan-300 flex items-center gap-1 font-bold shadow-md">
+                    <Camera className="w-3 h-3 text-cyan-400" />
+                    <span>NASA ARCHIVE</span>
+                  </div>
+
+                  {/* Click to expand overlay */}
+                  <div className="absolute top-2 right-2 px-2 py-1 rounded-md bg-black/85 backdrop-blur-md border border-slate-700 text-slate-300 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity shadow-md text-[9px] font-mono">
+                    <Maximize2 className="w-3 h-3 text-cyan-400" />
+                    <span>FULL VIEW</span>
+                  </div>
+
+                  {/* Photographer / Mission Credit */}
+                  <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between text-[9px] font-mono text-slate-300">
+                    <span className="truncate max-w-[280px] bg-black/80 backdrop-blur-sm px-2 py-0.5 rounded border border-slate-800/80">
+                      {nasaImage.photographer || "NASA / Space Telescope Science Institute"}
+                    </span>
+                  </div>
+                </div>
+              ) : (
+                <div className="h-28 w-full flex flex-col items-center justify-center p-3 text-center bg-[#060e22]">
+                  <Sparkles className="w-6 h-6 text-cyan-400 mb-1.5" />
+                  <span className="text-[10px] font-mono text-cyan-300 font-bold">
+                    SPECTROSCOPIC TELEMETRY LOCKED
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
 
           {/* 4 Compact Telemetry Metrics Grid */}
           <div className="grid grid-cols-2 gap-2 mt-3 font-mono text-xs">
@@ -2710,6 +3251,25 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="10" cy="10" r="6"/><path d="M14 6a6 6 0 0 1 0 8" strokeDasharray="2 2"/><circle cx="19" cy="17" r="2.5"/><circle cx="19" cy="17" r="4" strokeDasharray="1.5 2" opacity="0.4"/></svg>
         </button>
 
+        {/* Active Orbital Satellites */}
+        <button
+          type="button"
+          onClick={() => setShowSatellites((p) => !p)}
+          title={`Active Satellites (${topoSats.satellites.length} Visible in Sky)`}
+          className={`p-2.5 rounded-xl border transition-all duration-200 relative ${
+            showSatellites
+              ? "bg-emerald-500/25 border-emerald-400/60 text-emerald-300 shadow-[0_0_12px_rgba(16,185,129,0.35)]"
+              : "bg-[#030712]/50 border-slate-700/40 text-slate-500 hover:text-slate-300 hover:border-slate-600"
+          }`}
+        >
+          <Radio className="w-5 h-5" />
+          {topoSats.satellites.length > 0 && showSatellites && (
+            <span className="absolute -top-1 -right-1 px-1.5 py-0.2 rounded-full text-[8px] font-mono font-bold bg-emerald-500 text-black shadow">
+              {topoSats.satellites.length}
+            </span>
+          )}
+        </button>
+
         <div className="w-px h-7 bg-slate-700/40 mx-1" />
 
         {/* Temporal Stepper & Time Controls */}
@@ -2791,9 +3351,57 @@ function pos3DtoAzAlt(p: { x: number; y: number; z: number }): { az: number; alt
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HELPER: Generate Radial Glow Texture
+// HELPER: Generate Saturn Photorealistic 3D Ring Annulus Geometry
 // ═══════════════════════════════════════════════════════════════════════════════
+function createSaturnRingGeometry(innerRadius: number, outerRadius: number, segments: number = 64): THREE.BufferGeometry {
+  const geom = new THREE.BufferGeometry();
+  const positions: number[] = [];
+  const uvs: number[] = [];
+  const indices: number[] = [];
+
+  for (let i = 0; i <= segments; i++) {
+    const angle = (i / segments) * Math.PI * 2;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+
+    // Inner radius vertex (u = 0)
+    positions.push(cos * innerRadius, 0, sin * innerRadius);
+    uvs.push(0, i / segments);
+
+    // Outer radius vertex (u = 1)
+    positions.push(cos * outerRadius, 0, sin * outerRadius);
+    uvs.push(1, i / segments);
+  }
+
+  for (let i = 0; i < segments; i++) {
+    const i0 = i * 2;
+    const i1 = i * 2 + 1;
+    const i2 = (i + 1) * 2;
+    const i3 = (i + 1) * 2 + 1;
+
+    indices.push(i0, i1, i2);
+    indices.push(i1, i3, i2);
+    // Double side faces
+    indices.push(i2, i1, i0);
+    indices.push(i2, i3, i1);
+  }
+
+  geom.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geom.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geom.setIndex(indices);
+  geom.computeVertexNormals();
+  return geom;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// HELPER: Generate Radial Glow Texture (Cached)
+// ═══════════════════════════════════════════════════════════════════════════════
+const glowTextureCache = new Map<string, THREE.Texture>();
+
 function createRadialGlowTexture(size: number, centerColor: string, edgeColor: string): THREE.Texture {
+  const key = `${size}_${centerColor}_${edgeColor}`;
+  if (glowTextureCache.has(key)) return glowTextureCache.get(key)!;
+
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;
@@ -2807,13 +3415,19 @@ function createRadialGlowTexture(size: number, centerColor: string, edgeColor: s
   ctx.fillRect(0, 0, size, size);
   const tex = new THREE.CanvasTexture(canvas);
   tex.needsUpdate = true;
+  glowTextureCache.set(key, tex);
   return tex;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// HELPER: Generate Nebula Volumetric Glow Texture (Organic Gas Wisps)
+// HELPER: Generate Nebula Volumetric Glow Texture (Organic Gas Wisps - Cached)
 // ═══════════════════════════════════════════════════════════════════════════════
+const nebulaGlowCache = new Map<string, THREE.Texture>();
+
 function createNebulaGlowTexture(size: number, primaryColor: string, secondaryColor: string, type: string): THREE.Texture {
+  const key = `${size}_${primaryColor}_${secondaryColor}_${type}`;
+  if (nebulaGlowCache.has(key)) return nebulaGlowCache.get(key)!;
+
   const canvas = document.createElement("canvas");
   canvas.width = size;
   canvas.height = size;

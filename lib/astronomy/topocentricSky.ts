@@ -6,7 +6,7 @@
  * - Yale BSC5 Bright Stars with Johnson B-V Color Index Spectral Mapping
  * - Full IAU Constellations with Authentic Stellarium-grade Stick Figures
  * - The Moon with Real Topocentric Ephemeris + Phase Rendering
- * - 5 Visible Naked-Eye Planets (Mercury, Venus, Mars, Jupiter, Saturn)
+ * - 7 Planets: Mercury, Venus, Mars, Jupiter, Saturn, Uranus, Neptune (VSOP87)
  * - The Sun and Twilight Solar Elevation
  * - Photorealistic Galactic Plane / Milky Way Coordinate Mapping (J2000)
  */
@@ -376,13 +376,15 @@ export function computeTopocentricBodies(
     illuminationFraction: moonIllum.phase_fraction,
   };
 
-  // 2. Visible Planets — Precise VSOP87 Ephemeris
+  // 2. Visible Planets — Precise VSOP87 Ephemeris (all 7 classical + ice giants)
   const planetDefs = [
     { id: "mercury", name: "Mercury", body: Astronomy.Body.Mercury, color: "#cbd5e1" },
     { id: "venus",   name: "Venus",   body: Astronomy.Body.Venus,   color: "#fef08a" },
     { id: "mars",    name: "Mars",    body: Astronomy.Body.Mars,    color: "#f87171" },
     { id: "jupiter", name: "Jupiter", body: Astronomy.Body.Jupiter, color: "#fcd34d" },
     { id: "saturn",  name: "Saturn",  body: Astronomy.Body.Saturn,  color: "#fed7aa" },
+    { id: "uranus",  name: "Uranus",  body: Astronomy.Body.Uranus,  color: "#7dd3fc" }, // Ice-blue
+    { id: "neptune", name: "Neptune", body: Astronomy.Body.Neptune, color: "#818cf8" }, // Deep blue-violet
   ];
 
   const planets: TopocentricBody[] = [];

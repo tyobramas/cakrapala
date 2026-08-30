@@ -271,4 +271,30 @@ export const BODY_PROFILES: Record<string, Partial<CelestialObjectInfo>> = {
     funFact:
       "Lacking a substantial insulating atmosphere, Mercury endures the most extreme temperature swings in the Solar System.",
   },
+  uranus: {
+    scientificName: "Uranus (The Tilted Ice Giant)",
+    type: "Ice Giant Planet",
+    constellation: "Ecliptic Planet",
+    distanceLy: "~2.7 - 3.0 Billion km (~2.7 Light Hours)",
+    spectralType: "Methane-rich Hydrogen/Helium Atmosphere (Blue-green)",
+    surfaceTemp: "-224°C (Cloud Tops) — coldest planet",
+    massRadius: "Mass: 14.5 M⊕ | Radius: 25,362 km (4.0 R⊕)",
+    description:
+      "The seventh planet and first ice giant, with a dramatic axial tilt of 97.8°, meaning it effectively rolls along its orbital path on its side. It has 13 known rings and 28 moons.",
+    funFact:
+      "Uranus rotates on its side — its poles point almost directly toward and away from the Sun, giving each pole 42 years of continuous sunlight followed by 42 years of darkness.",
+  },
+  neptune: {
+    scientificName: "Neptune (The Windy Ice Giant)",
+    type: "Ice Giant Planet",
+    constellation: "Ecliptic Planet",
+    distanceLy: "~4.3 - 4.7 Billion km (~4.1 Light Hours)",
+    spectralType: "Deep Methane Blue — Hydrogen/Helium/Methane Atmosphere",
+    surfaceTemp: "-214°C (Cloud Tops)",
+    massRadius: "Mass: 17.1 M⊕ | Radius: 24,622 km (3.9 R⊕)",
+    description:
+      "The most distant and windiest planet in the Solar System, with supersonic winds exceeding 2,100 km/h. Its vivid sapphire blue color comes from methane absorbing red light in its upper atmosphere.",
+    funFact:
+      "Voyager 2 remains the only spacecraft to have visited Neptune, flying past in August 1989. It would take a new mission over 12 years just to reach it again.",
+  },
 };

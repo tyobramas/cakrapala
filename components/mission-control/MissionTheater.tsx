@@ -39,6 +39,8 @@ import {
   Crosshair,
   Layers,
 } from "lucide-react";
+import { gmstRad, launchSiteEciM } from "@/lib/mission-control/ascentModel";
+
 
 interface MissionTheaterProps {
   candidate: MissionCandidate | null;
@@ -65,11 +67,62 @@ const PHASE_COLORS: Record<string, { color: number; hex: string; label: string }
 
 const EARTH_RADIUS_VIS = 6.378137; // 6,378 km in Scene units (1 unit = 1,000 km)
 
+// ── Sun Direction in ECI from calendar date (low-precision solar ephemeris) ─
+function getSunDirectionECI(dateUtc?: string): THREE.Vector3 {
+  const date = dateUtc ? new Date(dateUtc) : new Date();
+  const JD = date.getTime() / 86400000 + 2440587.5;
+  const n = JD - 2451545.0; // days since J2000.0
+  const L = ((280.46 + 0.9856474 * n) % 360) * (Math.PI / 180);
+  const g = ((357.528 + 0.9856003 * n) % 360) * (Math.PI / 180);
+  const lambda = L + (1.915 * Math.sin(g) + 0.02 * Math.sin(2 * g)) * (Math.PI / 180);
+  const epsilon = 23.439 * (Math.PI / 180); // mean obliquity
+  return new THREE.Vector3(
+    Math.cos(lambda),
+    Math.sin(lambda) * Math.cos(epsilon),
+    Math.sin(lambda) * Math.sin(epsilon)
+  ).normalize();
+}
+
+// ── Physically-based Moon phase ShaderMaterial (hard terminator + earthshine) ─
+function createPhaseMoonMaterial(moonTexture: THREE.Texture, sunDir: THREE.Vector3): THREE.ShaderMaterial {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      moonTexture: { value: moonTexture },
+      sunDirection: { value: sunDir.clone() },
+    },
+    vertexShader: `
+      varying vec3 vWorldNormal;
+      varying vec2 vUv;
+      void main() {
+        vUv = uv;
+        vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform sampler2D moonTexture;
+      uniform vec3 sunDirection;
+      varying vec3 vWorldNormal;
+      varying vec2 vUv;
+      void main() {
+        vec4 texColor = texture2D(moonTexture, vUv);
+        float diffuse = max(0.0, dot(normalize(vWorldNormal), normalize(sunDirection)));
+        float ambient = 0.04; // faint earthshine on dark limb
+        float light = ambient + (1.0 - ambient) * diffuse;
+        // Blue earthshine tint on shadow side
+        vec3 earthshine = vec3(0.08, 0.12, 0.28) * (1.0 - diffuse) * 0.15;
+        gl_FragColor = vec4(texColor.rgb * light + earthshine, 1.0);
+      }
+    `,
+  });
+}
+
 export default function MissionTheater({
   candidate,
   missionType,
   moonPositionKm,
   launchSite,
+  launchDateUtc,
 }: MissionTheaterProps) {
   const canvasContainerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
@@ -95,6 +148,9 @@ export default function MissionTheater({
   const isPlayingRef = useRef(true);
   const trajectoryCurveRef = useRef<THREE.CatmullRomCurve3 | null>(null);
   const pulseMarkersRef = useRef<THREE.Mesh[]>([]);
+  // Ref so renderMissionTrajectory (memoized) always reads the current launch date
+  const launchDateUtcRef = useRef<string | undefined>(launchDateUtc);
+  launchDateUtcRef.current = launchDateUtc; // sync on every render
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -302,14 +358,11 @@ export default function MissionTheater({
           const moonGroup = new THREE.Group();
           moonGroup.name = "moonGroup";
 
-          const moonGeo = new THREE.SphereGeometry(moonRadius, 32, 32);
           const moonTex = textureLoader.load("/textures/planets/moon.jpg");
-          const moonMat = new THREE.MeshStandardMaterial({
-            map: moonTex,
-            roughness: 0.85,
-            metalness: 0.05,
-            emissive: new THREE.Color(0x222222),
-          });
+          moonTex.colorSpace = THREE.SRGBColorSpace;
+          const sunDir = getSunDirectionECI(launchDateUtcRef.current);
+          const moonMat = createPhaseMoonMaterial(moonTex, sunDir);
+          const moonGeo = new THREE.SphereGeometry(moonRadius, 32, 32);
           const moon = new THREE.Mesh(moonGeo, moonMat);
           moonGroup.add(moon);
 
@@ -356,14 +409,11 @@ export default function MissionTheater({
           const moonGroup = new THREE.Group();
           moonGroup.name = "moonGroup";
 
-          const moonGeo = new THREE.SphereGeometry(moonRadius, 48, 48);
           const moonTex = textureLoader.load("/textures/planets/moon.jpg");
-          const moonMat = new THREE.MeshStandardMaterial({
-            map: moonTex,
-            roughness: 0.85,
-            metalness: 0.05,
-            emissive: new THREE.Color(0x222222),
-          });
+          moonTex.colorSpace = THREE.SRGBColorSpace;
+          const sunDir = getSunDirectionECI(launchDateUtcRef.current);
+          const moonMat = createPhaseMoonMaterial(moonTex, sunDir);
+          const moonGeo = new THREE.SphereGeometry(moonRadius, 48, 48);
           const moon = new THREE.Mesh(moonGeo, moonMat);
           moonGroup.add(moon);
 
@@ -387,8 +437,8 @@ export default function MissionTheater({
             const mag =
               Math.sqrt(
                 periluneEvt.positionEciKm.x ** 2 +
-                  periluneEvt.positionEciKm.y ** 2 +
-                  periluneEvt.positionEciKm.z ** 2
+                periluneEvt.positionEciKm.y ** 2 +
+                periluneEvt.positionEciKm.z ** 2
               ) || 1;
             const pNormX = periluneEvt.positionEciKm.x / mag;
             const pNormY = periluneEvt.positionEciKm.y / mag;
@@ -611,12 +661,14 @@ export default function MissionTheater({
 
     const maxAniso = Math.min(renderer.capabilities.getMaxAnisotropy(), 16);
 
-    // 4. OrbitControls
+    // 4. OrbitControls — natural "push the globe" feel
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
     controls.minDistance = 6.8;
     controls.maxDistance = 50000;
+    // rotateSpeed = -1: drag right → globe rotates right ("push the globe" / grab-and-spin feel)
+    controls.rotateSpeed = -1;
     controlsRef.current = controls;
 
     // 5. Omnidirectional Daylight Illumination (100% Daylight Everywhere — Zero Dark Spots)
@@ -868,11 +920,10 @@ export default function MissionTheater({
       <div className="absolute top-3 left-3 z-10 flex items-center gap-1 p-1 rounded-xl bg-[#030712]/85 backdrop-blur-md border border-slate-800/80 shadow-lg">
         <button
           onClick={() => applyCameraFraming("Fit Full Trajectory", candidate, missionType, moonPositionKm)}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${
-            cameraMode === "Fit Full Trajectory"
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Fit Full Trajectory"
               ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_8px_rgba(6,182,212,0.2)]"
               : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
-          }`}
+            }`}
           title="Auto-Fit Mission View"
         >
           <Maximize2 className="w-3 h-3 text-cyan-400" />
@@ -880,11 +931,10 @@ export default function MissionTheater({
         </button>
         <button
           onClick={() => applyCameraFraming("Focus Earth", candidate, missionType, moonPositionKm)}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${
-            cameraMode === "Focus Earth"
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Earth"
               ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
               : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
-          }`}
+            }`}
           title="Focus on Earth"
         >
           <Globe className="w-3 h-3 text-blue-400" />
@@ -894,11 +944,10 @@ export default function MissionTheater({
           <>
             <button
               onClick={() => applyCameraFraming("Focus Launch", candidate, missionType, moonPositionKm)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${
-                cameraMode === "Focus Launch"
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Launch"
                   ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
                   : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
-              }`}
+                }`}
               title="Focus on Launch Pad"
             >
               <Crosshair className="w-3 h-3 text-amber-400" />
@@ -906,11 +955,10 @@ export default function MissionTheater({
             </button>
             <button
               onClick={() => applyCameraFraming("Focus Orbit", candidate, missionType, moonPositionKm)}
-              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${
-                cameraMode === "Focus Orbit"
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Orbit"
                   ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
                   : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
-              }`}
+                }`}
               title="Focus on Orbit Ring"
             >
               <Layers className="w-3 h-3 text-emerald-400" />
@@ -921,11 +969,10 @@ export default function MissionTheater({
         {missionType === "lunar_free_return" && (
           <button
             onClick={() => applyCameraFraming("Focus Moon Encounter", candidate, missionType, moonPositionKm)}
-            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${
-              cameraMode === "Focus Moon Encounter"
+            className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Moon Encounter"
                 ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
                 : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
-            }`}
+              }`}
             title="Focus on Moon Flyby Encounter"
           >
             <MoonIcon className="w-3 h-3 text-purple-400" />
@@ -934,11 +981,10 @@ export default function MissionTheater({
         )}
         <button
           onClick={() => applyCameraFraming("Focus Polar", candidate, missionType, moonPositionKm)}
-          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${
-            cameraMode === "Focus Polar"
+          className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Polar"
               ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
               : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
-          }`}
+            }`}
           title="Top-Down Polar View"
         >
           <Compass className="w-3 h-3 text-emerald-400" />

@@ -71,6 +71,9 @@ export default function CommandCenterGlobe() {
     const skyDome = new THREE.Mesh(skyGeo, skyMat);
     skyDome.rotation.x = 0.35;
     skyDome.rotation.y = -1.1;
+    // Fix mirrored sky: BackSide sphere flips texture horizontally.
+    // Negate scale.x to restore correct East/West orientation matching real sky (e.g. Stellarium).
+    skyDome.scale.x = -1;
     scene.add(skyDome);
 
     // ── Multi-Temperature Starfield ───────────────────────────────────
