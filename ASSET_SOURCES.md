@@ -74,3 +74,30 @@ This document records the provenance, license status, and technical specificatio
 | **Features** | Irregular natural terrain & hill profile variation mapped across 360° azimuth, cardinal direction markers (N, NE, E, SE, S, SW, W, NW) |
 | **Atmospheric Twilight Response** | Civil, Nautical, and Astronomical twilight color gradient transitions |
 | **License** | MIT License (Cakrapala Project) |
+
+---
+
+## 7. Classical Mythological Constellation Artwork (Johannes Hevelius Tradition)
+
+| Field | Specification |
+|---|---|
+| **Original Artwork Author** | Johan Meuris (for the Stellarium Project) |
+| **Source Project** | [Stellarium](https://stellarium.org) Western Sky Culture |
+| **License** | **Free Art License 1.3 (FAL / Licence Art Libre)** |
+| **License URL** | [http://artlibre.org/licence/lal/en/](http://artlibre.org/licence/lal/en/) |
+| **Coverage** | 85 Classical Mythological Western Constellation Textures |
+| **Storage Location** | `public/textures/constellations/*.webp` |
+| **Format** | Monochrome line illustrations exported with alpha transparency |
+
+---
+
+## 8. Astronomical Anchor Calibration & Hipparcos Catalogue
+
+| Field | Specification |
+|---|---|
+| **Anchor Definitions** | Stellarium Western Sky Culture `constellationsart.fab` (3-star affine anchor system) |
+| **Code / Data Origin** | Stellarium Core Engine (GPLv2+) |
+| **Star Coordinate Source** | Hipparcos and Tycho Catalogues (ESA 1997), CDS VizieR Reference [I/239/hip_main](https://cdsarc.cds.unistra.fr/viz-bin/cat/I/239) |
+| **Equinox / Epoch** | ICRS J2000.0 |
+| **Generated Output** | `lib/astronomy/constellationAnchorsGenerated.ts` |
+

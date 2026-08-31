@@ -1969,14 +1969,26 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           }
 
           // ── 3D Tangent-Plane Affine Celestial Mythological Artwork Projection ──
-          if (isThisSelected || toggles.showConstellationArt) {
-            const prof = getConstellationProfile(con.abbreviation || con.name);
-            const mapper = getArtworkMapper(con.abbreviation || con.name, prof);
+          // Note on Argo Navis (Carina / Puppis / Vela):
+          // In Stellarium Western Sky Culture, Carina, Puppis, and Vela are unified as Argo Navis (argonavis.webp).
+          // To avoid triple-drawing with AdditiveBlending, Puppis & Vela delegate to Carina when selected,
+          // and are skipped during global artwork display.
+          const isArgoSubdivision = (
+            con.abbreviation === "Pup" ||
+            con.abbreviation === "Vel" ||
+            con.name.toLowerCase() === "puppis" ||
+            con.name.toLowerCase() === "vela"
+          );
+
+          if ((isThisSelected || toggles.showConstellationArt) && (!isArgoSubdivision || isThisSelected)) {
+            const targetKey = isArgoSubdivision ? "Car" : (con.abbreviation || con.name);
+            const prof = getConstellationProfile(targetKey);
+            const mapper = getArtworkMapper(targetKey, prof);
             const artFile = prof?.artworkFile
-              || `${con.name.toLowerCase().replace(/\s+/g, "-")}.webp`;
+              || (isArgoSubdivision ? "argonavis.webp" : `${con.name.toLowerCase().replace(/\s+/g, "-")}.webp`);
 
             if (mapper) {
-              const key = (prof?.abbreviation || con.abbreviation || con.name).toLowerCase();
+              const key = (prof?.abbreviation || targetKey).toLowerCase();
               const entry = getArtEntry(key, artFile, mapper);
               if (entry) {
                 const posAttr = entry.geom.getAttribute("position") as THREE.BufferAttribute;

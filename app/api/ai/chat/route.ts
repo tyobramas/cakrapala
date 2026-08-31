@@ -52,9 +52,13 @@ export async function POST(request: NextRequest) {
 
     const baseUrl =
       process.env.NARA_ROUTER_BASE_URL || "https://router.bynara.id/v1";
-    const apiKey =
-      process.env.NARA_ROUTER_API_KEY ||
-      "sk-nry-VyXJm8i88IoU1ES8QJ1tbRjyR7PDJ7rzfrFW2ZaFHFQ";
+    const apiKey = process.env.NARA_ROUTER_API_KEY;
+    if (!apiKey) {
+      return NextResponse.json(
+        { error: "NARA_ROUTER_API_KEY environment variable is not configured." },
+        { status: 500 }
+      );
+    }
     const configuredModel =
       process.env.NARA_ROUTER_MODEL || "agnes-2.5-flash";
 
