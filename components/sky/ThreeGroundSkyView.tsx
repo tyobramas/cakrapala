@@ -63,9 +63,10 @@ import {
 import {
   CONSTELLATION_PROFILES,
   getConstellationProfile,
-  getConstellationCorners,
+  getArtworkMapper,
   type ConstellationProfile,
 } from "@/lib/astronomy/constellationProfiles";
+import type { ArtworkMapper } from "@/lib/astronomy/constellationArtworkSolver";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -1356,6 +1357,70 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       return constelTextureMap[file];
     }
 
+    const ART_N = 16;
+
+    type ArtEntry = {
+      mesh: THREE.Mesh;
+      geom: THREE.BufferGeometry;
+      mat: THREE.MeshBasicMaterial;
+      grid: { ra: number; dec: number }[];
+    };
+    const artCache = new Map<string, ArtEntry>();
+
+    function getArtEntry(key: string, artFile: string, mapper: ArtworkMapper): ArtEntry | null {
+      const hit = artCache.get(key);
+      if (hit) return hit;
+
+      const N = ART_N;
+      const vertCount = (N + 1) * (N + 1);
+      const positions = new Float32Array(vertCount * 3);
+      const uvArr = new Float32Array(vertCount * 2);
+      const grid: { ra: number; dec: number }[] = new Array(vertCount);
+      const idxArr: number[] = [];
+
+      for (let j = 0; j <= N; j++) {
+        for (let i = 0; i <= N; i++) {
+          const u = i / N, v = j / N;
+          const idx = j * (N + 1) + i;
+          grid[idx] = mapper.toRaDec(u, v);
+          uvArr[idx * 2] = u;
+          uvArr[idx * 2 + 1] = v;
+        }
+      }
+      for (let j = 0; j < N; j++) {
+        for (let i = 0; i < N; i++) {
+          const a = j * (N + 1) + i, b = a + 1, c = a + (N + 1), d = c + 1;
+          idxArr.push(a, b, d, a, d, c);
+        }
+      }
+
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geom.setAttribute("uv", new THREE.BufferAttribute(uvArr, 2));
+      geom.setIndex(idxArr);
+
+      const mat = new THREE.MeshBasicMaterial({
+        map: getConstelTexture(artFile),
+        blending: THREE.AdditiveBlending,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      });
+
+      const entry: ArtEntry = { mesh: new THREE.Mesh(geom, mat), geom, mat, grid };
+      entry.mesh.frustumCulled = false;
+      artCache.set(key, entry);
+      return entry;
+    }
+
+    function disposeArtCache() {
+      for (const e of artCache.values()) {
+        e.geom.dispose();
+        e.mat.dispose();
+      }
+      artCache.clear();
+    }
+
     // ── Persistent High-Fidelity Celestial Bodies (Photorealistic Textures & Shaders) ──
     // 1. Sun Photosphere & Glowing Solar Corona
     const sunGroup = new THREE.Group();
@@ -1801,11 +1866,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         constelGroup.remove(obj);
         if (obj.geometry) obj.geometry.dispose();
       }
-      while (constelArtGroup.children.length > 0) {
-        const obj = constelArtGroup.children[0] as THREE.Mesh;
-        constelArtGroup.remove(obj);
-        if (obj.geometry) obj.geometry.dispose();
-      }
+      constelArtGroup.clear();
       while (nebulaeGroup.children.length > 0) {
         const obj = nebulaeGroup.children[0];
         nebulaeGroup.remove(obj);
@@ -1907,92 +1968,30 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             }
           }
 
-          // ── 3D 3-Star Affine Celestial Mythological Artwork Projection ──
-          // Uses tessellated sphere-conformal mesh for accurate curvature alignment
+          // ── 3D Tangent-Plane Affine Celestial Mythological Artwork Projection ──
           if (isThisSelected || toggles.showConstellationArt) {
             const prof = getConstellationProfile(con.abbreviation || con.name);
-            const artFile = prof?.artworkFile || `${con.name.toLowerCase().replace(/\s+/g, "-")}.webp`;
+            const mapper = getArtworkMapper(con.abbreviation || con.name, prof);
+            const artFile = prof?.artworkFile
+              || `${con.name.toLowerCase().replace(/\s+/g, "-")}.webp`;
 
-            const artTex = getConstelTexture(artFile);
-            if (artTex) {
-              // Exact 4 Celestial Corner Coordinates from 3-Star Affine Anchors
-              const corners = getConstellationCorners(con.abbreviation || con.name, prof);
-
-              // Tessellate into NxN subdivided grid projected onto dome sphere surface
-              // Each sub-vertex is independently projected via RA/Dec → topocentric 3D
-              const N = 8; // 8×8 subdivisions (81 vertices, 128 triangles)
-              const vertCount = (N + 1) * (N + 1);
-              const positions = new Float32Array(vertCount * 3);
-              const uvArr = new Float32Array(vertCount * 2);
-              const idxArr: number[] = [];
-
-              // Pre-compute RA deltas to handle 0°/360° wrap-around during bilinear interpolation
-              // corners: [0]=BL(u=0,v=0), [1]=BR(u=1,v=0), [2]=TR(u=1,v=1), [3]=TL(u=0,v=1)
-              const raRef = corners[0].ra;
-              const wrapRA = (ra: number) => {
-                let d = ra - raRef;
-                if (d > 180) d -= 360;
-                if (d < -180) d += 360;
-                return raRef + d;
-              };
-              const cRA = [raRef, wrapRA(corners[1].ra), wrapRA(corners[2].ra), wrapRA(corners[3].ra)];
-              const cDec = [corners[0].dec, corners[1].dec, corners[2].dec, corners[3].dec];
-
-              for (let j = 0; j <= N; j++) {
-                const v = j / N;
-                for (let i = 0; i <= N; i++) {
-                  const u = i / N;
-                  const idx = j * (N + 1) + i;
-
-                  // Bilinear interpolation of RA/Dec across the quad
-                  const ra = ((1 - u) * (1 - v) * cRA[0] + u * (1 - v) * cRA[1] +
-                              u * v * cRA[2] + (1 - u) * v * cRA[3]);
-                  const dec = ((1 - u) * (1 - v) * cDec[0] + u * (1 - v) * cDec[1] +
-                               u * v * cDec[2] + (1 - u) * v * cDec[3]);
-
-                  // Normalize RA back to 0°–360°
-                  const raNorm = ((ra % 360) + 360) % 360;
-
-                  // Project each sub-vertex independently onto the dome sphere
-                  const p = raDecToTopocentricVec3(raNorm, dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
-                  positions[idx * 3] = p.x;
-                  positions[idx * 3 + 1] = p.y;
-                  positions[idx * 3 + 2] = p.z;
-                  uvArr[idx * 2] = u;
-                  uvArr[idx * 2 + 1] = v;
+            if (mapper) {
+              const key = (prof?.abbreviation || con.abbreviation || con.name).toLowerCase();
+              const entry = getArtEntry(key, artFile, mapper);
+              if (entry) {
+                const posAttr = entry.geom.getAttribute("position") as THREE.BufferAttribute;
+                for (let k = 0; k < entry.grid.length; k++) {
+                  const g = entry.grid[k];
+                  const p = raDecToTopocentricVec3(g.ra, g.dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+                  posAttr.setXYZ(k, p.x, p.y, p.z);
                 }
+                posAttr.needsUpdate = true;
+                entry.geom.computeBoundingSphere();
+
+                entry.mat.opacity = isThisSelected ? (isDay ? 0.75 : 0.95) : (isDay ? 0.20 : 0.38);
+                entry.mat.color.set(isThisSelected ? 0x38bdf8 : 0x7dd3fc);
+                constelArtGroup.add(entry.mesh);
               }
-
-              // Build triangle indices for the NxN grid
-              for (let j = 0; j < N; j++) {
-                for (let i = 0; i < N; i++) {
-                  const a = j * (N + 1) + i;
-                  const b = a + 1;
-                  const c = a + (N + 1);
-                  const d = c + 1;
-                  idxArr.push(a, b, d, a, d, c);
-                }
-              }
-
-              const geom = new THREE.BufferGeometry();
-              geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-              geom.setAttribute("uv", new THREE.BufferAttribute(uvArr, 2));
-              geom.setIndex(idxArr);
-              geom.computeVertexNormals();
-
-              const opacity = isThisSelected ? (isDay ? 0.75 : 0.95) : (isDay ? 0.20 : 0.38);
-              const mat = new THREE.MeshBasicMaterial({
-                map: artTex,
-                blending: THREE.AdditiveBlending,
-                transparent: true,
-                depthWrite: false,
-                opacity,
-                color: isThisSelected ? new THREE.Color(0x38bdf8) : new THREE.Color(0x7dd3fc),
-                side: THREE.DoubleSide,
-              });
-
-              const mesh = new THREE.Mesh(geom, mat);
-              constelArtGroup.add(mesh);
             }
           }
         }
@@ -2457,6 +2456,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     return () => {
       window.removeEventListener("resize", handleResize);
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      disposeArtCache();
       renderer.dispose();
       scene.clear();
       if (container.contains(renderer.domElement)) {
