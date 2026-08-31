@@ -89,24 +89,42 @@ export default function HeroSection() {
   // Fetch live telemetry
   useEffect(() => {
     let isMounted = true;
+    const satMeta =
+      SATELLITE_CATALOG.find((s) => s.id === selectedSatId) ||
+      SATELLITE_CATALOG[0];
+
+    // Immediate reactive switch so UI responds with zero delay
+    setTelemetry((prev) => ({
+      satelliteId: satMeta.id,
+      name: satMeta.fullName || satMeta.name,
+      noradId: satMeta.noradId,
+      latitude: prev?.satelliteId === satMeta.id ? prev.latitude : 0,
+      longitude: prev?.satelliteId === satMeta.id ? prev.longitude : 0,
+      altitude: satMeta.avgAltitudeKm,
+      velocity: prev?.satelliteId === satMeta.id ? prev.velocity : 27500,
+      visibility: "Calculating...",
+      period: satMeta.periodMin,
+      inclination: satMeta.inclinationDeg,
+    }));
+
     const fetchTelemetry = async () => {
       try {
         const res = await fetch(`/api/iss?id=${selectedSatId}`);
         if (!res.ok) return;
-        const data = await res.json();
-        if (isMounted && data.telemetry) {
-          const satMeta =
-            SATELLITE_CATALOG.find((s) => s.id === selectedSatId) ||
-            SATELLITE_CATALOG[0];
+        const raw = await res.json();
+        const data = raw.telemetry || raw;
+        if (isMounted && data && typeof data.latitude === "number") {
           setTelemetry({
-            satelliteId: data.telemetry.satelliteId || selectedSatId,
-            name: data.telemetry.name || satMeta.name,
-            noradId: satMeta.noradId,
-            latitude: Number(data.telemetry.latitude.toFixed(2)),
-            longitude: Number(data.telemetry.longitude.toFixed(2)),
-            altitude: Math.round(data.telemetry.altitude),
-            velocity: Math.round(data.telemetry.velocity),
-            visibility: data.telemetry.visibility || "Daylight",
+            satelliteId: data.id || selectedSatId,
+            name: data.fullName || data.name || satMeta.fullName || satMeta.name,
+            noradId: data.noradId || satMeta.noradId,
+            latitude: Number(data.latitude.toFixed(2)),
+            longitude: Number(data.longitude.toFixed(2)),
+            altitude: Math.round(data.altitude),
+            velocity: Math.round(data.velocity),
+            visibility: data.visibility
+              ? data.visibility.charAt(0).toUpperCase() + data.visibility.slice(1)
+              : "Daylight",
             period: satMeta.periodMin,
             inclination: satMeta.inclinationDeg,
           });
@@ -116,7 +134,7 @@ export default function HeroSection() {
       }
     };
     fetchTelemetry();
-    const interval = setInterval(fetchTelemetry, 5000);
+    const interval = setInterval(fetchTelemetry, 3000);
     return () => {
       isMounted = false;
       clearInterval(interval);

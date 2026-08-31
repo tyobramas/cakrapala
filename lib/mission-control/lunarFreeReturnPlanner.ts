@@ -371,10 +371,10 @@ function assembleCompleteLunarTrajectory(
     };
     const lastVelMps = lastPt.velocityEciKmS
       ? {
-          x: kmToM(lastPt.velocityEciKmS.x),
-          y: kmToM(lastPt.velocityEciKmS.y),
-          z: kmToM(lastPt.velocityEciKmS.z),
-        }
+        x: kmToM(lastPt.velocityEciKmS.x),
+        y: kmToM(lastPt.velocityEciKmS.y),
+        z: kmToM(lastPt.velocityEciKmS.z),
+      }
       : scale(normalize(lastPosM), -11000);
 
     const entryAltM = Math.max(0, magnitude(lastPosM) - EARTH_RADIUS_M);
