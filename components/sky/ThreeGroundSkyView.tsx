@@ -60,6 +60,11 @@ import {
   BODY_PROFILES,
   type CelestialObjectInfo,
 } from "@/lib/astronomy/celestialObjectProfiles";
+import {
+  CONSTELLATION_PROFILES,
+  getConstellationProfile,
+  type ConstellationProfile,
+} from "@/lib/astronomy/constellationProfiles";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CONSTANTS
@@ -69,6 +74,7 @@ const SKY_SPHERE_RADIUS = 900;
 const STAR_LAYER_RADIUS = 490;
 const NEBULA_LAYER_RADIUS = 486;
 const CONSTELLATION_LAYER_RADIUS = 485;
+const CONSTELLATION_ART_RADIUS = 478;
 const BODY_LAYER_RADIUS = 475;
 const SATELLITE_LAYER_RADIUS = 472;
 const GROUND_RADIUS = 480;
@@ -89,6 +95,35 @@ function azAltToVec3(azDeg: number, altDeg: number, r: number): THREE.Vector3 {
   );
 }
 
+// Direct RA/Dec (J2000) to Topocentric Three.js Vector3 conversion
+function raDecToTopocentricVec3(
+  raDeg: number,
+  decDeg: number,
+  lstDeg: number,
+  latRad: number,
+  radius: number
+): THREE.Vector3 {
+  const decRad = decDeg * (Math.PI / 180);
+  const H = ((lstDeg - raDeg) % 360 + 360) % 360;
+  const HRad = H * (Math.PI / 180);
+
+  const sinAlt = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(HRad);
+  const altRad = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
+
+  const cosAlt = Math.cos(altRad);
+  const cosAz = (Math.sin(decRad) - Math.sin(latRad) * Math.sin(altRad)) / (cosAlt * Math.cos(latRad) || 0.0001);
+  let azRad = Math.acos(Math.max(-1, Math.min(1, cosAz)));
+  if (Math.sin(HRad) > 0) {
+    azRad = 2 * Math.PI - azRad;
+  }
+
+  return new THREE.Vector3(
+    -radius * cosAlt * Math.sin(azRad),
+    radius * Math.sin(altRad),
+    radius * cosAlt * Math.cos(azRad)
+  );
+}
+
 interface Props {
   location: ObserverLocation;
   onBackToMap?: () => void;
@@ -104,6 +139,7 @@ export interface SelectedTarget {
   colorHex: string;
   nebulaInfo?: TopocentricNebula;
   satelliteInfo?: TopocentricSatellite;
+  constellationProfile?: ConstellationProfile;
 }
 
 interface SearchItem {
@@ -119,6 +155,84 @@ interface SearchItem {
   isAboveHorizon: boolean;
   rawNebula?: TopocentricNebula;
   rawSatellite?: TopocentricSatellite;
+}
+
+// Helper to calculate exact Rise & Set times for any celestial object or constellation
+function calculateRiseSetTimes(
+  target: SelectedTarget,
+  location: ObserverLocation,
+  date: Date
+): { riseTime: string; setTime: string } {
+  try {
+    const obs = new Astronomy.Observer(location.latitude, location.longitude, 0);
+    const time = Astronomy.MakeTime(date);
+
+    if (target.type === "sun" || target.id === "sun") {
+      const rise = Astronomy.SearchRiseSet(Astronomy.Body.Sun, obs, 1, time, 1);
+      const set = Astronomy.SearchRiseSet(Astronomy.Body.Sun, obs, -1, time, 1);
+      return {
+        riseTime: rise ? rise.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--",
+        setTime: set ? set.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--",
+      };
+    } else if (target.type === "moon" || target.id === "moon") {
+      const rise = Astronomy.SearchRiseSet(Astronomy.Body.Moon, obs, 1, time, 1);
+      const set = Astronomy.SearchRiseSet(Astronomy.Body.Moon, obs, -1, time, 1);
+      return {
+        riseTime: rise ? rise.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--",
+        setTime: set ? set.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--",
+      };
+    } else if (target.type === "planet") {
+      const bodyMap: Record<string, Astronomy.Body> = {
+        mercury: Astronomy.Body.Mercury,
+        venus: Astronomy.Body.Venus,
+        mars: Astronomy.Body.Mars,
+        jupiter: Astronomy.Body.Jupiter,
+        saturn: Astronomy.Body.Saturn,
+        uranus: Astronomy.Body.Uranus,
+        neptune: Astronomy.Body.Neptune,
+      };
+      const b = bodyMap[target.id.toLowerCase()];
+      if (b) {
+        const rise = Astronomy.SearchRiseSet(b, obs, 1, time, 1);
+        const set = Astronomy.SearchRiseSet(b, obs, -1, time, 1);
+        return {
+          riseTime: rise ? rise.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--",
+          setTime: set ? set.date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }) : "--:--",
+        };
+      }
+    }
+
+    // For Stars, Constellations, & Nebulae: Spherical hour angle formula
+    const latRad = location.latitude * (Math.PI / 180);
+    const altRad = target.altitudeDeg * (Math.PI / 180);
+    const azRad = target.azimuthDeg * (Math.PI / 180);
+
+    const sinDec = Math.sin(latRad) * Math.sin(altRad) + Math.cos(latRad) * Math.cos(altRad) * Math.cos(azRad);
+    const decRad = Math.asin(Math.max(-1, Math.min(1, sinDec)));
+
+    const cosH_rise = -Math.tan(latRad) * Math.tan(decRad);
+    if (cosH_rise > 1) return { riseTime: "Never Rises", setTime: "Never Sets" };
+    if (cosH_rise < -1) return { riseTime: "Circumpolar", setTime: "Circumpolar" };
+
+    const H_rise_deg = Math.acos(Math.max(-1, Math.min(1, cosH_rise))) * (180 / Math.PI);
+    const sinH = -Math.cos(altRad) * Math.sin(azRad);
+    const cosH = Math.cos(latRad) * Math.sin(altRad) - Math.sin(latRad) * Math.cos(altRad) * Math.cos(azRad);
+    let currentH_deg = Math.atan2(sinH, cosH) * (180 / Math.PI);
+    if (currentH_deg < 0) currentH_deg += 360;
+
+    const hoursToRise = ((360 - H_rise_deg - currentH_deg + 720) % 360) / 15.041;
+    const hoursToSet = ((H_rise_deg - currentH_deg + 720) % 360) / 15.041;
+
+    const riseDate = new Date(date.getTime() + hoursToRise * 3600000);
+    const setDate = new Date(date.getTime() + hoursToSet * 3600000);
+
+    return {
+      riseTime: riseDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
+      setTime: setDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false }),
+    };
+  } catch {
+    return { riseTime: "--:--", setTime: "--:--" };
+  }
 }
 
 // Helper to calculate exact hours until an object rises above horizon
@@ -424,6 +538,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   // Toggles
   const [showConstellations, setShowConstellations] = useState(true);
   const [showConstellationNames, setShowConstellationNames] = useState(true);
+  const [showConstellationArt, setShowConstellationArt] = useState(true);
   const [showMilkyWay, setShowMilkyWay] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showBodies, setShowBodies] = useState(true);
@@ -460,6 +575,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   const togglesRef = useRef({
     showConstellations: true,
     showConstellationNames: true,
+    showConstellationArt: true,
     showMilkyWay: true,
     showLabels: true,
     showBodies: true,
@@ -471,13 +587,14 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     togglesRef.current = {
       showConstellations,
       showConstellationNames,
+      showConstellationArt,
       showMilkyWay,
       showLabels,
       showBodies,
       showNebulae,
       showSatellites,
     };
-  }, [showConstellations, showConstellationNames, showMilkyWay, showLabels, showBodies, showNebulae, showSatellites]);
+  }, [showConstellations, showConstellationNames, showConstellationArt, showMilkyWay, showLabels, showBodies, showNebulae, showSatellites]);
 
   // ── Astronomical Calculations ──────────────────────────────────────────────
   const observationDate = useMemo(() => {
@@ -600,15 +717,27 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     }
 
     // 4. 89 IAU Constellations
+    const gmst = getGMST(observationDate);
+    const lstDeg = ((gmst + location.longitude) % 360 + 360) % 360;
+    const latRad = (location.latitude * Math.PI) / 180;
+
     for (const c of constellations) {
-      const center = pos3DtoAzAlt(c.centerPos3D);
+      const prof = getConstellationProfile(c.abbreviation || c.name);
+      let center: { az: number; alt: number } | null = null;
+      if (prof) {
+        const cVec = raDecToTopocentricVec3(prof.raHours * 15, prof.decDeg, lstDeg, latRad, DOME_RADIUS);
+        center = pos3DtoAzAlt(cVec);
+      } else {
+        center = pos3DtoAzAlt(c.centerPos3D);
+      }
+
       if (center) {
         items.push({
           id: c.abbreviation.toLowerCase(),
           name: c.name,
           category: "constellation",
           categoryLabel: "IAU Constellation",
-          subtitle: `Constellation (${c.abbreviation}) • ${c.segments.length} Lines`,
+          subtitle: `Constellation (${c.abbreviation}) • ${prof?.englishName || `${c.segments.length} Lines`}`,
           azimuthDeg: center.az,
           altitudeDeg: center.alt,
           isAboveHorizon: center.alt >= 0,
@@ -674,6 +803,36 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   const targetInfo: CelestialObjectInfo | null = useMemo(() => {
     if (!selectedTarget) return null;
 
+    const riseSet = calculateRiseSetTimes(selectedTarget, location, observationDate);
+
+    if (selectedTarget.type === "constellation") {
+      const cProfile = getConstellationProfile(selectedTarget.id || selectedTarget.name);
+      const fam = cProfile?.family ? `${cProfile.family} Constellation` : "IAU Modern Constellation";
+      const zod = cProfile?.zodiacSign ? ` • ${cProfile.zodiacSign}` : "";
+      return {
+        id: selectedTarget.id,
+        name: cProfile?.name || selectedTarget.name,
+        scientificName: cProfile
+          ? `${cProfile.genitive} (${cProfile.abbreviation}) • ${cProfile.englishName}`
+          : `${selectedTarget.name} Constellation (IAU)`,
+        type: `${fam}${zod}`,
+        constellation: cProfile ? `Quadrant: ${cProfile.quadrant} • Best in ${cProfile.monthBestSeen}` : "IAU Celestial Sphere",
+        magnitude: cProfile?.brightestStarMag ?? 2.0,
+        distanceLy: cProfile ? `Area: ${cProfile.areaSqDeg} sq° (Rank #${cProfile.areaRank} of 88)` : "Deep Sky Constellation",
+        spectralType: cProfile ? `Brightest: ${cProfile.brightestStar} (Mag ${cProfile.brightestStarMag > 0 ? '+' : ''}${cProfile.brightestStarMag.toFixed(2)})` : "Multiple Stars",
+        surfaceTemp: cProfile?.zodiacSign ? `Zodiac: ${cProfile.zodiacSign}` : "Stellar Pattern",
+        massRadius: cProfile ? `Centroid: RA ${cProfile.raHours}h / Dec ${cProfile.decDeg > 0 ? '+' : ''}${cProfile.decDeg}°` : "Celestial Map",
+        altitudeDeg: selectedTarget.altitudeDeg,
+        azimuthDeg: selectedTarget.azimuthDeg,
+        raDec: cProfile ? `${cProfile.raHours.toFixed(1)}h RA / ${cProfile.decDeg > 0 ? '+' : ''}${cProfile.decDeg.toFixed(1)}° Dec` : `${selectedTarget.azimuthDeg.toFixed(1)}° Az / ${selectedTarget.altitudeDeg.toFixed(1)}° Alt`,
+        description: cProfile?.mythology || `The constellation ${selectedTarget.name} is one of the 88 modern constellations officially recognized by the International Astronomical Union (IAU).`,
+        funFact: cProfile?.astronomicalHighlights?.[0] || `Constellation ${selectedTarget.name} forms an iconic pattern in the night sky.`,
+        constellationProfile: cProfile || undefined,
+        riseTime: riseSet.riseTime,
+        setTime: riseSet.setTime,
+      };
+    }
+
     if (selectedTarget.type === "satellite" && selectedTarget.satelliteInfo) {
       const sat = selectedTarget.satelliteInfo;
       return {
@@ -694,6 +853,8 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         funFact: sat.category === "station"
           ? "Conducts microgravity science and human spaceflight operations at ~27,600 km/h."
           : `Live SGP4 topocentric line-of-sight tracking above observer horizon.`,
+        riseTime: riseSet.riseTime,
+        setTime: riseSet.setTime,
       };
     }
 
@@ -715,6 +876,8 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         raDec: `${selectedTarget.azimuthDeg.toFixed(1)}° Az / ${selectedTarget.altitudeDeg.toFixed(1)}° Alt`,
         description: neb.description,
         funFact: neb.funFact,
+        riseTime: riseSet.riseTime,
+        setTime: riseSet.setTime,
       };
     }
 
@@ -741,8 +904,10 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       raDec: profile.raDec || `${selectedTarget.azimuthDeg.toFixed(1)}° Az / ${selectedTarget.altitudeDeg.toFixed(1)}° Alt`,
       description: profile.description || `The celestial object ${selectedTarget.name} is currently mapped in the observer's sky dome.`,
       funFact: profile.funFact || "This celestial object radiates photons traversing across deep space into your telescope tonight.",
+      riseTime: riseSet.riseTime,
+      setTime: riseSet.setTime,
     };
-  }, [selectedTarget]);
+  }, [selectedTarget, location, observationDate]);
 
   // Hours until target rises (if below horizon)
   const hoursUntilRise = useMemo(() => {
@@ -1170,6 +1335,10 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     starsGroup.name = "dynamicStars";
     scene.add(starsGroup);
 
+    const constelArtGroup = new THREE.Group();
+    constelArtGroup.name = "dynamicConstelArt";
+    scene.add(constelArtGroup);
+
     const constelGroup = new THREE.Group();
     constelGroup.name = "dynamicConstellations";
     scene.add(constelGroup);
@@ -1181,6 +1350,16 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
     const bodiesGroup = new THREE.Group();
     bodiesGroup.name = "dynamicBodies";
     scene.add(bodiesGroup);
+
+    const constelTextureMap: Record<string, THREE.Texture> = {};
+    function getConstelTexture(file: string): THREE.Texture {
+      if (!constelTextureMap[file]) {
+        const tex = textureLoader.load(`/textures/constellations/${file}`);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        constelTextureMap[file] = tex;
+      }
+      return constelTextureMap[file];
+    }
 
     // ── Persistent High-Fidelity Celestial Bodies (Photorealistic Textures & Shaders) ──
     // 1. Sun Photosphere & Glowing Solar Corona
@@ -1627,6 +1806,11 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         constelGroup.remove(obj);
         if (obj.geometry) obj.geometry.dispose();
       }
+      while (constelArtGroup.children.length > 0) {
+        const obj = constelArtGroup.children[0] as THREE.Mesh;
+        constelArtGroup.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+      }
       while (nebulaeGroup.children.length > 0) {
         const obj = nebulaeGroup.children[0];
         nebulaeGroup.remove(obj);
@@ -1699,11 +1883,20 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         starsGroup.add(starPoints);
       }
 
-      // ── 2. IAU CONSTELLATION STICK FIGURES (30% Thinner & Elegant) ────────
+      // ── 2. IAU CONSTELLATION STICK FIGURES & 3D CELESTIAL ARTWORK OVERLAYS ──
       if (toggles.showConstellations) {
-        const linePos: number[] = [];
+        const normalLinePos: number[] = [];
+        const highlightedLinePos: number[] = [];
+
+        const sel = selectedTargetRef.current;
+        const isConstelSelected = sel?.type === "constellation";
 
         for (const con of cstl) {
+          const isThisSelected = isConstelSelected && (
+            sel?.id.toLowerCase() === con.abbreviation.toLowerCase() ||
+            sel?.name.toLowerCase() === con.name.toLowerCase()
+          );
+
           for (const seg of con.segments) {
             const aA = pos3DtoAzAlt(seg[0]);
             const aB = pos3DtoAzAlt(seg[1]);
@@ -1711,22 +1904,111 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             if (aA && aB) {
               const pA = azAltToVec3(aA.az, aA.alt, CONSTELLATION_LAYER_RADIUS);
               const pB = azAltToVec3(aB.az, aB.alt, CONSTELLATION_LAYER_RADIUS);
-              linePos.push(pA.x, pA.y, pA.z, pB.x, pB.y, pB.z);
+              if (isThisSelected) {
+                highlightedLinePos.push(pA.x, pA.y, pA.z, pB.x, pB.y, pB.z);
+              } else {
+                normalLinePos.push(pA.x, pA.y, pA.z, pB.x, pB.y, pB.z);
+              }
+            }
+          }
+
+          // ── 3D Tangential Celestial Mythological Artwork Projection ──
+          if (isThisSelected || toggles.showConstellationArt) {
+            const prof = getConstellationProfile(con.abbreviation || con.name);
+            const artFile = prof?.artworkFile || `${con.name.toLowerCase().replace(/\s+/g, "-")}.webp`;
+
+            const artTex = getConstelTexture(artFile);
+            if (artTex) {
+              let raDeg = prof ? prof.raHours * 15 : 0;
+              let decDeg = prof ? prof.decDeg : 0;
+
+              if (!prof) {
+                const rawAzAlt = pos3DtoAzAlt(con.centerPos3D);
+                if (rawAzAlt) {
+                  const sinDec = Math.sin(latRad) * Math.sin((rawAzAlt.alt * Math.PI) / 180) + Math.cos(latRad) * Math.cos((rawAzAlt.alt * Math.PI) / 180) * Math.cos((rawAzAlt.az * Math.PI) / 180);
+                  decDeg = Math.asin(Math.max(-1, Math.min(1, sinDec))) * (180 / Math.PI);
+                }
+              }
+
+              // Exact topocentric centroid on the celestial sphere
+              const centerVec = raDecToTopocentricVec3(raDeg, decDeg, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+              const northPt = raDecToTopocentricVec3(raDeg, decDeg + 2.0, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+              const cosDec = Math.max(0.08, Math.cos((decDeg * Math.PI) / 180));
+              const eastPt = raDecToTopocentricVec3(raDeg + 2.0 / cosDec, decDeg, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+
+              // Inward normal (from sphere surface pointing to observer at origin)
+              const normal = centerVec.clone().negate().normalize();
+
+              // Up vector (towards Celestial North on sky)
+              let up = northPt.clone().sub(centerVec).normalize();
+              // Right vector on texture (+X): points Celestial WEST (-RA) for standard skyculture charts
+              let right = new THREE.Vector3().crossVectors(up, normal).normalize();
+              up = new THREE.Vector3().crossVectors(normal, right).normalize();
+
+              // Apply fine-tuned artwork rotation offset if specified
+              const rotDeg = prof?.artworkRotationDeg || 0;
+              if (rotDeg !== 0) {
+                const rotRad = (rotDeg * Math.PI) / 180;
+                const cosR = Math.cos(rotRad);
+                const sinR = Math.sin(rotRad);
+                const rNew = right.clone().multiplyScalar(cosR).add(up.clone().multiplyScalar(sinR)).normalize();
+                const uNew = right.clone().multiplyScalar(-sinR).add(up.clone().multiplyScalar(cosR)).normalize();
+                right.copy(rNew);
+                up.copy(uNew);
+              }
+
+              // Angular scale in sky dome
+              const scaleDeg = prof?.artworkScaleDeg || 38;
+              const scaleRad = (scaleDeg * Math.PI) / 180;
+              const quadSize = 2 * CONSTELLATION_ART_RADIUS * Math.tan(scaleRad / 2);
+
+              const geom = new THREE.PlaneGeometry(quadSize, quadSize);
+              const opacity = isThisSelected ? (isDay ? 0.75 : 0.95) : (isDay ? 0.20 : 0.38);
+              const mat = new THREE.MeshBasicMaterial({
+                map: artTex,
+                blending: THREE.AdditiveBlending,
+                transparent: true,
+                depthWrite: false,
+                opacity,
+                color: isThisSelected ? new THREE.Color(0x38bdf8) : new THREE.Color(0x7dd3fc),
+                side: THREE.DoubleSide,
+              });
+
+              const mesh = new THREE.Mesh(geom, mat);
+              const mat4 = new THREE.Matrix4();
+              mat4.makeBasis(right, up, normal);
+              mat4.setPosition(centerVec);
+              mesh.matrix.copy(mat4);
+              mesh.matrixAutoUpdate = false;
+              constelArtGroup.add(mesh);
             }
           }
         }
 
-        if (linePos.length > 0) {
+        if (normalLinePos.length > 0) {
           const lGeom = new THREE.BufferGeometry();
-          lGeom.setAttribute("position", new THREE.Float32BufferAttribute(linePos, 3));
+          lGeom.setAttribute("position", new THREE.Float32BufferAttribute(normalLinePos, 3));
           const lMat = new THREE.LineBasicMaterial({
             color: isDay ? 0x93c5fd : 0x7dd3fc,
             transparent: true,
-            opacity: isDay ? 0.55 : 0.42, // 30% subtler and thinner
+            opacity: isDay ? 0.55 : 0.42,
             linewidth: 1,
           });
           const constelLines = new THREE.LineSegments(lGeom, lMat);
           constelGroup.add(constelLines);
+        }
+
+        if (highlightedLinePos.length > 0) {
+          const hlGeom = new THREE.BufferGeometry();
+          hlGeom.setAttribute("position", new THREE.Float32BufferAttribute(highlightedLinePos, 3));
+          const hlMat = new THREE.LineBasicMaterial({
+            color: 0x00f0ff,
+            transparent: true,
+            opacity: 0.95,
+            linewidth: 2,
+          });
+          const hlLines = new THREE.LineSegments(hlGeom, hlMat);
+          constelGroup.add(hlLines);
         }
       }
 
@@ -1932,7 +2214,14 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           }
 
           for (const con of cstl) {
-            const center = pos3DtoAzAlt(con.centerPos3D);
+            const prof = getConstellationProfile(con.abbreviation || con.name);
+            let center: { az: number; alt: number } | null = null;
+            if (prof) {
+              const cVec = raDecToTopocentricVec3(prof.raHours * 15, prof.decDeg, lstDeg, latRad, CONSTELLATION_LAYER_RADIUS);
+              center = pos3DtoAzAlt(cVec);
+            } else {
+              center = pos3DtoAzAlt(con.centerPos3D);
+            }
             if (!center) continue;
             const p = project(center.az, center.alt, CONSTELLATION_LAYER_RADIUS);
             if (p) {
@@ -2330,26 +2619,73 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       }
     }
 
-    // 6. Check Constellations
+    // 6. Check Constellations (Center Label & Line Segments)
     if (!bestTarget) {
+      const gmst = getGMST(observationDate);
+      const lstDeg = ((gmst + location.longitude) % 360 + 360) % 360;
+      const latRad = (location.latitude * Math.PI) / 180;
+
       for (const con of cstl) {
-        const center = pos3DtoAzAlt(con.centerPos3D);
+        const prof = getConstellationProfile(con.abbreviation || con.name);
+        let center: { az: number; alt: number } | null = null;
+        if (prof) {
+          const cVec = raDecToTopocentricVec3(prof.raHours * 15, prof.decDeg, lstDeg, latRad, CONSTELLATION_LAYER_RADIUS);
+          center = pos3DtoAzAlt(cVec);
+        } else {
+          center = pos3DtoAzAlt(con.centerPos3D);
+        }
         if (!center) continue;
+
+        let hit = false;
+        let minD = 9999;
+
+        // Check constellation center
         const p = project(center.az, center.alt, CONSTELLATION_LAYER_RADIUS);
         if (p) {
           const d = Math.hypot(clickX - p.x, clickY - p.y);
-          if (d < 45 && d < bestDist) {
-            bestDist = d;
-            bestTarget = {
-              id: con.abbreviation.toLowerCase(),
-              name: con.name,
-              type: "constellation",
-              azimuthDeg: center.az,
-              altitudeDeg: center.alt,
-              mag: 2.0,
-              colorHex: "#38bdf8",
-            };
+          if (d < 60) {
+            hit = true;
+            minD = Math.min(minD, d);
           }
+        }
+
+        // Check constellation line segments
+        if (!hit) {
+          for (const seg of con.segments) {
+            const aA = pos3DtoAzAlt(seg[0]);
+            const aB = pos3DtoAzAlt(seg[1]);
+            if (aA && aB) {
+              const pA = project(aA.az, aA.alt, CONSTELLATION_LAYER_RADIUS);
+              const pB = project(aB.az, aB.alt, CONSTELLATION_LAYER_RADIUS);
+              if (pA && pB) {
+                const l2 = (pB.x - pA.x) ** 2 + (pB.y - pA.y) ** 2;
+                if (l2 > 0) {
+                  const t = Math.max(0, Math.min(1, ((clickX - pA.x) * (pB.x - pA.x) + (clickY - pA.y) * (pB.y - pA.y)) / l2));
+                  const projX = pA.x + t * (pB.x - pA.x);
+                  const projY = pA.y + t * (pB.y - pA.y);
+                  const dSeg = Math.hypot(clickX - projX, clickY - projY);
+                  if (dSeg < 30) {
+                    hit = true;
+                    minD = Math.min(minD, dSeg);
+                    break;
+                  }
+                }
+              }
+            }
+          }
+        }
+
+        if (hit && minD < bestDist) {
+          bestDist = minD;
+          bestTarget = {
+            id: con.abbreviation.toLowerCase(),
+            name: con.name,
+            type: "constellation",
+            azimuthDeg: center.az,
+            altitudeDeg: center.alt,
+            mag: 2.0,
+            colorHex: "#38bdf8",
+          };
         }
       }
     }
@@ -2949,8 +3285,53 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             </button>
           </div>
 
-          {/* Image Banner: Real-time Moon Phase OR NASA Archive Photo */}
-          {(selectedTarget?.id === "moon" || selectedTarget?.type === "moon") ? (
+          {/* Image Banner: Constellation Artwork OR Real-time Moon Phase OR NASA Archive Photo */}
+          {selectedTarget?.type === "constellation" ? (
+            /* ── CONSTELLATION MYTHOLOGICAL ARTWORK BANNER ───────────────────── */
+            (() => {
+              const prof = targetInfo.constellationProfile || getConstellationProfile(selectedTarget.id || selectedTarget.name);
+              let artFile = prof?.artworkFile || `${targetInfo.name.toLowerCase().replace(/\s+/g, "-")}.webp`;
+              if (targetInfo.name.toLowerCase() === "virgo") artFile = "virgo.jpg";
+              else if (targetInfo.name.toLowerCase() === "taurus") artFile = "taurus.jpg";
+
+              return (
+                <div className="mt-3 relative rounded-2xl overflow-hidden bg-gradient-to-b from-[#060e22] via-[#020510] to-[#010309] border border-cyan-500/40 shadow-inner group">
+                  <div className="relative h-52 sm:h-56 w-full flex items-center justify-center p-2 bg-black/40">
+                    {/* Glowing radial backdrop */}
+                    <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-transparent to-transparent pointer-events-none" />
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`/textures/constellations/${artFile}`}
+                      alt={targetInfo.name}
+                      className="w-full h-full object-contain filter drop-shadow-[0_0_30px_rgba(56,189,248,0.5)] group-hover:scale-105 transition-transform duration-500"
+                    />
+
+                    {/* Badge Top Left */}
+                    <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-lg bg-black/85 backdrop-blur-md border border-cyan-500/50 text-[10px] font-mono text-cyan-300 flex items-center gap-1.5 font-bold shadow-md">
+                      <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                      <span>CELESTIAL ARTWORK</span>
+                    </div>
+
+                    {/* Badge Top Right */}
+                    <div className="absolute top-2.5 right-2.5 px-2 py-1 rounded-lg bg-black/85 backdrop-blur-md border border-emerald-500/40 text-[9px] font-mono text-emerald-300 flex items-center gap-1 font-bold shadow-md">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>3D SKY PROJECTED</span>
+                    </div>
+
+                    {/* Bottom Label */}
+                    <div className="absolute bottom-2.5 left-3 right-3 flex items-center justify-between text-[10px] font-mono text-slate-300">
+                      <span className="px-2 py-0.5 rounded bg-black/80 backdrop-blur-sm border border-slate-800 text-cyan-200">
+                        {prof?.englishName || "Mythological Figure"}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        IAU: {prof?.abbreviation || selectedTarget.id.toUpperCase()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()
+          ) : (selectedTarget?.id === "moon" || selectedTarget?.type === "moon") ? (
             /* ── REAL-TIME MOON PHASE VISUALIZER ─────────────────────────── */
             <div className="mt-3 relative rounded-2xl overflow-hidden bg-black border border-slate-700/50 shadow-inner">
               <div className="h-52 w-full flex flex-col items-center justify-center bg-gradient-to-b from-[#050912] to-[#020510] relative p-3">
@@ -3140,7 +3521,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             <div className="p-2.5 rounded-xl bg-[#060b18]/80 border border-slate-800 flex flex-col justify-between">
               <div className="text-[10px] text-slate-400 uppercase flex items-center gap-1">
                 <Activity className="w-3 h-3 text-cyan-400" />
-                <span>Apparent Mag (V)</span>
+                <span>{selectedTarget?.type === "constellation" ? "Brightest Mag" : "Apparent Mag (V)"}</span>
               </div>
               <div className="text-sm font-bold text-white mt-1">
                 {targetInfo.magnitude > 0 ? `+${targetInfo.magnitude.toFixed(2)}` : targetInfo.magnitude.toFixed(2)}
@@ -3167,11 +3548,11 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
 
             <div className="p-2.5 rounded-xl bg-[#060b18]/80 border border-slate-800 flex flex-col justify-between">
               <div className="text-[10px] text-slate-400 uppercase flex items-center gap-1">
-                <Flame className="w-3 h-3 text-rose-400" />
-                <span>Classification</span>
+                <Clock className="w-3 h-3 text-emerald-400" />
+                <span>Visibility</span>
               </div>
-              <div className="text-xs font-bold text-rose-300 mt-1 truncate" title={targetInfo.surfaceTemp}>
-                {targetInfo.surfaceTemp}
+              <div className="text-xs font-bold text-emerald-300 mt-1 truncate" title={`Rise: ${targetInfo.riseTime || '--'} | Set: ${targetInfo.setTime || '--'}`}>
+                {targetInfo.riseTime ? `Rise: ${targetInfo.riseTime}` : targetInfo.surfaceTemp}
               </div>
             </div>
           </div>
@@ -3179,15 +3560,27 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           {/* Scientific Metadata Key-Values (Responsive & Clean Wrapping) */}
           <div className="space-y-2 text-xs font-mono py-2 mt-2 border-t border-slate-800/60 text-slate-300">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-slate-500 shrink-0">Constellation:</span>
+              <span className="text-slate-500 shrink-0">Coordinates (RA/Dec):</span>
+              <span className="text-cyan-300 font-bold text-right">{targetInfo.raDec}</span>
+            </div>
+            {targetInfo.riseTime && targetInfo.setTime && (
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-slate-500 shrink-0">Daily Rise / Set:</span>
+                <span className="text-emerald-300 font-bold text-right">
+                  {targetInfo.riseTime} &bull; {targetInfo.setTime}
+                </span>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-slate-500 shrink-0">Constellation / Sky Area:</span>
               <span className="text-slate-200 font-bold text-right">{targetInfo.constellation}</span>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-0.5 sm:gap-2">
-              <span className="text-slate-500 shrink-0">Distance:</span>
+              <span className="text-slate-500 shrink-0">Classification:</span>
               <span className="text-cyan-300 font-bold text-left sm:text-right break-words">{targetInfo.distanceLy}</span>
             </div>
             <div className="flex flex-col sm:flex-row sm:items-baseline justify-between gap-0.5 sm:gap-2">
-              <span className="text-slate-500 shrink-0">Spectral Profile:</span>
+              <span className="text-slate-500 shrink-0">Key Feature:</span>
               <span className="text-slate-200 text-left sm:text-right break-words text-[11px] leading-tight">{targetInfo.spectralType}</span>
             </div>
           </div>
@@ -3212,13 +3605,31 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             </div>
           )}
 
-          {/* Astrophysical Dossier Description & Fun Fact */}
+          {/* Astrophysical Dossier Description & Mythology */}
           <div className="mt-2 p-3 rounded-xl bg-[#060b18]/60 border border-slate-800 text-xs text-slate-300 leading-relaxed space-y-2">
+            <div className="text-[10px] font-mono font-bold text-slate-400 uppercase flex items-center gap-1">
+              <Sparkles className="w-3 h-3 text-cyan-400" />
+              <span>{selectedTarget?.type === "constellation" ? "Mythology & Observational Lore" : "Astrophysical Dossier"}</span>
+            </div>
             <p className="text-[11px] text-slate-300 font-sans">{targetInfo.description}</p>
             {targetInfo.funFact && (
               <div className="pt-2 border-t border-slate-800/80 text-[11px] text-amber-300/95 font-sans flex items-start gap-1.5">
                 <Sparkles className="w-3.5 h-3.5 flex-shrink-0 text-amber-400 mt-0.5" />
                 <span>{targetInfo.funFact}</span>
+              </div>
+            )}
+
+            {/* Constellation Highlights List */}
+            {targetInfo.constellationProfile?.astronomicalHighlights && targetInfo.constellationProfile.astronomicalHighlights.length > 0 && (
+              <div className="pt-2 border-t border-slate-800/80 space-y-1.5">
+                <div className="text-[10px] font-mono font-bold text-cyan-400 uppercase">
+                  Astronomical Highlights:
+                </div>
+                <ul className="space-y-1 text-[11px] text-slate-300 list-disc list-inside">
+                  {targetInfo.constellationProfile.astronomicalHighlights.map((hl, idx) => (
+                    <li key={idx} className="leading-snug">{hl}</li>
+                  ))}
+                </ul>
               </div>
             )}
           </div>
@@ -3245,54 +3656,24 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="relative max-w-4xl w-full max-h-[90vh] rounded-[28px] overflow-hidden bg-[#030712] border border-cyan-500/50 shadow-[0_0_80px_rgba(6,182,212,0.3)] flex flex-col font-mono text-xs text-slate-200"
+            className="relative max-w-4xl max-h-[90vh] bg-[#020612] border border-cyan-500/40 rounded-3xl overflow-hidden p-2 flex flex-col items-center justify-center shadow-2xl"
           >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800 bg-[#060e22]/90">
-              <div className="flex items-center gap-2">
-                <Camera className="w-4 h-4 text-cyan-400" />
-                <span className="font-bold text-white text-xs tracking-wider">
-                  {nasaImage.title || targetInfo?.name}
-                </span>
-                <span className="px-2 py-0.5 rounded text-[9px] bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
-                  NASA / ESA / JWST
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsFullscreenImageOpen(false)}
-                className="w-7 h-7 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-all cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={nasaImage.imageUrl}
+              alt={targetInfo?.name || "NASA Astrophotography"}
+              className="max-w-full max-h-[75vh] object-contain rounded-2xl"
+            />
+            <div className="mt-2 text-center text-xs font-mono text-slate-300">
+              <span className="text-cyan-400 font-bold">{nasaImage.title || targetInfo?.name}</span> &bull; {nasaImage.photographer || "NASA Archive"}
             </div>
-
-            {/* Modal Image Display */}
-            <div className="relative flex-1 min-h-[300px] max-h-[65vh] overflow-hidden bg-black flex items-center justify-center">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={nasaImage.imageUrl}
-                alt={targetInfo?.name || "NASA Astrophotography"}
-                className="w-full h-full object-contain max-h-[65vh]"
-              />
-            </div>
-
-            {/* Modal Footer Caption */}
-            <div className="px-5 py-3 border-t border-slate-800 bg-[#060e22]/90 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-[11px] text-slate-400">
-              <div>
-                <strong className="text-slate-200">Credit: </strong>
-                <span>{nasaImage.photographer || "NASA / Space Telescope Science Institute"}</span>
-              </div>
-              <a
-                href={nasaImage.imageUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-cyan-400 hover:text-cyan-300 underline font-bold"
-              >
-                <span>Open Original High-Res (NASA Archive)</span>
-                <ExternalLink className="w-3 h-3" />
-              </a>
-            </div>
+            <button
+              type="button"
+              onClick={() => setIsFullscreenImageOpen(false)}
+              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-black/80 border border-slate-700 text-slate-300 hover:text-white flex items-center justify-center cursor-pointer"
+            >
+              <X className="w-4 h-4" />
+            </button>
           </div>
         </div>
       )}
@@ -3325,6 +3706,16 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             variant="blue"
             icon={<svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"><path d="M4 7h6M4 12h8M4 17h5"/><path d="M16 5l2 6 2-6" strokeLinejoin="round"/><circle cx="17" cy="17" r="2.5"/></svg>}
             label="NAME"
+          />
+
+          {/* Constellation Mythological Artwork Overlays */}
+          <SciFi3DButton
+            onClick={() => setShowConstellationArt((p) => !p)}
+            title="Toggle Celestial Constellation Artwork Overlays (Stellarium / Star Walk)"
+            isActive={showConstellationArt}
+            variant="blue"
+            icon={<Layers className="w-4 h-4" />}
+            label="ART"
           />
 
           {/* Milky Way Galaxy */}

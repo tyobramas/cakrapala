@@ -2,6 +2,8 @@
  * Scientific Celestial Object Profiles for Stars, Planets, the Moon, and the Sun (English).
  */
 
+import type { ConstellationProfile } from "@/lib/astronomy/constellationProfiles";
+
 export interface CelestialObjectInfo {
   id: string;
   name: string;
@@ -18,6 +20,9 @@ export interface CelestialObjectInfo {
   raDec: string;
   description: string;
   funFact: string;
+  constellationProfile?: ConstellationProfile;
+  riseTime?: string;
+  setTime?: string;
 }
 
 export const STAR_PROFILES: Record<string, Partial<CelestialObjectInfo>> = {
