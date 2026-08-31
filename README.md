@@ -26,10 +26,56 @@
 
 - ☄️ Inspect real-world near-Earth asteroid approaches
 - 🛰️ Track orbital assets over an interactive 3D Earth
-- 🌠 Explore 9,000+ stars and official IAU constellations
+- 🌠 Explore 9,110+ stars and 85 dynamically mapped constellation artworks
 - 🪐 Navigate a heliocentric Solar System orrery
 - 🚀 Simulate satellite launches and lunar free-return trajectories
 - 🤖 Interact with an AI astronomy and mission-analysis co-pilot
+
+---
+
+## 🎯 Selected Challenge Theme
+
+**August Challenge — Advance Space Exploration with AI.**
+Cakrapala targets the gap between authoritative space data (NASA NeoWs,
+CelesTrak/NORAD TLE, IAU/Hipparcos catalogues) and the general public's
+ability to interpret it, by turning raw telemetry into a spatially accurate,
+interactive observatory with an AI explanation layer on top.
+
+## 🛠️ How IBM Bob Was Used
+
+IBM Bob was the primary development tool for this project, from problem
+framing through implementation:
+
+**Business process & product definition**
+- Shaping the problem statement: identifying who actually suffers from
+  inaccessible space telemetry (students, educators, science communicators,
+  amateur observers) and what decision each of them needs to make.
+- Defining the five-module scope and the user journey through them, and
+  deciding what belongs in a deterministic solver versus an AI explanation
+  layer.
+- Prioritising features against real-world feasibility — what a browser can
+  honestly deliver without proprietary desktop tooling such as STK or GMAT.
+
+**Fundamental coding**
+- Establishing the Next.js 16 App Router structure and the domain boundaries
+  between `lib/astronomy`, `lib/mission-control`, and the render components.
+- Writing the core physics and spherical-astronomy routines: Tsiolkovsky Δv
+  budgeting, Lambert transfer, patched-conic sphere-of-influence handoff, the
+  free-return figure-8 solver, and the topocentric RA/Dec → horizon pipeline.
+- Establishing TypeScript contracts and unit conventions (SI internally,
+  display conversion at the boundary) so modules compose without silent
+  unit errors.
+
+**Building and hardening the application**
+- Implementing the 3D render layers across Three.js, CesiumJS, and Babylon.js.
+- Diagnosing the constellation artwork misalignment, replacing hand-measured
+  UV anchors with an authoritative generated set, and designing the gnomonic
+  tangent-plane affine solver behind it.
+- Authoring the Vitest suites that validate handedness, shear, anisotropy,
+  and residuals across all 85 anchored constellations.
+- Performance and security review: eliminating per-frame GPU geometry
+  reallocation in the sky renderer, and enforcing server-side-only secrets
+  handling in the AI route.
 
 ---
 
@@ -49,7 +95,7 @@ Despite billions of dollars invested in global space exploration and orbital inf
 
 * **Real-Time Near-Earth Object (NEO) Radar**: Live tracking of asteroids ingested directly from NASA JPL NeoWs, displaying close-approach velocity, minimum miss distance, DEFCON threat status, and intuitive real-world physical size comparisons (e.g., Monas, Eiffel Tower, Boeing 747).
 * **Multi-Satellite Fleet Orbit Tracker**: High-precision SGP4 propagation of active space assets (ISS, Tiangong CSS, Hubble Space Telescope, NOAA-19, Terra, Starlink) over CesiumJS 3D geospatial globes.
-* **Topocentric IAU Ground Sky Dome**: Stellarium-style interactive sky view from any observer coordinate on Earth, rendering 9,000+ stars from the Yale Bright Star Catalog (BSC5) and 88 official IAU constellation vectors.
+* **Topocentric Ground Sky Observatory**: Stellarium-style interactive sky view from any observer coordinate on Earth, rendering 9,110 stars from the Yale Bright Star Catalog (BSC5) and 85 constellation artworks anchored to real sky coordinates via a gnomonic tangent-plane affine solver.
 * **Heliocentric 3D Solar System Orrery**: Multi-body Keplerian planetary simulator modeling orbital periods, eccentricities, and semi-major axes across all 8 major solar system planets.
 * **AI Mission Control Workspace (SYS-05)**: Physics-grounded decision-support cockpit for orbital satellite launches and Apollo-style Lunar Free-Return transfers with interactive 3D spatial flight paths and automated AI post-analysis.
 
@@ -74,15 +120,16 @@ Despite billions of dollars invested in global space exploration and orbital inf
                                         │
     ┌───────────────────────────────────┼───────────────────────────────────┐
     ▼                                   ▼                                   ▼
-┌───────────────────────┐   ┌───────────────────────┐   ┌───────────────────────┐
-│   DATA INGESTION      │   │  ASTRODYNAMICS SOLVER │   │   AI REASONING LAYER  │
-│  • NASA JPL NeoWs API │   │  • SGP4 Propagator    │   │  • IBM Granite Copilot│
-│  • CelesTrak TLEs     │   │  • Tsiolkovsky Engine │   │  • Gemini AI Analysis │
-│  • IAU Star Catalog   │   │  • Lambert Solver     │   │  • Voice Command HUD  │
-└───────────┬───────────┘   └───────────┬───────────┘   └───────────┬───────────┘
-            │                           │                           │
-            └───────────────────────────┼───────────────────────────┘
-                                        ▼
+┌───────────────────────┐   ┌───────────────────────────────────┐   ┌───────────────────────────────────┐
+│   DATA INGESTION      │   │     DETERMINISTIC SOLVER CORE     │   │         AI CO-PILOT LAYER         │
+│  • NASA JPL NeoWs API │   │  • astronomy-engine · satellite.js│   │  • Provider-agnostic LLM          │
+│  • CelesTrak TLEs     │   │  • Custom Astrodynamics & Physics │   │    (Server-side, streaming)      │
+│  • IAU Star Catalog   │   │  • SGP4 · Lambert · Tsiolkovsky   │   │  • Structured Context Grounding   │
+└───────────┬───────────┘   └─────────────────┬─────────────────┘   └─────────────────┬─────────────────┘
+            │                                 │                                       │
+            │                                 └─── ↕ structured context only ─────────┘
+            └─────────────────────────────────┬───────────────────────────────────────┘
+                                              ▼
     ┌───────────────────────────────────────────────────────────────────┐
     │                 3D SPATIAL ENGINE (Three.js & CesiumJS)            │
     │  • 360° Full Daylight Earth (NASA 4K Blue Marble, Zero Shadow)    │
@@ -92,39 +139,23 @@ Despite billions of dollars invested in global space exploration and orbital inf
     └───────────────────────────────────────────────────────────────────┘
 ```
 
-1. **Embedded AI Assistant (IBM Granite Space AI Co-Pilot)**:
-   * Conversational natural language interface tuned for orbital mechanics, asteroid threat evaluation, and astronomical inquiries.
-   * Hands-free tactical voice recognition and audio telemetry feedback.
-2. **AI Mission Post-Analysis**:
-   * Automated synthesis of mission feasibility, Delta-V margin risks, key flight events, and mission recommendations.
-3. **Deterministic Pre-Flight Gatekeeper**:
-   * All trajectory paths are verified by physics solvers before 3D rendering to ensure mathematical precision and zero numerical clipping.
+### 🤖 AI Space Co-Pilot
+An LLM-backed conversational layer grounded on Cakrapala's deterministic
+astronomy and astrodynamics engines. The model never invents numbers: every
+orbital, ephemeris, and Δv figure quoted in a response is computed first by
+the solver core, then passed to the model as structured context.
+
+1. **AI Mission Post-Analysis**: Automated synthesis of mission feasibility, Delta-V margin risks, key flight events, and mission recommendations.
+2. **Deterministic Pre-Flight Gatekeeper**: All trajectory paths are verified by physics solvers before 3D rendering to ensure mathematical precision and zero numerical clipping.
 
 ---
 
-## 🛠️ 5. How IBM Bob Was Used
-
-**IBM Bob** served as the core enterprise AI software engineering and architecture copilot throughout the development lifecycle of Cakrapala:
-
-1. **Software Architecture & Modular Decomposition**:
-   * Guided the end-to-end Next.js 16 (App Router) + React 19 architecture, separating deterministic physics solvers (`lib/mission-control/`) from 3D WebGL rendering components (`components/mission-control/`).
-2. **High-Precision Algorithmic Synthesis**:
-   * Accelerated the mathematical implementation of complex coordinate transformations (Geodetic WGS-84 ⇄ ECEF ⇄ ECI ⇄ Three.js WebGL coordinates).
-   * Formulated the Tsiolkovsky rocket equation, circular orbit velocity equations, Lambert universal-variable transfer solver, and Patched-Conic hyperbolic flyby geometry.
-3. **Astrodynamic Figure-8 Trajectory Formulation**:
-   * Engineered the seamless Apollo Figure-8 retrograde lunar loop, guaranteeing continuous 3D tube geometry without mesh clipping or visual breaks.
-4. **Code Quality, Type Safety & Zero-Regression Verification**:
-   * Enforced strict TypeScript interfaces across all data contracts.
-   * Formulated automated Vitest unit test suites (`tests/mission-control/`) covering coordinate transforms, trajectory validation, AI analysis, and orbital planners (14/14 tests passing).
-
----
-
-## 📊 6. Evaluation Points & Capability Matrix
+## 📊 5. Evaluation Points & Capability Matrix
 
 | Evaluation Dimension | Technical Implementation & Architectural Evidence |
 | :--- | :--- |
-| **Technical Execution & Reliability** | • **Full-Stack Excellence**: Built on Next.js 16 (App Router), React 19, and strict TypeScript.<br>• **Multi-Engine 3D Graphics**: Three.js (Mission Control & Asteroids), CesiumJS (Satellite Fleets), and Babylon.js (Planetary Orrery).<br>• **Rigorous Closed-Form Astrodynamics**: Real-world Tsiolkovsky rocket equations, Vis-Viva orbital speed, Earth rotational boost (v_rot = ω_E · R_E · cos φ), Lambert transfer solver, and Patched-Conic Apollo Figure-8 flybys.<br>• **High Reliability**: 14/14 automated Vitest unit tests passing and 100% successful Next.js production builds. |
-| **Innovation & Spatial Intelligence** | • **Spatial 3D Intelligence**: Replaces static Delta-V spreadsheets with an interactive 3D theater, featuring 360° full daylight Earth, exact Florida spaceport pinning, and non-clipping lunar retrograde loops.<br>• **Interactive Flight Phase Graphic**: Multi-color timeline profile bar and dynamic SVG altitude geometry sparklines.<br>• **Human-Scale Scale Comparisons**: Compares asteroid dimensions to tangible landmarks (Monas 132m, Eiffel Tower 330m, Boeing 747 70m).<br>• **Bidirectional Voice HUD**: Voice-command cockpit navigation. |
+| **Technical Execution & Reliability** | • **Full-Stack Excellence**: Built on Next.js 16 (App Router), React 19, and strict TypeScript.<br>• **Multi-Engine 3D Graphics**: Three.js (Mission Control & Asteroids), CesiumJS (Satellite Fleets), and Babylon.js (Planetary Orrery).<br>• **Rigorous Closed-Form Astrodynamics**: Real-world Tsiolkovsky rocket equations, Vis-Viva orbital speed, Earth rotational boost ($v_{rot} = \omega_E \cdot R_E \cdot \cos \phi$), Lambert transfer solver, and Patched-Conic Apollo Figure-8 flybys.<br>• **High Reliability**: 86 unit tests across 17 suites — 100% passing and 100% successful Next.js production builds. |
+| **Innovation & Spatial Intelligence** | • **Spatial 3D Intelligence**: Replaces static Delta-V spreadsheets with an interactive 3D theater, featuring 360° full daylight Earth, exact Florida spaceport pinning, and non-clipping lunar retrograde loops.<br>• **Interactive Flight Phase Graphic**: Multi-color timeline profile bar and dynamic SVG altitude geometry sparklines.<br>• **Human-Scale Scale Comparisons**: Compares asteroid dimensions to tangible landmarks (Monas 132m, Eiffel Tower 330m, Boeing 747 70m).<br>• **Gnomonic Tangent-Plane Affine Solver**: Resolves celestial artwork distortion dynamically from Hipparcos catalogue coordinates. |
 | **Domain Scope & Open Data Alignment** | • **100% Aligned with Open Science Data**: Directly ingests open scientific data from NASA JPL NeoWs, NASA Horizons, NORAD/CelesTrak TLEs, and the Yale Bright Star Catalog (BSC5).<br>• **Scientific Rigor**: Merges generative AI insights with deterministic physical constraints. |
 | **Feasibility & Operational Deployment** | • **100% Browser-Native & Zero-Install**: Accessible globally without requiring $10,000+ desktop aerospace software licenses (STK/GMAT) or specialized GPU hardware.<br>• **Hallucination-Free Gatekeeper**: Physics engine calculates all Delta-V budgets and orbit geometries deterministically prior to rendering.<br>• **Optimized Performance**: Server-side API caching and disciplined WebGL memory management. |
 | **Real-World Impact & Public Value** | • **Mitigating Media Panic & Disinformation**: Delivers a transparent, zero-bias visual radar for asteroid close-approaches to counter sensationalist media claims.<br>• **Democratizing Aerospace Education**: Empowers students, educators, and researchers worldwide to simulate orbital launches and lunar transfers interactively for free. |
@@ -136,10 +167,27 @@ Despite billions of dollars invested in global space exploration and orbital inf
 | Module Code | Module Name | Core Technology | Primary Functionality |
 | :--- | :--- | :--- | :--- |
 | **SYS-01** | **3D Planetary Orrery** | Babylon.js & Keplerian Math | Heliocentric simulation of 8 primary solar system planets. |
-| **SYS-02** | **IAU Sky Dome** | Astronomy-Engine & BSC5 Catalog | Topocentric Stellarium-style ground sky view with 9,000+ stars & IAU constellations. |
+| **SYS-02** | **Ground Sky Observatory** | Three.js, BSC5 & Hipparcos | Topocentric Stellarium-style ground sky dome with 9,110 stars & 85 affine-projected constellation artworks. |
 | **SYS-03** | **Asteroid Defense Radar** | NASA JPL NeoWs & Three.js | Real-time NEO proximity radar, DEFCON threat monitoring, and physical size scaling. |
 | **SYS-04** | **Satellite Fleet Radar** | SGP4 Propagator & CesiumJS | Live multi-satellite tracking with ground tracks and sensor footprint cones. |
 | **SYS-05** | **AI Mission Control** | Three.js & Astrodynamics Physics | Deterministic decision-support workspace for orbital satellite launch and Apollo-style Lunar Free-Return transfers with AI post-analysis. |
+
+---
+
+### 🌠 Ground Sky Observatory (`/sky`)
+- **9,110 stars** from the Yale Bright Star Catalogue, plotted topocentrically
+  from observer latitude/longitude and Local Sidereal Time.
+- **85 constellation artworks** anchored to real sky coordinates. Anchor stars
+  are resolved from the Hipparcos catalogue (CDS VizieR I/239) rather than
+  measured by hand, and each artwork is mapped through a **gnomonic
+  tangent-plane affine solver** — so orientation, aspect ratio, and parallactic
+  tilt follow the sky correctly at any latitude and any time, with no
+  hard-coded rotation constants.
+- **Validated, not eyeballed.** An automated audit asserts consistent
+  handedness (negative Jacobian determinant) across all 85 constellations,
+  plus bounded shear and aspect-ratio anisotropy.
+- Argo Navis (Carina/Puppis/Vela) is rendered as a single historical figure,
+  matching Stellarium's Western sky-culture convention.
 
 ---
 
@@ -169,7 +217,7 @@ Despite billions of dollars invested in global space exploration and orbital inf
 
 #### A. Rocket Performance & Delta-V Capacity (Tsiolkovsky Rocket Equation)
 
-The vehicle's available velocity increment (Δv_avail) is calculated via the Tsiolkovsky equation:
+The vehicle's available velocity increment ($\Delta v_{avail}$) is calculated via the Tsiolkovsky equation:
 
 ```
 Δv_avail = Isp · g₀ · ln( m_wet / (m_dry + m_payload) )
@@ -220,7 +268,7 @@ The vehicle's available velocity increment (Δv_avail) is calculated via the Tsi
 
 #### C. Lunar Free-Return Mechanics (Lambert Transfer & Patched-Conic Slingshot)
 
-1. **Trans-Lunar Injection (TLI) from Parking Orbit (r₀ = R_E + h_park)**:
+1. **Trans-Lunar Injection (TLI) from Parking Orbit ($r_0 = R_E + h_{park}$)**:
 
    ```
    v_TLI = √( 2·μ_E / r₀ - 2·μ_E / (r₀ + r_Moon) )
@@ -232,23 +280,23 @@ The vehicle's available velocity increment (Δv_avail) is calculated via the Tsi
 
 2. **Hyperbolic Flyby & Retrograde Gravity Slingshot**:
 
-   The spacecraft approaches the Moon's leading edge with hyperbolic excess velocity (v_inf). The Moon's gravitational parameter (μ_M = 4,904.87 km³/s²) bends the trajectory by turn angle (δ):
+   The spacecraft approaches the Moon's leading edge with hyperbolic excess velocity ($v_\infty$). The Moon's gravitational parameter ($\mu_M = 4,904.87\text{ km}^3/\text{s}^2$) bends the trajectory by turn angle ($\delta$):
 
    ```
    sin( δ / 2 ) = 1 / ( 1 + (r_peri · v_inf² / μ_M) )
    ```
 
-   * **r_peri**: Perilune radius from Moon center = R_Moon (1,737.4 km) + h_perilune (200 km)
+   * **r_peri**: Perilune radius from Moon center = $R_{Moon}$ (1,737.4 km) + $h_{perilune}$ (200 km)
 
 3. **Continuous 3D Figure-8 Coordinate Synthesis**:
 
-   In Moon-centered orbital coordinates defined by radial unit vector (u_rad) and tangential flight velocity unit vector (u_tan):
+   In Moon-centered orbital coordinates defined by radial unit vector ($u_{rad}$) and tangential flight velocity unit vector ($u_{tan}$):
 
    ```
    r_flyby(θ) = r_Moon + r_M(θ) · [ cos(θ) · u_rad - sin(θ) · u_tan ],   θ ∈ [-π/2, +π/2]
    ```
 
-   * Sweeps continuously behind the Moon's far side at perilune (θ = 0) without clipping through the lunar surface, directly routing the return vector toward Earth's atmospheric entry interface (h = 120 km).
+   * Sweeps continuously behind the Moon's far side at perilune ($\theta = 0$) without clipping through the lunar surface, directly routing the return vector toward Earth's atmospheric entry interface ($h = 120\text{ km}$).
 
 ---
 
@@ -258,20 +306,28 @@ The vehicle's available velocity increment (Δv_avail) is calculated via the Tsi
 Margin (Δv_margin) = Δv_avail - Δv_req
 ```
 
-* **Feasible** (Δv_margin ≥ 500 m/s): Green indicator; nominal capability with safety reserves.
-* **Marginal** (0 ≤ Δv_margin < 500 m/s): Amber indicator; flight possible under nominal conditions, sensitive to trajectory dispersion.
-* **Infeasible** (Δv_margin < 0 m/s): Red indicator; vehicle propellant capacity is insufficient for the requested payload and orbit.
+* **Feasible** ($\Delta v_{margin} \ge 500\text{ m/s}$): Green indicator; nominal capability with safety reserves.
+* **Marginal** ($0 \le \Delta v_{margin} < 500\text{ m/s}$): Amber indicator; flight possible under nominal conditions, sensitive to trajectory dispersion.
+* **Infeasible** ($\Delta v_{margin} < 0\text{ m/s}$): Red indicator; vehicle propellant capacity is insufficient for the requested payload and orbit.
 
 ---
 
 ## 🛠️ Tech Stack
 
-* **AI & Engineering Platform**: **IBM Bob** (Development & Architecture Copilot) + **IBM Granite / Gemini** (Astrophysical AI Co-Pilot & Mission Post-Analysis)
+* **AI & Engineering Platform**: **IBM Bob** (Development & Architecture Copilot) + **AI Co-Pilot Layer** (Provider-agnostic LLM with deterministic physics grounding)
 * **Framework**: [Next.js 16 (App Router)](https://nextjs.org/) + [React 19](https://react.dev/) + [TypeScript](https://www.typescriptlang.org/)
 * **3D & Geospatial Engines**: [Three.js](https://threejs.org/) + [CesiumJS](https://cesium.com/) + [Babylon.js](https://www.babylonjs.com/)
 * **Astrophysics Math**: `astronomy-engine`, `satellite.js` (SGP4), Lambert Universal-Variable Solver, Patched-Conic Mechanics, WGS-84 Ellipsoid Transforms
 * **Styling & UI**: Tailwind CSS + Lucide Icons + Frosted Sci-Fi Glassmorphism
-* **Data Sources**: NASA JPL NeoWs, NASA Horizons, CelesTrak NORAD, Yale Bright Star Catalog (BSC5)
+* **Data Sources**: NASA JPL NeoWs, NASA Horizons, CelesTrak NORAD, Yale Bright Star Catalog (BSC5), ESA Hipparcos (CDS VizieR I/239)
+
+---
+
+## 🗺️ Roadmap
+
+- **Tactical Voice HUD** *(experimental — not enabled in this release)*: Hands-free voice recognition and speech telemetry feedback for cockpit operations.
+- **Multivariate Multi-Impulse Trajectory Optimization**: Generalized numerical shooting method for non-coplanar interplanetary orbital transfers.
+- **Atmospheric Reentry Aerothermal Flux Simulation**: High-fidelity stagnation temperature and heat shield deceleration profiles.
 
 ---
 
@@ -337,11 +393,8 @@ Navigate to [http://localhost:3000/mission-control](http://localhost:3000/missio
 # Start development server
 npm run dev
 
-# Run automated tests
+# Run automated tests (86 unit tests across 17 suites)
 npm test
-
-# Run ESLint
-npm run lint
 
 # Run TypeScript validation
 npx tsc --noEmit
@@ -357,4 +410,8 @@ npm start
 
 ## 📜 License
 
-This project is intended to be released under the MIT License. A `LICENSE` file still needs to be added to the repository before the license is formally included.
+Source code: MIT License (see `LICENSE`).
+Constellation artwork: Free Art License 1.3 — © Johan Meuris, Stellarium
+project. Anchor coordinate data derived from Stellarium (GPLv2+). Star
+positions from the ESA Hipparcos catalogue via CDS VizieR. Full attribution
+in `ASSET_SOURCES.md`.
