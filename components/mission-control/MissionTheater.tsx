@@ -40,6 +40,8 @@ import {
   Layers,
 } from "lucide-react";
 import { gmstRad, launchSiteEciM } from "@/lib/mission-control/ascentModel";
+import { moonOrbitPathEciKm } from "@/lib/mission-control/moonOrbitPath";
+
 
 
 interface MissionTheaterProps {
@@ -54,16 +56,41 @@ interface MissionTheaterProps {
 }
 
 // ── Color map by trajectory phase ────────────────────────────────────────────
-const PHASE_COLORS: Record<string, { color: number; hex: string; label: string }> = {
-  launch: { color: 0xef4444, hex: "#ef4444", label: "Pad Liftoff & Atmospheric Ascent" }, // Red (0km Liftoff)
-  ascent: { color: 0xf59e0b, hex: "#f59e0b", label: "Gravity Turn Pitch" },               // Amber (120km Pitchover)
-  parking_orbit: { color: 0x06b6d4, hex: "#06b6d4", label: "Circular Target Orbit" },    // Cyan (550km Circular Orbit)
+interface PhaseStyle {
+  color: number;
+  hex: string;
+  label: string;
+}
+
+const PHASE_COLORS: Record<string, PhaseStyle> = {
+  launch: { color: 0xef4444, hex: "#ef4444", label: "Pad Liftoff & Atmospheric Ascent" },
+  ascent: { color: 0xf59e0b, hex: "#f59e0b", label: "Gravity Turn Pitch" },
+  parking_orbit: { color: 0x06b6d4, hex: "#06b6d4", label: "Circular Orbit (Parking / Target)" },
   tli: { color: 0xf97316, hex: "#f97316", label: "TLI Burn" },
   outbound: { color: 0xf97316, hex: "#f97316", label: "Outbound TLI Transfer" },
   lunar_flyby: { color: 0xc084fc, hex: "#c084fc", label: "Perilune Lunar Flyby" },
   return: { color: 0x38bdf8, hex: "#38bdf8", label: "Earth Free-Return Leg" },
   reentry_interface: { color: 0x60a5fa, hex: "#60a5fa", label: "Reentry Corridor" },
 };
+
+/**
+ * Satellite missions reuse the "outbound" phase for the Hohmann transfer
+ * ellipse. Orange would be nearly indistinguishable from the amber gravity
+ * turn, so the coast arc is rendered green and labelled for what it is.
+ */
+const SATELLITE_PHASE_OVERRIDES: Record<string, PhaseStyle> = {
+  outbound: { color: 0x22c55e, hex: "#22c55e", label: "Hohmann Transfer Ellipse" },
+};
+
+const PHASE_FALLBACK: PhaseStyle = { color: 0x00f0ff, hex: "#00f0ff", label: "Coast Arc" };
+
+/** Single source of truth for phase colors — used by both renderer and legend. */
+function resolvePhaseStyle(phase: string, type: MissionType): PhaseStyle {
+  if (type === "satellite_launch" && SATELLITE_PHASE_OVERRIDES[phase]) {
+    return SATELLITE_PHASE_OVERRIDES[phase];
+  }
+  return PHASE_COLORS[phase] ?? PHASE_FALLBACK;
+}
 
 const EARTH_RADIUS_VIS = 6.378137; // 6,378 km in Scene units (1 unit = 1,000 km)
 
@@ -151,6 +178,7 @@ export default function MissionTheater({
   // Ref so renderMissionTrajectory (memoized) always reads the current launch date
   const launchDateUtcRef = useRef<string | undefined>(launchDateUtc);
   launchDateUtcRef.current = launchDateUtc; // sync on every render
+  const earthSpinRef = useRef(0);
 
   useEffect(() => {
     isPlayingRef.current = isPlaying;
@@ -287,13 +315,14 @@ export default function MissionTheater({
 
       // 1.5 Render Dedicated 3D Launch Site / Departure Pad Surface Beacon
       if (site) {
-        const latRad = (site.latitudeDeg * Math.PI) / 180;
-        const lonRad = (site.longitudeDeg * Math.PI) / 180;
-        const siteEciKm = {
-          x: 6378.137 * Math.cos(latRad) * Math.cos(lonRad),
-          y: 6378.137 * Math.cos(latRad) * Math.sin(lonRad),
-          z: 6378.137 * Math.sin(latRad),
-        };
+        // Must use the SAME epoch the planner used for trajectory[0], otherwise
+        // the beacon and the trajectory separate by the GMST difference.
+        const epochUtc = launchDateUtcRef.current ?? new Date().toISOString();
+        earthSpinRef.current = gmstRad(epochUtc);
+
+        const siteM = launchSiteEciM(site.latitudeDeg, site.longitudeDeg, epochUtc);
+        const siteEciKm = { x: siteM.x / 1000, y: siteM.y / 1000, z: siteM.z / 1000 };
+
         const sPos = eciKmToRendererPosition(siteEciKm);
         const sVec = new THREE.Vector3(sPos.x, sPos.y, sPos.z);
         const sNorm = sVec.clone().normalize();
@@ -372,14 +401,14 @@ export default function MissionTheater({
           moonGroupRef.current = moonGroup;
 
           // Moon Orbit Ring
-          const moonDist = Math.sqrt(mPos.x ** 2 + mPos.y ** 2 + mPos.z ** 2);
-          const ringPoints: THREE.Vector3[] = [];
-          for (let i = 0; i <= 128; i++) {
-            const angle = (i / 128) * Math.PI * 2;
-            ringPoints.push(
-              new THREE.Vector3(moonDist * Math.cos(angle), 0, moonDist * Math.sin(angle))
-            );
-          }
+          const orbitPath = moonOrbitPathEciKm(
+            launchDateUtcRef.current ?? new Date().toISOString()
+          );
+          const ringPoints = orbitPath.points.map((p) => {
+            const rp = eciKmToRendererPosition(p);
+            return new THREE.Vector3(rp.x, rp.y, rp.z);
+          });
+
           const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPoints);
           const ringMat = new THREE.LineBasicMaterial({
             color: 0x475569,
@@ -456,14 +485,13 @@ export default function MissionTheater({
           moonGroupRef.current = moonGroup;
 
           // Moon Orbit Ring around Earth
-          const moonDist = Math.sqrt(mPos.x ** 2 + mPos.y ** 2 + mPos.z ** 2);
-          const ringPoints: THREE.Vector3[] = [];
-          for (let i = 0; i <= 128; i++) {
-            const angle = (i / 128) * Math.PI * 2;
-            ringPoints.push(
-              new THREE.Vector3(moonDist * Math.cos(angle), 0, moonDist * Math.sin(angle))
-            );
-          }
+          const orbitPath = moonOrbitPathEciKm(
+            launchDateUtcRef.current ?? new Date().toISOString()
+          );
+          const ringPoints = orbitPath.points.map((p) => {
+            const rp = eciKmToRendererPosition(p);
+            return new THREE.Vector3(rp.x, rp.y, rp.z);
+          });
           const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPoints);
           const ringMat = new THREE.LineBasicMaterial({
             color: 0x475569,
@@ -507,7 +535,8 @@ export default function MissionTheater({
           }
 
           if (cleanSegPoints.length >= 2) {
-            const conf = PHASE_COLORS[currentPhase] || { color: 0x00f0ff, hex: "#00f0ff" };
+            const conf = resolvePhaseStyle(currentPhase, type);
+
 
             // A. Sharp high-intensity core line overlay
             const lineGeo = new THREE.BufferGeometry().setFromPoints(cleanSegPoints);
@@ -843,12 +872,13 @@ export default function MissionTheater({
       // Earth rotation: rotates gently during standby; locks at launch epoch when trajectory is loaded
       if (earthMeshRef.current) {
         if (!trajectoryCurveRef.current) {
-          earthMeshRef.current.rotation.y += 0.0002;
+          earthMeshRef.current.rotation.y += 0.0002;  // idle showcase spin
         } else {
-          earthMeshRef.current.rotation.y = 0;
+          // Earth rotates inside the inertial frame: lock the mesh to epoch GMST
+          // so geographic features line up with ECI-computed positions.
+          earthMeshRef.current.rotation.y = earthSpinRef.current;
         }
       }
-
       // Pulse event markers
       const pulseScale = 1.0 + Math.sin(Date.now() * 0.006) * 0.18;
       for (const marker of pulseMarkersRef.current) {
@@ -921,8 +951,8 @@ export default function MissionTheater({
         <button
           onClick={() => applyCameraFraming("Fit Full Trajectory", candidate, missionType, moonPositionKm)}
           className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Fit Full Trajectory"
-              ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_8px_rgba(6,182,212,0.2)]"
-              : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
+            ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-[0_0_8px_rgba(6,182,212,0.2)]"
+            : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
             }`}
           title="Auto-Fit Mission View"
         >
@@ -932,8 +962,8 @@ export default function MissionTheater({
         <button
           onClick={() => applyCameraFraming("Focus Earth", candidate, missionType, moonPositionKm)}
           className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Earth"
-              ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
-              : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
+            ? "bg-blue-500/20 text-blue-300 border border-blue-500/40"
+            : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
             }`}
           title="Focus on Earth"
         >
@@ -945,8 +975,8 @@ export default function MissionTheater({
             <button
               onClick={() => applyCameraFraming("Focus Launch", candidate, missionType, moonPositionKm)}
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Launch"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                  : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
+                ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
                 }`}
               title="Focus on Launch Pad"
             >
@@ -956,8 +986,8 @@ export default function MissionTheater({
             <button
               onClick={() => applyCameraFraming("Focus Orbit", candidate, missionType, moonPositionKm)}
               className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Orbit"
-                  ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-                  : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
+                ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
                 }`}
               title="Focus on Orbit Ring"
             >
@@ -970,8 +1000,8 @@ export default function MissionTheater({
           <button
             onClick={() => applyCameraFraming("Focus Moon Encounter", candidate, missionType, moonPositionKm)}
             className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Moon Encounter"
-                ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
-                : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
+              ? "bg-purple-500/20 text-purple-300 border border-purple-500/40"
+              : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
               }`}
             title="Focus on Moon Flyby Encounter"
           >
@@ -982,8 +1012,8 @@ export default function MissionTheater({
         <button
           onClick={() => applyCameraFraming("Focus Polar", candidate, missionType, moonPositionKm)}
           className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[9px] font-bold transition-all cursor-pointer ${cameraMode === "Focus Polar"
-              ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
-              : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
+            ? "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+            : "text-slate-400 hover:text-white bg-slate-800/50 hover:bg-slate-700/60"
             }`}
           title="Top-Down Polar View"
         >
@@ -1023,38 +1053,34 @@ export default function MissionTheater({
       )}
 
       {/* ── Bottom Left Legend / Telemetry HUD ─────────────────────────── */}
+      {/* ── Bottom Left Legend / Telemetry HUD ─────────────────────────── */}
       <div className="absolute bottom-3 left-3 p-2.5 rounded-xl bg-[#030712]/85 backdrop-blur-md border border-slate-800/80 text-[9px] text-slate-400 font-mono space-y-1 z-10 shadow-lg">
         {candidate ? (
           <>
             <div className="text-[8px] font-bold text-slate-500 uppercase tracking-wider mb-1">
               TRAJECTORY TELEMETRY SPLINE
             </div>
-            {missionType === "satellite_launch" ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="w-3.5 h-1.5 bg-[#00f0ff] rounded shadow-[0_0_10px_#00f0ff]" />
-                  <span className="text-slate-200">Ascent Gravity Turn</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3.5 h-1.5 bg-[#38bdf8] rounded shadow-[0_0_10px_#38bdf8]" />
-                  <span className="text-slate-200">Circular Insertion Orbit</span>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="w-3.5 h-1.5 bg-[#f97316] rounded shadow-[0_0_10px_#f97316]" />
-                  <span className="text-slate-200">Outbound TLI Transfer</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3.5 h-1.5 bg-[#d946ef] rounded shadow-[0_0_10px_#d946ef]" />
-                  <span className="text-slate-200">Lunar Perilune Flyby</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className="w-3.5 h-1.5 bg-[#6366f1] rounded shadow-[0_0_10px_#6366f1]" />
-                  <span className="text-slate-200">Earth Free-Return Leg</span>
-                </div>
-              </>
+            {/* Legend is derived from the phases actually present in the
+                trajectory and colored through resolvePhaseStyle — the same
+                function the renderer uses. It therefore cannot drift out of
+                sync with what is drawn on the canvas. Set preserves first
+                appearance, so entries follow the mission timeline. */}
+            {Array.from(new Set(candidate.trajectory.map((p) => p.phase))).map(
+              (phase) => {
+                const style = resolvePhaseStyle(phase, missionType);
+                return (
+                  <div key={phase} className="flex items-center gap-2">
+                    <span
+                      className="w-3.5 h-1.5 rounded shrink-0"
+                      style={{
+                        backgroundColor: style.hex,
+                        boxShadow: `0 0 10px ${style.hex}`,
+                      }}
+                    />
+                    <span className="text-slate-200">{style.label}</span>
+                  </div>
+                );
+              }
             )}
           </>
         ) : (
@@ -1077,6 +1103,7 @@ export default function MissionTheater({
           Left Drag: Rotate · Right Drag: Pan · Scroll: Zoom
         </div>
       </div>
+
 
       {/* ── Bottom Right Collapsible Rendering Diagnostics ─────────────── */}
       <div className="absolute bottom-3 right-3 z-10 flex flex-col items-end">

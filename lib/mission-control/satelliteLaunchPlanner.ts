@@ -53,6 +53,8 @@ import {
 } from "./ascentModel";
 
 import { vehicleDeltaVMps } from "./stagingModel";
+import { generateSatelliteTrajectory } from "./satelliteTrajectory";
+
 
 // ── Core Physics ──────────────────────────────────────────────────────────────
 
@@ -489,7 +491,17 @@ export function planSatelliteLaunch(
       ).transferTimeS
       : 0;
   const estimatedTimeToOrbitS = ascentS + coastS;
-  const durationHours = estimatedTimeToOrbitS / 3600;
+  const traj = generateSatelliteTrajectory(
+    input,
+    budget.parkingAltitudeKm,
+    ascentS
+  );
+
+  const durationHours = traj.timeToFinalOrbitS / 3600;
+
+  // Staged mission path: ascent, parking revolution, Hohmann transfer ellipse,
+  // final orbit — all sharing one orbit normal, so the rings stay coplanar.
+
 
   // ── Generate 3D trajectory ──────────────────────────────────────────────
   const { points: ascentPoints, events } = generateAscentTrajectory(
@@ -523,7 +535,8 @@ export function planSatelliteLaunch(
   );
 
   // Combined trajectory
-  const trajectory = [...ascentPoints, ...orbitRing];
+  const trajectory = traj.points;
+
 
   // ── Build delta-v budget for display ────────────────────────────────────
   const deltaV: DeltaVBudget = {
