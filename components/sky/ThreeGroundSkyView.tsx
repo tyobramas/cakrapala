@@ -540,7 +540,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   // Toggles
   const [showConstellations, setShowConstellations] = useState(true);
   const [showConstellationNames, setShowConstellationNames] = useState(true);
-  const [showConstellationArt, setShowConstellationArt] = useState(true);
+  const [showConstellationArt, setShowConstellationArt] = useState(false);
   const [showMilkyWay, setShowMilkyWay] = useState(true);
   const [showLabels, setShowLabels] = useState(true);
   const [showBodies, setShowBodies] = useState(true);
@@ -577,7 +577,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
   const togglesRef = useRef({
     showConstellations: true,
     showConstellationNames: true,
-    showConstellationArt: true,
+    showConstellationArt: false,
     showMilkyWay: true,
     showLabels: true,
     showBodies: true,
