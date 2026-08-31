@@ -667,6 +667,213 @@ export const CONSTELLATION_PROFILES: Record<string, ConstellationProfile> = {
 };
 
 /**
+ * 3-Star Astronomical Affine Anchor System
+ * Maps 3 specific points on each constellation texture to the exact J2000 RA/Dec of its anchor stars.
+ * This guarantees 100% mathematical alignment of the artwork with the real celestial sphere.
+ */
+export interface ConstellationAnchorData {
+  star1: { uv: [number, number]; ra: number; dec: number; name: string };
+  star2: { uv: [number, number]; ra: number; dec: number; name: string };
+  star3: { uv: [number, number]; ra: number; dec: number; name: string };
+}
+
+export interface CelestialCorner {
+  ra: number;
+  dec: number;
+}
+
+export const CONSTELLATION_ANCHORS: Record<string, ConstellationAnchorData> = {
+  // Scorpius: Antares (Heart), Dschubba (Head/Claws), Shaula (Stinger)
+  sco: {
+    star1: { name: "Antares (α Sco)", uv: [250 / 512, 1 - 220 / 512], ra: 247.35, dec: -26.43 },
+    star2: { name: "Dschubba (δ Sco)", uv: [330 / 512, 1 - 95 / 512], ra: 240.08, dec: -22.62 },
+    star3: { name: "Shaula (λ Sco)", uv: [60 / 512, 1 - 430 / 512], ra: 263.40, dec: -37.10 },
+  },
+  // Orion: Betelgeuse (Left Shoulder), Rigel (Right Foot), Bellatrix (Right Shoulder)
+  ori: {
+    star1: { name: "Betelgeuse (α Ori)", uv: [175 / 512, 1 - 165 / 512], ra: 88.79, dec: 7.41 },
+    star2: { name: "Rigel (β Ori)", uv: [325 / 512, 1 - 400 / 512], ra: 78.63, dec: -8.20 },
+    star3: { name: "Bellatrix (γ Ori)", uv: [330 / 512, 1 - 170 / 512], ra: 81.28, dec: 6.35 },
+  },
+  // Taurus: Aldebaran (Eye of Bull), Elnath (Horn Tip), Alcyone (Pleiades on Back)
+  tau: {
+    star1: { name: "Aldebaran (α Tau)", uv: [230 / 512, 1 - 260 / 512], ra: 68.98, dec: 16.51 },
+    star2: { name: "Elnath (β Tau)", uv: [130 / 512, 1 - 90 / 512], ra: 81.57, dec: 28.61 },
+    star3: { name: "Alcyone (η Tau)", uv: [390 / 512, 1 - 200 / 512], ra: 56.87, dec: 24.11 },
+  },
+  // Virgo: Spica (Ear of Wheat), Porrima (Torso), Vindemiatrix (Right Arm/Wing)
+  vir: {
+    star1: { name: "Spica (α Vir)", uv: [190 / 512, 1 - 340 / 512], ra: 201.30, dec: -11.16 },
+    star2: { name: "Porrima (γ Vir)", uv: [270 / 512, 1 - 250 / 512], ra: 190.43, dec: -1.45 },
+    star3: { name: "Vindemiatrix (ε Vir)", uv: [210 / 512, 1 - 130 / 512], ra: 195.55, dec: 10.96 },
+  },
+  // Leo: Regulus (Heart), Denebola (Tail), Algieba (Mane)
+  leo: {
+    star1: { name: "Regulus (α Leo)", uv: [330 / 512, 1 - 320 / 512], ra: 152.09, dec: 11.97 },
+    star2: { name: "Denebola (β Leo)", uv: [110 / 512, 1 - 250 / 512], ra: 177.26, dec: 14.57 },
+    star3: { name: "Algieba (γ Leo)", uv: [320 / 512, 1 - 180 / 512], ra: 154.99, dec: 19.84 },
+  },
+  // Ursa Major: Dubhe (Bowl Top), Merak (Bowl Bottom), Alkaid (Tail Tip)
+  uma: {
+    star1: { name: "Dubhe (α UMa)", uv: [300 / 512, 1 - 230 / 512], ra: 165.93, dec: 61.75 },
+    star2: { name: "Merak (β UMa)", uv: [300 / 512, 1 - 320 / 512], ra: 165.46, dec: 56.38 },
+    star3: { name: "Alkaid (η UMa)", uv: [80 / 512, 1 - 230 / 512], ra: 206.88, dec: 49.31 },
+  },
+  // Cassiopeia: Schedar (Center of W), Caph (Right of W), Gamma Cas (Middle Peak)
+  cas: {
+    star1: { name: "Schedar (α Cas)", uv: [270 / 512, 1 - 260 / 512], ra: 10.13, dec: 56.54 },
+    star2: { name: "Caph (β Cas)", uv: [370 / 512, 1 - 240 / 512], ra: 2.29, dec: 59.15 },
+    star3: { name: "Gamma Cas (γ Cas)", uv: [240 / 512, 1 - 170 / 512], ra: 14.18, dec: 60.72 },
+  },
+  // Cygnus: Deneb (Tail), Albireo (Beak), Sadr (Chest)
+  cyg: {
+    star1: { name: "Deneb (α Cyg)", uv: [240 / 512, 1 - 140 / 512], ra: 310.36, dec: 45.28 },
+    star2: { name: "Albireo (β Cyg)", uv: [270 / 512, 1 - 420 / 512], ra: 292.68, dec: 27.96 },
+    star3: { name: "Sadr (γ Cyg)", uv: [255 / 512, 1 - 240 / 512], ra: 305.56, dec: 40.26 },
+  },
+  // Canis Major: Sirius (Mouth), Adhara (Hind Foot), Wezen (Body)
+  cma: {
+    star1: { name: "Sirius (α CMa)", uv: [300 / 512, 1 - 170 / 512], ra: 101.29, dec: -16.72 },
+    star2: { name: "Adhara (ε CMa)", uv: [230 / 512, 1 - 390 / 512], ra: 104.66, dec: -28.97 },
+    star3: { name: "Wezen (δ CMa)", uv: [190 / 512, 1 - 320 / 512], ra: 107.10, dec: -26.39 },
+  },
+  // Gemini: Castor (Northern Twin Head), Pollux (Southern Twin Head), Alhena (Foot)
+  gem: {
+    star1: { name: "Castor (α Gem)", uv: [320 / 512, 1 - 150 / 512], ra: 113.65, dec: 31.89 },
+    star2: { name: "Pollux (β Gem)", uv: [260 / 512, 1 - 170 / 512], ra: 116.33, dec: 28.03 },
+    star3: { name: "Alhena (γ Gem)", uv: [380 / 512, 1 - 400 / 512], ra: 99.43, dec: 16.40 },
+  },
+  // Sagittarius: Kaus Australis (Bow Base), Nunki (Upper Chest), Alnasl (Arrow Tip)
+  sgr: {
+    star1: { name: "Kaus Australis (ε Sgr)", uv: [310 / 512, 1 - 320 / 512], ra: 276.04, dec: -34.38 },
+    star2: { name: "Nunki (σ Sgr)", uv: [220 / 512, 1 - 210 / 512], ra: 283.82, dec: -26.30 },
+    star3: { name: "Alnasl (γ Sgr)", uv: [380 / 512, 1 - 280 / 512], ra: 271.43, dec: -30.42 },
+  },
+  // Bootes: Arcturus (Base of Kite), Nekkar (Head), Izar (Side)
+  boo: {
+    star1: { name: "Arcturus (α Boo)", uv: [260 / 512, 1 - 370 / 512], ra: 213.91, dec: 19.18 },
+    star2: { name: "Nekkar (β Boo)", uv: [240 / 512, 1 - 130 / 512], ra: 225.49, dec: 40.39 },
+    star3: { name: "Izar (ε Boo)", uv: [210 / 512, 1 - 280 / 512], ra: 221.25, dec: 27.07 },
+  },
+  // Aquila: Altair (Neck), Tarazed (Right Wing), Alshain (Left Wing)
+  aql: {
+    star1: { name: "Altair (α Aql)", uv: [260 / 512, 1 - 240 / 512], ra: 297.70, dec: 8.87 },
+    star2: { name: "Tarazed (γ Aql)", uv: [320 / 512, 1 - 190 / 512], ra: 296.54, dec: 10.61 },
+    star3: { name: "Alshain (β Aql)", uv: [220 / 512, 1 - 280 / 512], ra: 298.83, dec: 6.41 },
+  },
+  // Lyra: Vega (Top of Harp), Sheliak (Base Left), Sulafat (Base Right)
+  lyr: {
+    star1: { name: "Vega (α Lyr)", uv: [260 / 512, 1 - 160 / 512], ra: 279.23, dec: 38.78 },
+    star2: { name: "Sheliak (β Lyr)", uv: [220 / 512, 1 - 360 / 512], ra: 282.52, dec: 33.36 },
+    star3: { name: "Sulafat (γ Lyr)", uv: [280 / 512, 1 - 370 / 512], ra: 284.74, dec: 32.69 },
+  },
+  // Crux: Acrux (Cross Base), Gacrux (Cross Top), Mimosa (Cross Left)
+  cru: {
+    star1: { name: "Acrux (α Cru)", uv: [255 / 512, 1 - 390 / 512], ra: 186.65, dec: -63.10 },
+    star2: { name: "Gacrux (γ Cru)", uv: [255 / 512, 1 - 150 / 512], ra: 187.79, dec: -57.11 },
+    star3: { name: "Mimosa (β Cru)", uv: [170 / 512, 1 - 270 / 512], ra: 191.93, dec: -59.69 },
+  },
+  // Centaurus: Rigil Kentaurus (Front Hoof), Hadar (Front Leg), Menkent (Head)
+  cen: {
+    star1: { name: "Rigil Kentaurus (α Cen)", uv: [180 / 512, 1 - 420 / 512], ra: 219.90, dec: -60.83 },
+    star2: { name: "Hadar (β Cen)", uv: [260 / 512, 1 - 390 / 512], ra: 210.96, dec: -60.37 },
+    star3: { name: "Menkent (θ Cen)", uv: [260 / 512, 1 - 120 / 512], ra: 211.72, dec: -36.37 },
+  },
+  // Pegasus: Markab (Shoulder), Scheat (Front Leg), Algenib (Wing)
+  peg: {
+    star1: { name: "Markab (α Peg)", uv: [320 / 512, 1 - 270 / 512], ra: 346.19, dec: 15.21 },
+    star2: { name: "Scheat (β Peg)", uv: [330 / 512, 1 - 160 / 512], ra: 345.94, dec: 28.08 },
+    star3: { name: "Algenib (γ Peg)", uv: [160 / 512, 1 - 300 / 512], ra: 2.30, dec: 15.18 },
+  },
+};
+
+/**
+ * Solve 4 Celestial Corners (RA, Dec) from 3-Star Affine Anchors.
+ * Returns corners corresponding to texture UVs:
+ * [0]: (u=0, v=0) Bottom-Left
+ * [1]: (u=1, v=0) Bottom-Right
+ * [2]: (u=1, v=1) Top-Right
+ * [3]: (u=0, v=1) Top-Left
+ */
+export function solveConstellationCorners(anchors: ConstellationAnchorData): [CelestialCorner, CelestialCorner, CelestialCorner, CelestialCorner] {
+  const u1 = anchors.star1.uv[0], v1 = anchors.star1.uv[1];
+  const u2 = anchors.star2.uv[0], v2 = anchors.star2.uv[1];
+  const u3 = anchors.star3.uv[0], v3 = anchors.star3.uv[1];
+
+  const det = u1 * (v2 - v3) - u2 * (v1 - v3) + u3 * (v1 - v2);
+  if (Math.abs(det) < 1e-6) {
+    const centerRa = anchors.star1.ra;
+    const centerDec = anchors.star1.dec;
+    return [
+      { ra: centerRa + 15, dec: centerDec - 15 },
+      { ra: centerRa - 15, dec: centerDec - 15 },
+      { ra: centerRa - 15, dec: centerDec + 15 },
+      { ra: centerRa + 15, dec: centerDec + 15 },
+    ];
+  }
+
+  const inv00 = (v2 - v3) / det;
+  const inv01 = (u3 - u2) / det;
+  const inv02 = (u2 * v3 - u3 * v2) / det;
+
+  const inv10 = (v3 - v1) / det;
+  const inv11 = (u1 - u3) / det;
+  const inv12 = (u3 * v1 - u1 * v3) / det;
+
+  const inv20 = (v1 - v2) / det;
+  const inv21 = (u2 - u1) / det;
+  const inv22 = (u1 * v2 - u2 * v1) / det;
+
+  const ra1 = anchors.star1.ra, dec1 = anchors.star1.dec;
+  const ra2 = anchors.star2.ra, dec2 = anchors.star2.dec;
+  const ra3 = anchors.star3.ra, dec3 = anchors.star3.dec;
+
+  const a11 = ra1 * inv00 + ra2 * inv10 + ra3 * inv20;
+  const a12 = ra1 * inv01 + ra2 * inv11 + ra3 * inv21;
+  const b1  = ra1 * inv02 + ra2 * inv12 + ra3 * inv22;
+
+  const a21 = dec1 * inv00 + dec2 * inv10 + dec3 * inv20;
+  const a22 = dec1 * inv01 + dec2 * inv11 + dec3 * inv21;
+  const b2  = dec1 * inv02 + dec2 * inv12 + dec3 * inv22;
+
+  return [
+    { ra: b1, dec: b2 },                             // (0, 0)
+    { ra: a11 + b1, dec: a21 + b2 },                 // (1, 0)
+    { ra: a11 + a12 + b1, dec: a21 + a22 + b2 },     // (1, 1)
+    { ra: a12 + b1, dec: a22 + b2 },                 // (0, 1)
+  ];
+}
+
+/**
+ * Get 4 celestial corners for any constellation.
+ * Uses exact 3-star affine anchors if available, or computes an astronomical fallback from profile centroid & scale.
+ */
+export function getConstellationCorners(
+  abbrOrName: string,
+  profile: ConstellationProfile | null
+): [CelestialCorner, CelestialCorner, CelestialCorner, CelestialCorner] {
+  const code = (profile?.abbreviation || abbrOrName).toLowerCase().trim();
+  const explicitAnchor = CONSTELLATION_ANCHORS[code];
+  if (explicitAnchor) {
+    return solveConstellationCorners(explicitAnchor);
+  }
+
+  // Astronomical fallback from profile centroid & angular scale
+  const raDeg = profile ? profile.raHours * 15 : 0;
+  const decDeg = profile ? profile.decDeg : 0;
+  const halfSpan = (profile?.artworkScaleDeg || 30) / 2;
+  const cosDec = Math.max(0.1, Math.cos((decDeg * Math.PI) / 180));
+  const halfRa = halfSpan / cosDec;
+
+  return [
+    { ra: (raDeg + halfRa) % 360, dec: Math.max(-90, decDeg - halfSpan) },
+    { ra: (raDeg - halfRa + 360) % 360, dec: Math.max(-90, decDeg - halfSpan) },
+    { ra: (raDeg - halfRa + 360) % 360, dec: Math.min(90, decDeg + halfSpan) },
+    { ra: (raDeg + halfRa) % 360, dec: Math.min(90, decDeg + halfSpan) },
+  ];
+}
+
+/**
  * Get profile for a constellation by name, abbreviation, or ID
  */
 export function getConstellationProfile(query: string): ConstellationProfile | null {

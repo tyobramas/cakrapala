@@ -63,6 +63,7 @@ import {
 import {
   CONSTELLATION_PROFILES,
   getConstellationProfile,
+  getConstellationCorners,
   type ConstellationProfile,
 } from "@/lib/astronomy/constellationProfiles";
 
@@ -1912,57 +1913,40 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
             }
           }
 
-          // ── 3D Tangential Celestial Mythological Artwork Projection ──
+          // ── 3D 3-Star Affine Celestial Mythological Artwork Projection ──
           if (isThisSelected || toggles.showConstellationArt) {
             const prof = getConstellationProfile(con.abbreviation || con.name);
             const artFile = prof?.artworkFile || `${con.name.toLowerCase().replace(/\s+/g, "-")}.webp`;
 
             const artTex = getConstelTexture(artFile);
             if (artTex) {
-              let raDeg = prof ? prof.raHours * 15 : 0;
-              let decDeg = prof ? prof.decDeg : 0;
+              // Exact 4 Celestial Corner Coordinates from 3-Star Affine Anchors
+              const corners = getConstellationCorners(con.abbreviation || con.name, prof);
 
-              if (!prof) {
-                const rawAzAlt = pos3DtoAzAlt(con.centerPos3D);
-                if (rawAzAlt) {
-                  const sinDec = Math.sin(latRad) * Math.sin((rawAzAlt.alt * Math.PI) / 180) + Math.cos(latRad) * Math.cos((rawAzAlt.alt * Math.PI) / 180) * Math.cos((rawAzAlt.az * Math.PI) / 180);
-                  decDeg = Math.asin(Math.max(-1, Math.min(1, sinDec))) * (180 / Math.PI);
-                }
-              }
+              const pos0 = raDecToTopocentricVec3(corners[0].ra, corners[0].dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+              const pos1 = raDecToTopocentricVec3(corners[1].ra, corners[1].dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+              const pos2 = raDecToTopocentricVec3(corners[2].ra, corners[2].dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+              const pos3 = raDecToTopocentricVec3(corners[3].ra, corners[3].dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
 
-              // Exact topocentric centroid on the celestial sphere
-              const centerVec = raDecToTopocentricVec3(raDeg, decDeg, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
-              const northPt = raDecToTopocentricVec3(raDeg, decDeg + 2.0, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
-              const cosDec = Math.max(0.08, Math.cos((decDeg * Math.PI) / 180));
-              const eastPt = raDecToTopocentricVec3(raDeg + 2.0 / cosDec, decDeg, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+              const geom = new THREE.BufferGeometry();
+              const vertices = new Float32Array([
+                pos0.x, pos0.y, pos0.z, // 0: Bottom-Left (u=0, v=0)
+                pos1.x, pos1.y, pos1.z, // 1: Bottom-Right (u=1, v=0)
+                pos2.x, pos2.y, pos2.z, // 2: Top-Right (u=1, v=1)
+                pos3.x, pos3.y, pos3.z, // 3: Top-Left (u=0, v=1)
+              ]);
+              const uvs = new Float32Array([
+                0, 0,
+                1, 0,
+                1, 1,
+                0, 1,
+              ]);
+              const indices = [0, 1, 2, 0, 2, 3];
+              geom.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
+              geom.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
+              geom.setIndex(indices);
+              geom.computeVertexNormals();
 
-              // Inward normal (from sphere surface pointing to observer at origin)
-              const normal = centerVec.clone().negate().normalize();
-
-              // Up vector (towards Celestial North on sky)
-              let up = northPt.clone().sub(centerVec).normalize();
-              // Right vector on texture (+X): points Celestial WEST (-RA) for standard skyculture charts
-              let right = new THREE.Vector3().crossVectors(up, normal).normalize();
-              up = new THREE.Vector3().crossVectors(normal, right).normalize();
-
-              // Apply fine-tuned artwork rotation offset if specified
-              const rotDeg = prof?.artworkRotationDeg || 0;
-              if (rotDeg !== 0) {
-                const rotRad = (rotDeg * Math.PI) / 180;
-                const cosR = Math.cos(rotRad);
-                const sinR = Math.sin(rotRad);
-                const rNew = right.clone().multiplyScalar(cosR).add(up.clone().multiplyScalar(sinR)).normalize();
-                const uNew = right.clone().multiplyScalar(-sinR).add(up.clone().multiplyScalar(cosR)).normalize();
-                right.copy(rNew);
-                up.copy(uNew);
-              }
-
-              // Angular scale in sky dome
-              const scaleDeg = prof?.artworkScaleDeg || 38;
-              const scaleRad = (scaleDeg * Math.PI) / 180;
-              const quadSize = 2 * CONSTELLATION_ART_RADIUS * Math.tan(scaleRad / 2);
-
-              const geom = new THREE.PlaneGeometry(quadSize, quadSize);
               const opacity = isThisSelected ? (isDay ? 0.75 : 0.95) : (isDay ? 0.20 : 0.38);
               const mat = new THREE.MeshBasicMaterial({
                 map: artTex,
@@ -1975,11 +1959,6 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
               });
 
               const mesh = new THREE.Mesh(geom, mat);
-              const mat4 = new THREE.Matrix4();
-              mat4.makeBasis(right, up, normal);
-              mat4.setPosition(centerVec);
-              mesh.matrix.copy(mat4);
-              mesh.matrixAutoUpdate = false;
               constelArtGroup.add(mesh);
             }
           }
