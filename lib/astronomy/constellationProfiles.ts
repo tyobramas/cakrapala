@@ -685,105 +685,195 @@ export interface CelestialCorner {
 export const CONSTELLATION_ANCHORS: Record<string, ConstellationAnchorData> = {
   // Scorpius: Antares (Heart), Dschubba (Head/Claws), Shaula (Stinger)
   sco: {
-    star1: { name: "Antares (α Sco)", uv: [250 / 512, 1 - 220 / 512], ra: 247.35, dec: -26.43 },
-    star2: { name: "Dschubba (δ Sco)", uv: [330 / 512, 1 - 95 / 512], ra: 240.08, dec: -22.62 },
-    star3: { name: "Shaula (λ Sco)", uv: [60 / 512, 1 - 430 / 512], ra: 263.40, dec: -37.10 },
+    star1: { name: "Antares (α Sco)", uv: [270 / 512, 1 - 230 / 512], ra: 247.35, dec: -26.43 },
+    star2: { name: "Dschubba (δ Sco)", uv: [310 / 512, 1 - 135 / 512], ra: 240.08, dec: -22.62 },
+    star3: { name: "Shaula (λ Sco)", uv: [65 / 512, 1 - 410 / 512], ra: 263.40, dec: -37.10 },
   },
   // Orion: Betelgeuse (Left Shoulder), Rigel (Right Foot), Bellatrix (Right Shoulder)
   ori: {
     star1: { name: "Betelgeuse (α Ori)", uv: [175 / 512, 1 - 165 / 512], ra: 88.79, dec: 7.41 },
-    star2: { name: "Rigel (β Ori)", uv: [325 / 512, 1 - 400 / 512], ra: 78.63, dec: -8.20 },
+    star2: { name: "Rigel (β Ori)", uv: [450 / 512, 1 - 370 / 512], ra: 78.63, dec: -8.20 },
     star3: { name: "Bellatrix (γ Ori)", uv: [330 / 512, 1 - 170 / 512], ra: 81.28, dec: 6.35 },
   },
   // Taurus: Aldebaran (Eye of Bull), Elnath (Horn Tip), Alcyone (Pleiades on Back)
   tau: {
-    star1: { name: "Aldebaran (α Tau)", uv: [230 / 512, 1 - 260 / 512], ra: 68.98, dec: 16.51 },
-    star2: { name: "Elnath (β Tau)", uv: [130 / 512, 1 - 90 / 512], ra: 81.57, dec: 28.61 },
-    star3: { name: "Alcyone (η Tau)", uv: [390 / 512, 1 - 200 / 512], ra: 56.87, dec: 24.11 },
+    star1: { name: "Aldebaran (α Tau)", uv: [245 / 512, 1 - 255 / 512], ra: 68.98, dec: 16.51 },
+    star2: { name: "Elnath (β Tau)", uv: [60 / 512, 1 - 120 / 512], ra: 81.57, dec: 28.61 },
+    star3: { name: "Alcyone (η Tau)", uv: [430 / 512, 1 - 180 / 512], ra: 56.87, dec: 24.11 },
   },
-  // Virgo: Spica (Ear of Wheat), Porrima (Torso), Vindemiatrix (Right Arm/Wing)
+  // Virgo: Spica (Ear of Wheat in Left Hand), Porrima (Torso), Vindemiatrix (Right Shoulder/Wing)
   vir: {
-    star1: { name: "Spica (α Vir)", uv: [190 / 512, 1 - 340 / 512], ra: 201.30, dec: -11.16 },
-    star2: { name: "Porrima (γ Vir)", uv: [270 / 512, 1 - 250 / 512], ra: 190.43, dec: -1.45 },
-    star3: { name: "Vindemiatrix (ε Vir)", uv: [210 / 512, 1 - 130 / 512], ra: 195.55, dec: 10.96 },
+    star1: { name: "Spica (α Vir)", uv: [340 / 512, 1 - 380 / 512], ra: 201.30, dec: -11.16 },
+    star2: { name: "Porrima (γ Vir)", uv: [280 / 512, 1 - 250 / 512], ra: 190.43, dec: -1.45 },
+    star3: { name: "Vindemiatrix (ε Vir)", uv: [360 / 512, 1 - 180 / 512], ra: 195.55, dec: 10.96 },
   },
   // Leo: Regulus (Heart), Denebola (Tail), Algieba (Mane)
   leo: {
-    star1: { name: "Regulus (α Leo)", uv: [330 / 512, 1 - 320 / 512], ra: 152.09, dec: 11.97 },
-    star2: { name: "Denebola (β Leo)", uv: [110 / 512, 1 - 250 / 512], ra: 177.26, dec: 14.57 },
-    star3: { name: "Algieba (γ Leo)", uv: [320 / 512, 1 - 180 / 512], ra: 154.99, dec: 19.84 },
+    star1: { name: "Regulus (α Leo)", uv: [360 / 512, 1 - 230 / 512], ra: 152.09, dec: 11.97 },
+    star2: { name: "Denebola (β Leo)", uv: [40 / 512, 1 - 390 / 512], ra: 177.26, dec: 14.57 },
+    star3: { name: "Algieba (γ Leo)", uv: [310 / 512, 1 - 140 / 512], ra: 154.99, dec: 19.84 },
   },
   // Ursa Major: Dubhe (Bowl Top), Merak (Bowl Bottom), Alkaid (Tail Tip)
   uma: {
-    star1: { name: "Dubhe (α UMa)", uv: [300 / 512, 1 - 230 / 512], ra: 165.93, dec: 61.75 },
-    star2: { name: "Merak (β UMa)", uv: [300 / 512, 1 - 320 / 512], ra: 165.46, dec: 56.38 },
-    star3: { name: "Alkaid (η UMa)", uv: [80 / 512, 1 - 230 / 512], ra: 206.88, dec: 49.31 },
+    star1: { name: "Dubhe (α UMa)", uv: [370 / 512, 1 - 230 / 512], ra: 165.93, dec: 61.75 },
+    star2: { name: "Merak (β UMa)", uv: [325 / 512, 1 - 360 / 512], ra: 165.46, dec: 56.38 },
+    star3: { name: "Alkaid (η UMa)", uv: [40 / 512, 1 - 80 / 512], ra: 206.88, dec: 49.31 },
   },
-  // Cassiopeia: Schedar (Center of W), Caph (Right of W), Gamma Cas (Middle Peak)
-  cas: {
-    star1: { name: "Schedar (α Cas)", uv: [270 / 512, 1 - 260 / 512], ra: 10.13, dec: 56.54 },
-    star2: { name: "Caph (β Cas)", uv: [370 / 512, 1 - 240 / 512], ra: 2.29, dec: 59.15 },
-    star3: { name: "Gamma Cas (γ Cas)", uv: [240 / 512, 1 - 170 / 512], ra: 14.18, dec: 60.72 },
+  // Bootes: Arcturus (Base of Torso/Kite), Nekkar (Head), Izar (Side)
+  boo: {
+    star1: { name: "Arcturus (α Boo)", uv: [255 / 512, 1 - 320 / 512], ra: 213.91, dec: 19.18 },
+    star2: { name: "Nekkar (β Boo)", uv: [370 / 512, 1 - 90 / 512], ra: 225.49, dec: 40.39 },
+    star3: { name: "Izar (ε Boo)", uv: [270 / 512, 1 - 220 / 512], ra: 221.25, dec: 27.07 },
   },
-  // Cygnus: Deneb (Tail), Albireo (Beak), Sadr (Chest)
-  cyg: {
-    star1: { name: "Deneb (α Cyg)", uv: [240 / 512, 1 - 140 / 512], ra: 310.36, dec: 45.28 },
-    star2: { name: "Albireo (β Cyg)", uv: [270 / 512, 1 - 420 / 512], ra: 292.68, dec: 27.96 },
-    star3: { name: "Sadr (γ Cyg)", uv: [255 / 512, 1 - 240 / 512], ra: 305.56, dec: 40.26 },
+  // Corvus: Gienah (Top Wing), Algorab (Right Wing), Kraz (Claw/Tail)
+  crv: {
+    star1: { name: "Gienah (γ Crv)", uv: [190 / 512, 1 - 100 / 512], ra: 183.95, dec: -17.54 },
+    star2: { name: "Algorab (δ Crv)", uv: [370 / 512, 1 - 220 / 512], ra: 187.47, dec: -16.52 },
+    star3: { name: "Kraz (β Crv)", uv: [140 / 512, 1 - 310 / 512], ra: 193.30, dec: -23.40 },
   },
-  // Canis Major: Sirius (Mouth), Adhara (Hind Foot), Wezen (Body)
+  // Crater: Delta Crt (Left Rim), Gamma Crt (Right Rim), Alkes (Base)
+  crt: {
+    star1: { name: "Delta Crt (δ Crt)", uv: [110 / 512, 1 - 120 / 512], ra: 169.62, dec: -14.78 },
+    star2: { name: "Gamma Crt (γ Crt)", uv: [400 / 512, 1 - 160 / 512], ra: 173.79, dec: -17.68 },
+    star3: { name: "Alkes (α Crt)", uv: [256 / 512, 1 - 440 / 512], ra: 164.96, dec: -18.30 },
+  },
+  // Canis Major: Sirius (Mouth), Adhara (Hind Foot), Wezen (Hind Body)
   cma: {
-    star1: { name: "Sirius (α CMa)", uv: [300 / 512, 1 - 170 / 512], ra: 101.29, dec: -16.72 },
-    star2: { name: "Adhara (ε CMa)", uv: [230 / 512, 1 - 390 / 512], ra: 104.66, dec: -28.97 },
-    star3: { name: "Wezen (δ CMa)", uv: [190 / 512, 1 - 320 / 512], ra: 107.10, dec: -26.39 },
+    star1: { name: "Sirius (α CMa)", uv: [360 / 512, 1 - 90 / 512], ra: 101.29, dec: -16.72 },
+    star2: { name: "Adhara (ε CMa)", uv: [170 / 512, 1 - 440 / 512], ra: 104.66, dec: -28.97 },
+    star3: { name: "Wezen (δ CMa)", uv: [130 / 512, 1 - 330 / 512], ra: 107.10, dec: -26.39 },
   },
   // Gemini: Castor (Northern Twin Head), Pollux (Southern Twin Head), Alhena (Foot)
   gem: {
-    star1: { name: "Castor (α Gem)", uv: [320 / 512, 1 - 150 / 512], ra: 113.65, dec: 31.89 },
-    star2: { name: "Pollux (β Gem)", uv: [260 / 512, 1 - 170 / 512], ra: 116.33, dec: 28.03 },
-    star3: { name: "Alhena (γ Gem)", uv: [380 / 512, 1 - 400 / 512], ra: 99.43, dec: 16.40 },
+    star1: { name: "Castor (α Gem)", uv: [100 / 512, 1 - 110 / 512], ra: 113.65, dec: 31.89 },
+    star2: { name: "Pollux (β Gem)", uv: [260 / 512, 1 - 110 / 512], ra: 116.33, dec: 28.03 },
+    star3: { name: "Alhena (γ Gem)", uv: [220 / 512, 1 - 470 / 512], ra: 99.43, dec: 16.40 },
   },
   // Sagittarius: Kaus Australis (Bow Base), Nunki (Upper Chest), Alnasl (Arrow Tip)
   sgr: {
-    star1: { name: "Kaus Australis (ε Sgr)", uv: [310 / 512, 1 - 320 / 512], ra: 276.04, dec: -34.38 },
-    star2: { name: "Nunki (σ Sgr)", uv: [220 / 512, 1 - 210 / 512], ra: 283.82, dec: -26.30 },
-    star3: { name: "Alnasl (γ Sgr)", uv: [380 / 512, 1 - 280 / 512], ra: 271.43, dec: -30.42 },
+    star1: { name: "Kaus Australis (ε Sgr)", uv: [400 / 512, 1 - 310 / 512], ra: 276.04, dec: -34.38 },
+    star2: { name: "Nunki (σ Sgr)", uv: [190 / 512, 1 - 200 / 512], ra: 283.82, dec: -26.30 },
+    star3: { name: "Alnasl (γ Sgr)", uv: [480 / 512, 1 - 160 / 512], ra: 271.43, dec: -30.42 },
   },
-  // Bootes: Arcturus (Base of Kite), Nekkar (Head), Izar (Side)
-  boo: {
-    star1: { name: "Arcturus (α Boo)", uv: [260 / 512, 1 - 370 / 512], ra: 213.91, dec: 19.18 },
-    star2: { name: "Nekkar (β Boo)", uv: [240 / 512, 1 - 130 / 512], ra: 225.49, dec: 40.39 },
-    star3: { name: "Izar (ε Boo)", uv: [210 / 512, 1 - 280 / 512], ra: 221.25, dec: 27.07 },
+  // Cygnus: Deneb (Tail), Albireo (Beak), Sadr (Chest)
+  cyg: {
+    star1: { name: "Deneb (α Cyg)", uv: [255 / 512, 1 - 170 / 512], ra: 310.36, dec: 45.28 },
+    star2: { name: "Albireo (β Cyg)", uv: [480 / 512, 1 - 450 / 512], ra: 292.68, dec: 27.96 },
+    star3: { name: "Sadr (γ Cyg)", uv: [310 / 512, 1 - 280 / 512], ra: 305.56, dec: 40.26 },
   },
   // Aquila: Altair (Neck), Tarazed (Right Wing), Alshain (Left Wing)
   aql: {
-    star1: { name: "Altair (α Aql)", uv: [260 / 512, 1 - 240 / 512], ra: 297.70, dec: 8.87 },
-    star2: { name: "Tarazed (γ Aql)", uv: [320 / 512, 1 - 190 / 512], ra: 296.54, dec: 10.61 },
-    star3: { name: "Alshain (β Aql)", uv: [220 / 512, 1 - 280 / 512], ra: 298.83, dec: 6.41 },
+    star1: { name: "Altair (α Aql)", uv: [220 / 512, 1 - 240 / 512], ra: 297.70, dec: 8.87 },
+    star2: { name: "Tarazed (γ Aql)", uv: [350 / 512, 1 - 130 / 512], ra: 296.54, dec: 10.61 },
+    star3: { name: "Alshain (β Aql)", uv: [100 / 512, 1 - 350 / 512], ra: 298.83, dec: 6.41 },
   },
   // Lyra: Vega (Top of Harp), Sheliak (Base Left), Sulafat (Base Right)
   lyr: {
-    star1: { name: "Vega (α Lyr)", uv: [260 / 512, 1 - 160 / 512], ra: 279.23, dec: 38.78 },
-    star2: { name: "Sheliak (β Lyr)", uv: [220 / 512, 1 - 360 / 512], ra: 282.52, dec: 33.36 },
-    star3: { name: "Sulafat (γ Lyr)", uv: [280 / 512, 1 - 370 / 512], ra: 284.74, dec: 32.69 },
+    star1: { name: "Vega (α Lyr)", uv: [256 / 512, 1 - 70 / 512], ra: 279.23, dec: 38.78 },
+    star2: { name: "Sheliak (β Lyr)", uv: [210 / 512, 1 - 410 / 512], ra: 282.52, dec: 33.36 },
+    star3: { name: "Sulafat (γ Lyr)", uv: [300 / 512, 1 - 410 / 512], ra: 284.74, dec: 32.69 },
   },
-  // Crux: Acrux (Cross Base), Gacrux (Cross Top), Mimosa (Cross Left)
-  cru: {
-    star1: { name: "Acrux (α Cru)", uv: [255 / 512, 1 - 390 / 512], ra: 186.65, dec: -63.10 },
-    star2: { name: "Gacrux (γ Cru)", uv: [255 / 512, 1 - 150 / 512], ra: 187.79, dec: -57.11 },
-    star3: { name: "Mimosa (β Cru)", uv: [170 / 512, 1 - 270 / 512], ra: 191.93, dec: -59.69 },
-  },
-  // Centaurus: Rigil Kentaurus (Front Hoof), Hadar (Front Leg), Menkent (Head)
-  cen: {
-    star1: { name: "Rigil Kentaurus (α Cen)", uv: [180 / 512, 1 - 420 / 512], ra: 219.90, dec: -60.83 },
-    star2: { name: "Hadar (β Cen)", uv: [260 / 512, 1 - 390 / 512], ra: 210.96, dec: -60.37 },
-    star3: { name: "Menkent (θ Cen)", uv: [260 / 512, 1 - 120 / 512], ra: 211.72, dec: -36.37 },
+  // Cassiopeia: Schedar (Center of W), Caph (Right of W), Gamma Cas (Middle Peak)
+  cas: {
+    star1: { name: "Schedar (α Cas)", uv: [160 / 512, 1 - 180 / 512], ra: 10.13, dec: 56.54 },
+    star2: { name: "Caph (β Cas)", uv: [190 / 512, 1 - 50 / 512], ra: 2.29, dec: 59.15 },
+    star3: { name: "Gamma Cas (γ Cas)", uv: [240 / 512, 1 - 240 / 512], ra: 14.18, dec: 60.72 },
   },
   // Pegasus: Markab (Shoulder), Scheat (Front Leg), Algenib (Wing)
   peg: {
-    star1: { name: "Markab (α Peg)", uv: [320 / 512, 1 - 270 / 512], ra: 346.19, dec: 15.21 },
-    star2: { name: "Scheat (β Peg)", uv: [330 / 512, 1 - 160 / 512], ra: 345.94, dec: 28.08 },
-    star3: { name: "Algenib (γ Peg)", uv: [160 / 512, 1 - 300 / 512], ra: 2.30, dec: 15.18 },
+    star1: { name: "Markab (α Peg)", uv: [310 / 512, 1 - 290 / 512], ra: 346.19, dec: 15.21 },
+    star2: { name: "Scheat (β Peg)", uv: [60 / 512, 1 - 270 / 512], ra: 345.94, dec: 28.08 },
+    star3: { name: "Algenib (γ Peg)", uv: [470 / 512, 1 - 370 / 512], ra: 2.30, dec: 15.18 },
+  },
+  // Crux: Acrux (Cross Base), Gacrux (Cross Top), Mimosa (Cross Left)
+  cru: {
+    star1: { name: "Acrux (α Cru)", uv: [60 / 512, 1 - 430 / 512], ra: 186.65, dec: -63.10 },
+    star2: { name: "Gacrux (γ Cru)", uv: [420 / 512, 1 - 90 / 512], ra: 187.79, dec: -57.11 },
+    star3: { name: "Mimosa (β Cru)", uv: [160 / 512, 1 - 90 / 512], ra: 191.93, dec: -59.69 },
+  },
+  // Centaurus: Rigil Kentaurus (Front Hoof), Hadar (Front Leg), Menkent (Head)
+  cen: {
+    star1: { name: "Rigil Kentaurus (α Cen)", uv: [240 / 512, 1 - 470 / 512], ra: 219.90, dec: -60.83 },
+    star2: { name: "Hadar (β Cen)", uv: [360 / 512, 1 - 420 / 512], ra: 210.96, dec: -60.37 },
+    star3: { name: "Menkent (θ Cen)", uv: [150 / 512, 1 - 140 / 512], ra: 211.72, dec: -36.37 },
+  },
+  // Libra: Zubeneschamali (North Scale), Zubenelgenubi (South Scale), Zubenelakrab (Beam)
+  lib: {
+    star1: { name: "Zubeneschamali (β Lib)", uv: [80 / 512, 1 - 290 / 512], ra: 229.25, dec: -9.38 },
+    star2: { name: "Zubenelgenubi (α Lib)", uv: [420 / 512, 1 - 370 / 512], ra: 222.72, dec: -16.04 },
+    star3: { name: "Zubenelakrab (γ Lib)", uv: [290 / 512, 1 - 120 / 512], ra: 233.87, dec: -14.79 },
+  },
+  // Cancer: Acubens (Left Claw), Altarf (Right Leg), Asellus Australis (Shell)
+  cnc: {
+    star1: { name: "Acubens (α Cnc)", uv: [110 / 512, 1 - 330 / 512], ra: 134.61, dec: 11.86 },
+    star2: { name: "Altarf (β Cnc)", uv: [240 / 512, 1 - 440 / 512], ra: 124.13, dec: 9.19 },
+    star3: { name: "Asellus Australis (δ Cnc)", uv: [250 / 512, 1 - 260 / 512], ra: 131.17, dec: 18.15 },
+  },
+  // Aries: Hamal (Head), Sheratan (Horns), Mesarthim (Back)
+  ari: {
+    star1: { name: "Hamal (α Ari)", uv: [390 / 512, 1 - 130 / 512], ra: 31.79, dec: 23.46 },
+    star2: { name: "Sheratan (β Ari)", uv: [460 / 512, 1 - 90 / 512], ra: 28.66, dec: 20.81 },
+    star3: { name: "Mesarthim (γ Ari)", uv: [200 / 512, 1 - 200 / 512], ra: 28.02, dec: 19.29 },
+  },
+  // Pisces: Alrescha (Knot), Fumalsamakah (Western Fish), Gamma Psc (Northern Fish)
+  psc: {
+    star1: { name: "Alrescha (α Psc)", uv: [110 / 512, 1 - 470 / 512], ra: 30.51, dec: 2.76 },
+    star2: { name: "Fumalsamakah (β Psc)", uv: [50 / 512, 1 - 150 / 512], ra: 345.97, dec: 3.82 },
+    star3: { name: "Gamma Psc (γ Psc)", uv: [450 / 512, 1 - 200 / 512], ra: 349.25, dec: 3.28 },
+  },
+  // Capricornus: Algedi (Horns), Dabih (Head), Deneb Algedi (Fish Tail)
+  cap: {
+    star1: { name: "Algedi (α Cap)", uv: [420 / 512, 1 - 70 / 512], ra: 304.49, dec: -12.54 },
+    star2: { name: "Dabih (β Cap)", uv: [480 / 512, 1 - 150 / 512], ra: 305.25, dec: -14.78 },
+    star3: { name: "Deneb Algedi (δ Cap)", uv: [70 / 512, 1 - 350 / 512], ra: 326.76, dec: -16.13 },
+  },
+  // Aquarius: Sadalmelik (Right Shoulder), Sadalsuud (Left Shoulder), Skat (Water Stream)
+  aqr: {
+    star1: { name: "Sadalmelik (α Aqr)", uv: [240 / 512, 1 - 140 / 512], ra: 331.45, dec: -0.32 },
+    star2: { name: "Sadalsuud (β Aqr)", uv: [420 / 512, 1 - 100 / 512], ra: 322.89, dec: -5.57 },
+    star3: { name: "Skat (δ Aqr)", uv: [110 / 512, 1 - 460 / 512], ra: 343.66, dec: -15.82 },
+  },
+  // Andromeda: Alpheratz (Crown/Head), Mirach (Waist), Almach (Left Foot)
+  and: {
+    star1: { name: "Alpheratz (α And)", uv: [300 / 512, 1 - 80 / 512], ra: 2.10, dec: 29.09 },
+    star2: { name: "Mirach (β And)", uv: [250 / 512, 1 - 280 / 512], ra: 17.43, dec: 35.62 },
+    star3: { name: "Almach (γ And)", uv: [270 / 512, 1 - 460 / 512], ra: 30.97, dec: 42.33 },
+  },
+  // Perseus: Mirfak (Chest), Algol (Medusa Head), Atik (Foot)
+  per: {
+    star1: { name: "Mirfak (α Per)", uv: [330 / 512, 1 - 160 / 512], ra: 51.08, dec: 49.86 },
+    star2: { name: "Algol (β Per)", uv: [330 / 512, 1 - 330 / 512], ra: 47.04, dec: 40.96 },
+    star3: { name: "Atik (ζ Per)", uv: [160 / 512, 1 - 460 / 512], ra: 58.52, dec: 31.88 },
+  },
+  // Auriga: Capella (Goat on Shoulder), Menkalinan (Right Shoulder), Hassaleh (Foot)
+  aur: {
+    star1: { name: "Capella (α Aur)", uv: [440 / 512, 1 - 180 / 512], ra: 79.17, dec: 46.00 },
+    star2: { name: "Menkalinan (β Aur)", uv: [250 / 512, 1 - 120 / 512], ra: 89.84, dec: 44.95 },
+    star3: { name: "Hassaleh (ι Aur)", uv: [360 / 512, 1 - 470 / 512], ra: 74.11, dec: 33.17 },
+  },
+  // Hercules: Kornephoros (Hero Shoulder), Rasalgethi (Head), Sarin (Waist)
+  her: {
+    star1: { name: "Kornephoros (β Her)", uv: [180 / 512, 1 - 180 / 512], ra: 247.61, dec: 21.49 },
+    star2: { name: "Rasalgethi (α Her)", uv: [200 / 512, 1 - 110 / 512], ra: 258.66, dec: 14.39 },
+    star3: { name: "Sarin (δ Her)", uv: [260 / 512, 1 - 290 / 512], ra: 258.77, dec: 24.84 },
+  },
+  // Ophiuchus: Rasalhague (Head), Sabik (Leg), Cebalrai (Shoulder)
+  oph: {
+    star1: { name: "Rasalhague (α Oph)", uv: [230 / 512, 1 - 90 / 512], ra: 263.73, dec: 12.56 },
+    star2: { name: "Sabik (η Oph)", uv: [240 / 512, 1 - 470 / 512], ra: 257.59, dec: -15.72 },
+    star3: { name: "Cebalrai (β Oph)", uv: [310 / 512, 1 - 180 / 512], ra: 265.87, dec: 4.57 },
+  },
+  // Draco: Eltanin (Dragon Head Top), Rastaban (Dragon Eye), Thuban (Dragon Body Tail)
+  dra: {
+    star1: { name: "Eltanin (γ Dra)", uv: [420 / 512, 1 - 190 / 512], ra: 269.15, dec: 51.49 },
+    star2: { name: "Rastaban (β Dra)", uv: [410 / 512, 1 - 140 / 512], ra: 262.61, dec: 52.30 },
+    star3: { name: "Thuban (α Dra)", uv: [50 / 512, 1 - 390 / 512], ra: 211.14, dec: 64.38 },
+  },
+  // Ursa Minor: Polaris (Little Bear Tail Tip), Kochab (Bowl Shoulder), Pherkad (Bowl Foot)
+  umi: {
+    star1: { name: "Polaris (α UMi)", uv: [40 / 512, 1 - 80 / 512], ra: 37.95, dec: 89.26 },
+    star2: { name: "Kochab (β UMi)", uv: [370 / 512, 1 - 230 / 512], ra: 222.68, dec: 74.16 },
+    star3: { name: "Pherkad (γ UMi)", uv: [325 / 512, 1 - 360 / 512], ra: 230.18, dec: 71.83 },
   },
 };
 
@@ -824,9 +914,13 @@ export function solveConstellationCorners(anchors: ConstellationAnchorData): [Ce
   const inv21 = (u2 - u1) / det;
   const inv22 = (u1 * v2 - u2 * v1) / det;
 
-  const ra1 = anchors.star1.ra, dec1 = anchors.star1.dec;
-  const ra2 = anchors.star2.ra, dec2 = anchors.star2.dec;
-  const ra3 = anchors.star3.ra, dec3 = anchors.star3.dec;
+  // Normalize RA values relative to star1 to handle 0°/360° wrap-around
+  // (e.g. Pegasus: Markab RA=346° vs Algenib RA=2° → delta should be +16°, not -344°)
+  const raRef = anchors.star1.ra;
+  const wrapRA = (ra: number) => { let d = ra - raRef; if (d > 180) d -= 360; if (d < -180) d += 360; return raRef + d; };
+  const ra1 = raRef, dec1 = anchors.star1.dec;
+  const ra2 = wrapRA(anchors.star2.ra), dec2 = anchors.star2.dec;
+  const ra3 = wrapRA(anchors.star3.ra), dec3 = anchors.star3.dec;
 
   const a11 = ra1 * inv00 + ra2 * inv10 + ra3 * inv20;
   const a12 = ra1 * inv01 + ra2 * inv11 + ra3 * inv21;
@@ -836,11 +930,14 @@ export function solveConstellationCorners(anchors: ConstellationAnchorData): [Ce
   const a22 = dec1 * inv01 + dec2 * inv11 + dec3 * inv21;
   const b2  = dec1 * inv02 + dec2 * inv12 + dec3 * inv22;
 
+  // Denormalize output corners back to 0°–360° range
+  const normRA = (ra: number) => ((ra % 360) + 360) % 360;
+
   return [
-    { ra: b1, dec: b2 },                             // (0, 0)
-    { ra: a11 + b1, dec: a21 + b2 },                 // (1, 0)
-    { ra: a11 + a12 + b1, dec: a21 + a22 + b2 },     // (1, 1)
-    { ra: a12 + b1, dec: a22 + b2 },                 // (0, 1)
+    { ra: normRA(b1), dec: b2 },                                     // (0, 0)
+    { ra: normRA(a11 + b1), dec: a21 + b2 },                         // (1, 0)
+    { ra: normRA(a11 + a12 + b1), dec: a21 + a22 + b2 },             // (1, 1)
+    { ra: normRA(a12 + b1), dec: a22 + b2 },                         // (0, 1)
   ];
 }
 

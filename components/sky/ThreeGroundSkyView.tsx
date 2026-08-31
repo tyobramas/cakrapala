@@ -724,13 +724,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
 
     for (const c of constellations) {
       const prof = getConstellationProfile(c.abbreviation || c.name);
-      let center: { az: number; alt: number } | null = null;
-      if (prof) {
-        const cVec = raDecToTopocentricVec3(prof.raHours * 15, prof.decDeg, lstDeg, latRad, DOME_RADIUS);
-        center = pos3DtoAzAlt(cVec);
-      } else {
-        center = pos3DtoAzAlt(c.centerPos3D);
-      }
+      const center = pos3DtoAzAlt(c.centerPos3D);
 
       if (center) {
         items.push({
@@ -1914,6 +1908,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           }
 
           // ── 3D 3-Star Affine Celestial Mythological Artwork Projection ──
+          // Uses tessellated sphere-conformal mesh for accurate curvature alignment
           if (isThisSelected || toggles.showConstellationArt) {
             const prof = getConstellationProfile(con.abbreviation || con.name);
             const artFile = prof?.artworkFile || `${con.name.toLowerCase().replace(/\s+/g, "-")}.webp`;
@@ -1923,28 +1918,66 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
               // Exact 4 Celestial Corner Coordinates from 3-Star Affine Anchors
               const corners = getConstellationCorners(con.abbreviation || con.name, prof);
 
-              const pos0 = raDecToTopocentricVec3(corners[0].ra, corners[0].dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
-              const pos1 = raDecToTopocentricVec3(corners[1].ra, corners[1].dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
-              const pos2 = raDecToTopocentricVec3(corners[2].ra, corners[2].dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
-              const pos3 = raDecToTopocentricVec3(corners[3].ra, corners[3].dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+              // Tessellate into NxN subdivided grid projected onto dome sphere surface
+              // Each sub-vertex is independently projected via RA/Dec → topocentric 3D
+              const N = 8; // 8×8 subdivisions (81 vertices, 128 triangles)
+              const vertCount = (N + 1) * (N + 1);
+              const positions = new Float32Array(vertCount * 3);
+              const uvArr = new Float32Array(vertCount * 2);
+              const idxArr: number[] = [];
+
+              // Pre-compute RA deltas to handle 0°/360° wrap-around during bilinear interpolation
+              // corners: [0]=BL(u=0,v=0), [1]=BR(u=1,v=0), [2]=TR(u=1,v=1), [3]=TL(u=0,v=1)
+              const raRef = corners[0].ra;
+              const wrapRA = (ra: number) => {
+                let d = ra - raRef;
+                if (d > 180) d -= 360;
+                if (d < -180) d += 360;
+                return raRef + d;
+              };
+              const cRA = [raRef, wrapRA(corners[1].ra), wrapRA(corners[2].ra), wrapRA(corners[3].ra)];
+              const cDec = [corners[0].dec, corners[1].dec, corners[2].dec, corners[3].dec];
+
+              for (let j = 0; j <= N; j++) {
+                const v = j / N;
+                for (let i = 0; i <= N; i++) {
+                  const u = i / N;
+                  const idx = j * (N + 1) + i;
+
+                  // Bilinear interpolation of RA/Dec across the quad
+                  const ra = ((1 - u) * (1 - v) * cRA[0] + u * (1 - v) * cRA[1] +
+                              u * v * cRA[2] + (1 - u) * v * cRA[3]);
+                  const dec = ((1 - u) * (1 - v) * cDec[0] + u * (1 - v) * cDec[1] +
+                               u * v * cDec[2] + (1 - u) * v * cDec[3]);
+
+                  // Normalize RA back to 0°–360°
+                  const raNorm = ((ra % 360) + 360) % 360;
+
+                  // Project each sub-vertex independently onto the dome sphere
+                  const p = raDecToTopocentricVec3(raNorm, dec, lstDeg, latRad, CONSTELLATION_ART_RADIUS);
+                  positions[idx * 3] = p.x;
+                  positions[idx * 3 + 1] = p.y;
+                  positions[idx * 3 + 2] = p.z;
+                  uvArr[idx * 2] = u;
+                  uvArr[idx * 2 + 1] = v;
+                }
+              }
+
+              // Build triangle indices for the NxN grid
+              for (let j = 0; j < N; j++) {
+                for (let i = 0; i < N; i++) {
+                  const a = j * (N + 1) + i;
+                  const b = a + 1;
+                  const c = a + (N + 1);
+                  const d = c + 1;
+                  idxArr.push(a, b, d, a, d, c);
+                }
+              }
 
               const geom = new THREE.BufferGeometry();
-              const vertices = new Float32Array([
-                pos0.x, pos0.y, pos0.z, // 0: Bottom-Left (u=0, v=0)
-                pos1.x, pos1.y, pos1.z, // 1: Bottom-Right (u=1, v=0)
-                pos2.x, pos2.y, pos2.z, // 2: Top-Right (u=1, v=1)
-                pos3.x, pos3.y, pos3.z, // 3: Top-Left (u=0, v=1)
-              ]);
-              const uvs = new Float32Array([
-                0, 0,
-                1, 0,
-                1, 1,
-                0, 1,
-              ]);
-              const indices = [0, 1, 2, 0, 2, 3];
-              geom.setAttribute("position", new THREE.BufferAttribute(vertices, 3));
-              geom.setAttribute("uv", new THREE.BufferAttribute(uvs, 2));
-              geom.setIndex(indices);
+              geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+              geom.setAttribute("uv", new THREE.BufferAttribute(uvArr, 2));
+              geom.setIndex(idxArr);
               geom.computeVertexNormals();
 
               const opacity = isThisSelected ? (isDay ? 0.75 : 0.95) : (isDay ? 0.20 : 0.38);
@@ -2193,14 +2226,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
           }
 
           for (const con of cstl) {
-            const prof = getConstellationProfile(con.abbreviation || con.name);
-            let center: { az: number; alt: number } | null = null;
-            if (prof) {
-              const cVec = raDecToTopocentricVec3(prof.raHours * 15, prof.decDeg, lstDeg, latRad, CONSTELLATION_LAYER_RADIUS);
-              center = pos3DtoAzAlt(cVec);
-            } else {
-              center = pos3DtoAzAlt(con.centerPos3D);
-            }
+            const center = pos3DtoAzAlt(con.centerPos3D);
             if (!center) continue;
             const p = project(center.az, center.alt, CONSTELLATION_LAYER_RADIUS);
             if (p) {
@@ -2605,14 +2631,7 @@ export default function ThreeGroundSkyView({ location, onBackToMap }: Props) {
       const latRad = (location.latitude * Math.PI) / 180;
 
       for (const con of cstl) {
-        const prof = getConstellationProfile(con.abbreviation || con.name);
-        let center: { az: number; alt: number } | null = null;
-        if (prof) {
-          const cVec = raDecToTopocentricVec3(prof.raHours * 15, prof.decDeg, lstDeg, latRad, CONSTELLATION_LAYER_RADIUS);
-          center = pos3DtoAzAlt(cVec);
-        } else {
-          center = pos3DtoAzAlt(con.centerPos3D);
-        }
+        const center = pos3DtoAzAlt(con.centerPos3D);
         if (!center) continue;
 
         let hit = false;
