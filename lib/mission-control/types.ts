@@ -180,6 +180,8 @@ export interface MissionCandidate {
   periluneAltitudeKm?: number;
   arrivalVInfinityMps?: number;
   assumptions: string[];
+  /** Moon ECI position (km) at the exact time of perilune — from lunar ephemeris. */
+  moonPositionAtPeriluneKm?: Vec3;
 }
 
 // ── Analysis Result ───────────────────────────────────────────────────────────

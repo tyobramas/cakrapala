@@ -40,6 +40,7 @@ import { getMoonPositionEciM, getMoonVelocityEciMps } from "./ephemeris";
 /** Lunar sphere of influence used for phase labelling (m). */
 export const MOON_SOI_RADIUS_M = 66_100_000;
 
+
 /** Ephemeris cache spacing (s). Hermite error at this spacing is < 1 mm. */
 const EPHEMERIS_SAMPLE_S = 1_800;
 
@@ -62,7 +63,8 @@ const REFINE_SUBSTEPS = 64;
  * and derivative are exact at the nodes, the interpolant is C1 continuous —
  * important, since a kinked perturbing acceleration would corrupt RK4.
  */
-class MoonEphemerisCache {
+export class MoonEphemerisCache {
+
     private readonly baseMs: number;
     private readonly stepMs: number;
     private readonly pos: Vec3[] = [];
@@ -105,6 +107,33 @@ class MoonEphemerisCache {
             z: h00 * p0.z + h10 * h * v0.z + h01 * p1.z + h11 * h * v1.z,
         };
     }
+
+    velocityAt(tMs: number): Vec3 {
+        const x = (tMs - this.baseMs) / this.stepMs;
+        let i = Math.floor(x);
+        if (i < 0) i = 0;
+        if (i > this.pos.length - 2) i = this.pos.length - 2;
+
+        const s = x - i;
+        const h = this.stepMs / 1000;
+        const s2 = s * s;
+        const d00 = 6 * s2 - 6 * s;
+        const d10 = 3 * s2 - 4 * s + 1;
+        const d01 = -6 * s2 + 6 * s;
+        const d11 = 3 * s2 - 2 * s;
+
+        const p0 = this.pos[i];
+        const p1 = this.pos[i + 1];
+        const v0 = this.vel[i];
+        const v1 = this.vel[i + 1];
+
+        return {
+            x: (d00 * p0.x + d01 * p1.x) / h + d10 * v0.x + d11 * v1.x,
+            y: (d00 * p0.y + d01 * p1.y) / h + d10 * v0.y + d11 * v1.y,
+            z: (d00 * p0.z + d01 * p1.z) / h + d10 * v0.z + d11 * v1.z,
+        };
+    }
+
 }
 
 // ── Dynamics ──────────────────────────────────────────────────────────────────
@@ -178,6 +207,10 @@ export interface LunarPropagationOptions {
     collectPoints?: boolean;
     /** Altitude at which the return leg is declared to have reached entry (m). */
     reentryAltitudeM?: number;
+
+    /** Reuse a prebuilt ephemeris cache across many propagations. */
+    ephemeris?: MoonEphemerisCache;
+
 }
 
 export interface LunarPropagationResult {
@@ -210,7 +243,8 @@ export function propagateLunarTrajectory(
     const reentryAltM = options.reentryAltitudeM ?? 120_000;
 
     const t0Ms = new Date(departureUtc).getTime();
-    const eph = new MoonEphemerisCache(t0Ms, maxDurationS);
+    const eph = options.ephemeris ?? new MoonEphemerisCache(t0Ms, maxDurationS);
+
 
     const points: TrajectoryPoint[] = [];
     const events: MissionEvent[] = [];
@@ -276,8 +310,9 @@ export function propagateLunarTrajectory(
 
     let prevRelRate = dot(
         sub(st.pos, eph.positionAt(t0Ms)),
-        sub(st.vel, getMoonVelocityEciMps(new Date(t0Ms)))
+        sub(st.vel, eph.velocityAt(t0Ms))
     );
+
     let prevRadialRate = dot(st.pos, st.vel);
 
     while (tS < maxDurationS) {
@@ -305,7 +340,8 @@ export function propagateLunarTrajectory(
         if (newRM > maxRM) maxRM = newRM;
 
         // Closest lunar approach: d/dt |r - r_M| changes sign from - to +.
-        const moonVel = getMoonVelocityEciMps(new Date(t0Ms + tS * 1000));
+        const moonVel = eph.velocityAt(t0Ms + tS * 1000);
+
         const relRate = dot(newRel, sub(st.vel, moonVel));
         if (!perilunePassed && prevRelRate < 0 && relRate >= 0) {
             const refined = refineClosestApproach(prev, prevTS, dtS, t0Ms, eph, true);
@@ -465,33 +501,77 @@ export function correctFreeReturn(
     const velAt = (a: number, b: number): Vec3 =>
         add(lambertVelMps, add(scale(u1, a), scale(u2, b)));
 
+    const sharedEph = new MoonEphemerisCache(
+        new Date(departureUtc).getTime(),
+        maxDurationS
+    );
+
     const run = (a: number, b: number, collectPoints: boolean) =>
         propagateLunarTrajectory(departurePosM, velAt(a, b), departureUtc, {
             maxDurationS,
             collectPoints,
             targetSamples: 600,
+            ephemeris: sharedEph,
         });
 
-    // Stage 1 — clear the Moon.
+    // Stage 1 — 2D grid search over (a, b) to find a true free-return flyby seed.
     let bestA = 0;
-    let bestErr = Infinity;
-    for (let i = -12; i <= 12; i++) {
-        const a = i * 12; // m/s
-        if (Math.abs(a) > CORRECTOR_MAX_TOTAL_MPS) continue;
-        const p = run(a, 0, false);
-        const altM = p.impactedMoon
-            ? -Infinity
-            : p.periluneAltitudeKm * 1000;
-        const err = Math.abs(altM - targetPeriluneAltitudeM);
-        if (Number.isFinite(err) && err < bestErr) {
-            bestErr = err;
-            bestA = a;
+    let bestB = 0;
+    let bestScore = Infinity;
+
+    // a = out-of-plane (controls inclination / perilune latitude)
+    // b = in-plane perpendicular (controls lead/lag aim point relative to lunar motion)
+    const aSteps = [-200, -150, -100, -60, -30, 0, 30, 60, 100, 150, 200];
+    const bSteps = [-300, -220, -150, -90, -40, 0, 40, 90, 150, 220, 300];
+
+    for (const bVal of bSteps) {
+        for (const aVal of aSteps) {
+            const p = run(aVal, bVal, false);
+            if (p.impactedMoon) continue;
+
+            const periluneErr = Math.abs(p.periluneAltitudeKm * 1000 - targetPeriluneAltitudeM);
+            const returnErr = p.returnFound
+                ? Math.abs(p.returnPerigeeAltitudeKm * 1000 - targetReentryAltitudeM)
+                : 2e8; // penalize unbound/non-returning trajectories
+
+            // Score prioritizes returning trajectories, then perilune accuracy
+            const score = returnErr * 0.1 + periluneErr;
+            if (score < bestScore) {
+                bestScore = score;
+                bestA = aVal;
+                bestB = bVal;
+            }
         }
     }
 
-    // Stage 2 — Newton on (perilune, return perigee).
-    let a = bestA;
-    let b = 0;
+    // Refine around the best coarse grid point with fine steps
+    let refinedA = bestA;
+    let refinedB = bestB;
+    for (let db = -40; db <= 40; db += 10) {
+        for (let da = -30; da <= 30; da += 10) {
+            const aVal = bestA + da;
+            const bVal = bestB + db;
+            if (Math.hypot(aVal, bVal) > CORRECTOR_MAX_TOTAL_MPS) continue;
+            const p = run(aVal, bVal, false);
+            if (p.impactedMoon) continue;
+
+            const periluneErr = Math.abs(p.periluneAltitudeKm * 1000 - targetPeriluneAltitudeM);
+            const returnErr = p.returnFound
+                ? Math.abs(p.returnPerigeeAltitudeKm * 1000 - targetReentryAltitudeM)
+                : 2e8;
+
+            const score = returnErr * 0.1 + periluneErr;
+            if (score < bestScore) {
+                bestScore = score;
+                refinedA = aVal;
+                refinedB = bVal;
+            }
+        }
+    }
+
+    // Stage 2 — Newton-Raphson on (perilune, return perigee).
+    let a = refinedA;
+    let b = refinedB;
     let converged = false;
     let iterations = 0;
     let current = run(a, b, false);
@@ -529,7 +609,7 @@ export function correctFreeReturn(
 
         // Damping keeps the step inside the region where the Jacobian is valid.
         const stepMag = Math.hypot(da, db);
-        const maxStep = 40;
+        const maxStep = 25;
         if (stepMag > maxStep) {
             da *= maxStep / stepMag;
             db *= maxStep / stepMag;

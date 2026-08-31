@@ -209,11 +209,13 @@ export interface DefaultLunarScenario {
   departureDateUtc: string;
 }
 
-/** Generate a future ISO date string (+30 days from now) */
+/** Generate a future ISO date string (+N days from now), midnight UTC. */
 export function getFutureDemonstrationDate(daysAhead: number = 30): string {
   const d = new Date();
-  d.setDate(d.getDate() + daysAhead);
-  d.setMinutes(0, 0, 0);
+  // Use UTC methods so the result is always a clean UTC midnight/hour regardless
+  // of the browser's local timezone (fixes the WIB +7 offset issue).
+  d.setUTCDate(d.getUTCDate() + daysAhead);
+  d.setUTCHours(3, 0, 0, 0); // 03:00 UTC — a typical early-morning TLI window
   return d.toISOString().slice(0, 19) + "Z";
 }
 

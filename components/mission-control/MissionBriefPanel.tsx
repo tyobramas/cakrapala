@@ -6,6 +6,27 @@
  */
 
 import React from "react";
+
+/**
+ * Convert an ISO UTC string to the format required by datetime-local input ("YYYY-MM-DDTHH:mm").
+ * We treat the UTC time directly so the displayed value always matches UTC, not local time.
+ */
+function utcIsoToDatetimeLocal(isoUtc: string): string {
+  if (!isoUtc) return "";
+  // ISO string is already UTC — just strip seconds/ms and the trailing "Z"
+  // e.g. "2026-09-30T20:00:00.000Z" → "2026-09-30T20:00"
+  return isoUtc.replace(/(\.\d+)?Z$/, "").slice(0, 16);
+}
+
+/**
+ * Parse a datetime-local value ("YYYY-MM-DDTHH:mm") as a UTC time and return ISO string.
+ * The datetime-local input has no timezone info, so we explicitly append "Z" so that
+ * JavaScript Date treats it as UTC rather than local time.
+ */
+function datetimeLocalToUtcIso(localValue: string): string {
+  if (!localValue) return "";
+  return new Date(localValue + ":00Z").toISOString();
+}
 import type {
   MissionType,
   OptimizationObjective,
@@ -251,10 +272,10 @@ export default function MissionBriefPanel(props: MissionBriefPanelProps) {
             <input
               type="datetime-local"
               className={inputClass}
-              value={launchDateUtc ? launchDateUtc.slice(0, 16) : ""}
+              value={utcIsoToDatetimeLocal(launchDateUtc)}
               onChange={(e) => {
                 if (e.target.value) {
-                  onLaunchDateChange(new Date(e.target.value).toISOString());
+                  onLaunchDateChange(datetimeLocalToUtcIso(e.target.value));
                 }
               }}
             />

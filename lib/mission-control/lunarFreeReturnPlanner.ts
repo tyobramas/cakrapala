@@ -19,15 +19,14 @@ import type {
   LunarFreeReturnInput,
   MissionAnalysisResult,
   MissionCandidate,
-  TrajectoryPoint,
   MissionEvent,
+  TrajectoryPoint,
   Vec3,
   FeasibilityStatus,
 } from "./types";
 import {
   EARTH_MU_M3_S2,
   EARTH_RADIUS_M,
-  MOON_RADIUS_M,
   MODEL_VERSION,
   MIDCOURSE_CORRECTION_ESTIMATE_MPS,
   RETURN_CORRECTION_ESTIMATE_MPS,
@@ -43,14 +42,13 @@ import {
   degToRad,
 } from "./units";
 import {
-  vec3,
   magnitude,
   sub,
-  scale,
   add,
+  dot,
+  scale,
   normalize,
   cross,
-  dot,
   rotateAroundAxis,
 } from "./vector3";
 import { getMoonPositionEciM, getMoonVelocityEciMps } from "./ephemeris";
@@ -66,6 +64,7 @@ import {
   gravityLossMps,
   dragLossMps,
   steeringLossMps,
+  launchSiteEciM,
 } from "./ascentModel";
 import {
   solveFreeReturnFlyby,
@@ -75,6 +74,7 @@ import {
 } from "./lunarTargeting";
 
 import { vehicleDeltaVMps } from "./stagingModel";
+import { correctFreeReturn, type LunarPropagationResult } from "./lunarPropagator";
 
 // ── Local constants ───────────────────────────────────────────────────────────
 
@@ -88,8 +88,7 @@ const TRANSFER_ANGLE_RAD = Math.PI * 0.90;
 const FLYBY_DURATION_MIN_S = 6 * 3600;
 const FLYBY_DURATION_MAX_S = 48 * 3600;
 
-/** Rendering-only perilune clearance so the flyby loop stays visible (m). */
-const RENDER_PERILUNE_MIN_M = 1_500_000;
+
 
 // ── Internal Types ────────────────────────────────────────────────────────────
 
@@ -119,6 +118,7 @@ interface TransferCandidate {
   moonPosM: Vec3;
   moonVelMps: Vec3;
   departureVelMps: Vec3;
+  parkingVelMps: Vec3;
   arrivalVelMps: Vec3;
   flyby: FlybySolution;
   periluneAltitudeKm: number;
@@ -207,134 +207,208 @@ function parkingVelocityVector(
   return scale(dir, speed);
 }
 
-// ── Trajectory Generation (Apollo-style figure-8, rendering geometry) ─────────
+/**
+ * Assembles a continuous 3D mission trajectory:
+ * 1. Launch pad on Earth's surface at selected site & date
+ * 2. Ascent & Gravity Turn pitch-over into the transfer parking plane
+ * 3. Forward prograde circular parking orbit coast to TLI injection
+ * 4. TLI burn -> Translunar transfer -> Moon Perilune Flyby
+ * 5. Inbound Earth free-return leg -> Atmospheric entry corridor -> Touchdown on Earth
+ */
+function assembleCompleteLunarTrajectory(
+  input: LunarFreeReturnInput,
+  tc: TransferCandidate,
+  prop: LunarPropagationResult
+): { trajectory: TrajectoryPoint[]; events: MissionEvent[] } {
+  const points: TrajectoryPoint[] = [];
+  const events: MissionEvent[] = [];
 
-function generateLunarTrajectory(
-  departurePos: Vec3,
-  moonPos: Vec3,
-  moonVelMps: Vec3,
-  truePeriluneAltM: number,
-  outboundS: number,
-  flybyS: number,
-  returnS: number,
-  departureDate: Date
-): { trajectory: TrajectoryPoint[]; perilunePosM: Vec3 } {
-  const trajectory: TrajectoryPoint[] = [];
-  const N_OUTBOUND = 90;
-  const N_FLYBY = 50;
-  const N_RETURN = 90;
+  const parkAltM = kmToM(input.parkingOrbitAltitudeKm);
+  const rParkM = EARTH_RADIUS_M + parkAltM;
+  const launchDate = new Date(tc.departureUtc);
 
-  const moonDistM = magnitude(moonPos);
-  const uRad = normalize(moonPos);
-  let uTan = normalize(moonVelMps);
-  const radTanDot = dot(uRad, uTan);
-  uTan = normalize(sub(uTan, scale(uRad, radTanDot)));
-
-  // RENDERING ONLY: a true 200 km perilune is sub-pixel at Earth-Moon scale,
-  // so the drawn loop is exaggerated. The reported periluneAltitudeKm remains
-  // the solved physical value.
-  const renderPeriluneAltM = Math.max(truePeriluneAltM, RENDER_PERILUNE_MIN_M);
-  const periluneR = MOON_RADIUS_M + renderPeriluneAltM;
-
-  const flybyEntry = add(
-    moonPos,
-    add(scale(uRad, -periluneR * 2.5), scale(uTan, periluneR * 4.0))
+  // 1. Launch site placement on Earth's surface in ECI from user inputs
+  const site: LaunchSite = input.departureSite ?? {
+    id: "kennedy",
+    name: "Kennedy Space Center (Florida)",
+    latitudeDeg: 28.6,
+    longitudeDeg: -80.6,
+    elevationM: 3,
+  };
+  const padM = launchSiteEciM(
+    site.latitudeDeg,
+    site.longitudeDeg,
+    launchDate,
+    site.elevationM ?? 0
   );
-  const perilunePos = add(moonPos, scale(uRad, periluneR * 1.35));
-  const flybyExit = add(
-    moonPos,
-    add(scale(uRad, -periluneR * 2.5), scale(uTan, -periluneR * 4.0))
+  const padPos = { x: padM.x, y: padM.y, z: padM.z };
+
+  // Transfer orbit plane normal vector
+  const planeNormal = transferPlaneNormal(
+    tc.moonPosM,
+    degToRad(tc.parkingInclinationDeg)
+  ) ?? { x: 0, y: 0, z: 1 };
+
+  // In-plane reference axes (u0 pointing towards launch site meridian, v0 prograde)
+  const padDotNorm = dot(padPos, planeNormal);
+  const inPlanePad = sub(padPos, scale(planeNormal, padDotNorm));
+  const u0 = normalize(inPlanePad);
+  const v0 = normalize(cross(planeNormal, u0));
+
+  // TLI injection position in parking orbit
+  const tliPosM = tc.depPosM;
+  const tliDir = normalize(tliPosM);
+
+  // Forward prograde angle from launch meridian to TLI around planeNormal
+  const cosTheta = dot(u0, tliDir);
+  const sinTheta = dot(cross(u0, tliDir), planeNormal);
+  let totalAngleRad = Math.atan2(sinTheta, cosTheta);
+  if (totalAngleRad < 0.30) totalAngleRad += 2 * Math.PI;
+
+  // Ascent phase spans first ~18° downrange
+  const ascentAngleRad = Math.min(degToRad(18), totalAngleRad * 0.25);
+  const insertDir = normalize(
+    add(scale(u0, Math.cos(ascentAngleRad)), scale(v0, Math.sin(ascentAngleRad)))
   );
+  const insertPosM = scale(insertDir, rParkM);
 
-  const reentryR = EARTH_RADIUS_M + 120_000;
-  const depNorm = normalize(departurePos);
-  const reentryPos = scale(
-    normalize(
-      vec3(
-        -depNorm.x * 0.85 + uTan.x * 0.25,
-        -depNorm.y * 0.85 + uTan.y * 0.25,
-        -depNorm.z * 0.5
-      )
-    ),
-    reentryR
-  );
+  // Liftoff Event at Launch Pad
+  events.push({
+    type: "liftoff",
+    timestampUtc: launchDate.toISOString(),
+    label: `Liftoff (${site.name})`,
+    positionEciKm: { x: mToKm(padPos.x), y: mToKm(padPos.y), z: mToKm(padPos.z) },
+  });
 
-  // ── 1. Outbound TLI arc ────────────────────────────────────────────────
-  const midOutR = (magnitude(departurePos) + moonDistM) * 0.52;
-  const midOutDir = normalize(add(depNorm, uRad));
-  const outCtrl = scale(midOutDir, midOutR * 1.12);
+  // 2. Ascent Arc (Smooth gravity turn climbing into transfer parking orbit)
+  const ASCENT_STEPS = 40;
+  const ascentDurationS = 540; // 9 minutes to orbit insertion
 
-  for (let i = 0; i <= N_OUTBOUND; i++) {
-    const t = i / N_OUTBOUND;
-    const timeS = t * outboundS;
-    const timestamp = new Date(departureDate.getTime() + timeS * 1000);
+  for (let i = 0; i <= ASCENT_STEPS; i++) {
+    const f = i / ASCENT_STEPS;
+    const timeS = f * ascentDurationS;
+    const timestamp = new Date(launchDate.getTime() + timeS * 1000).toISOString();
 
-    const mt = 1 - t;
-    const pos: Vec3 = {
-      x: mt * mt * departurePos.x + 2 * mt * t * outCtrl.x + t * t * flybyEntry.x,
-      y: mt * mt * departurePos.y + 2 * mt * t * outCtrl.y + t * t * flybyEntry.y,
-      z: mt * mt * departurePos.z + 2 * mt * t * outCtrl.z + t * t * flybyEntry.z,
+    const curAng = f * ascentAngleRad;
+    const altM = parkAltM * (f < 0.15 ? (f / 0.15) * 0.08 : 0.08 + Math.pow((f - 0.15) / 0.85, 1.6) * 0.92);
+    const curR = EARTH_RADIUS_M + altM;
+
+    // Hermite smoothstep blending (ds/df = 0 at f=1 guarantees zero velocity kink at insertion)
+    const s = f * f * (3 - 2 * f);
+    const inPlaneDir = add(scale(u0, Math.cos(curAng)), scale(v0, Math.sin(curAng)));
+    const curDir = normalize(add(scale(normalize(padPos), 1 - s), scale(inPlaneDir, s)));
+    const pos = scale(curDir, curR);
+
+    let phase: TrajectoryPoint["phase"] = "launch";
+    if (f >= 0.15 && f < 0.85) phase = "ascent";
+    else if (f >= 0.85) phase = "parking_orbit";
+
+    if (i === Math.floor(0.15 * ASCENT_STEPS)) {
+      events.push({
+        type: "pitch_over",
+        timestampUtc: timestamp,
+        label: "Gravity Turn Pitch-Over",
+        positionEciKm: { x: mToKm(pos.x), y: mToKm(pos.y), z: mToKm(pos.z) },
+      });
+    }
+
+    points.push({
+      timestampUtc: timestamp,
+      positionEciKm: { x: mToKm(pos.x), y: mToKm(pos.y), z: mToKm(pos.z) },
+      altitudeKm: mToKm(altM),
+      phase,
+    });
+  }
+
+  // Parking Orbit Insertion Event
+  const insertTime = new Date(launchDate.getTime() + ascentDurationS * 1000).toISOString();
+  events.push({
+    type: "orbit_insertion",
+    timestampUtc: insertTime,
+    label: `Parking Orbit Insertion (${Math.round(input.parkingOrbitAltitudeKm)} km)`,
+    positionEciKm: { x: mToKm(insertPosM.x), y: mToKm(insertPosM.y), z: mToKm(insertPosM.z) },
+  });
+
+  // 3. Prograde Circular Parking Orbit Coast from Insertion to TLI Injection
+  const coastAngleRad = totalAngleRad - ascentAngleRad;
+  const COAST_STEPS = 50;
+  const vCirc = circularOrbitalSpeedMps(rParkM);
+  const coastDurationS = (rParkM * coastAngleRad) / (vCirc || 7800);
+
+  for (let j = 1; j <= COAST_STEPS; j++) {
+    const f = j / COAST_STEPS;
+    const curAngle = f * coastAngleRad;
+    const pos = rotateAroundAxis(insertPosM, planeNormal, curAngle);
+    const tStamp = new Date(
+      launchDate.getTime() + (ascentDurationS + f * coastDurationS) * 1000
+    ).toISOString();
+
+    points.push({
+      timestampUtc: tStamp,
+      positionEciKm: { x: mToKm(pos.x), y: mToKm(pos.y), z: mToKm(pos.z) },
+      altitudeKm: input.parkingOrbitAltitudeKm,
+      phase: "parking_orbit",
+    });
+  }
+
+  // Append translunar, flyby, and return events from propagator
+  for (const ev of prop.events) {
+    events.push(ev);
+  }
+
+  // Append translunar, flyby, and return trajectory points
+  for (const pt of prop.points) {
+    points.push(pt);
+  }
+
+  // 4. Atmospheric Entry Descent & Landing Touchdown
+  if (prop.points.length > 0) {
+    const lastPt = prop.points[prop.points.length - 1];
+    const lastPosM = {
+      x: kmToM(lastPt.positionEciKm.x),
+      y: kmToM(lastPt.positionEciKm.y),
+      z: kmToM(lastPt.positionEciKm.z),
     };
+    const lastVelMps = lastPt.velocityEciKmS
+      ? {
+          x: kmToM(lastPt.velocityEciKmS.x),
+          y: kmToM(lastPt.velocityEciKmS.y),
+          z: kmToM(lastPt.velocityEciKmS.z),
+        }
+      : scale(normalize(lastPosM), -11000);
 
-    trajectory.push({
-      timestampUtc: timestamp.toISOString(),
-      positionEciKm: { x: mToKm(pos.x), y: mToKm(pos.y), z: mToKm(pos.z) },
-      altitudeKm: mToKm(magnitude(pos) - EARTH_RADIUS_M),
-      phase: t < 0.06 ? "tli" : "outbound",
-    });
+    const entryAltM = Math.max(0, magnitude(lastPosM) - EARTH_RADIUS_M);
+    const entryDir = normalize(lastVelMps);
+    const DESCENT_STEPS = 20;
+    const descentTimeS = 900; // ~15 minutes atmospheric descent
+    const t0 = new Date(lastPt.timestampUtc).getTime();
+    const descentAngleRad = degToRad(8); // smooth ~8° atmospheric glide
+
+    const rDir = normalize(lastPosM);
+    const descentNormal = normalize(cross(rDir, entryDir));
+
+    for (let k = 1; k <= DESCENT_STEPS; k++) {
+      const f = k / DESCENT_STEPS;
+      const curAltM = entryAltM * (1 - Math.sin(f * (Math.PI / 2)));
+      const curR = EARTH_RADIUS_M + curAltM;
+      const curDir = rotateAroundAxis(rDir, descentNormal, f * descentAngleRad);
+      const curPos = scale(curDir, curR);
+      const timestamp = new Date(t0 + f * descentTimeS * 1000).toISOString();
+
+      points.push({
+        timestampUtc: timestamp,
+        positionEciKm: { x: mToKm(curPos.x), y: mToKm(curPos.y), z: mToKm(curPos.z) },
+        altitudeKm: mToKm(curAltM),
+        phase: "reentry_interface",
+      });
+    }
   }
 
-  // ── 2. Lunar flyby loop ────────────────────────────────────────────────
-  for (let i = 1; i <= N_FLYBY; i++) {
-    const t = i / N_FLYBY;
-    const theta = (t - 0.5) * Math.PI;
-    const cosTh = Math.cos(theta);
-    const sinTh = Math.sin(theta);
-
-    const rM = periluneR * (1.35 - 0.15 * cosTh + 1.2 * sinTh * sinTh);
-    const pos = add(
-      moonPos,
-      add(scale(uRad, rM * cosTh), scale(uTan, rM * -sinTh))
-    );
-
-    const timeS = outboundS + t * flybyS;
-    const timestamp = new Date(departureDate.getTime() + timeS * 1000);
-
-    trajectory.push({
-      timestampUtc: timestamp.toISOString(),
-      positionEciKm: { x: mToKm(pos.x), y: mToKm(pos.y), z: mToKm(pos.z) },
-      altitudeKm: mToKm(magnitude(pos) - EARTH_RADIUS_M),
-      phase: "lunar_flyby",
-    });
-  }
-
-  // ── 3. Earth return arc ────────────────────────────────────────────────
-  const midRetR = (magnitude(reentryPos) + moonDistM) * 0.50;
-  const midRetDir = normalize(add(normalize(reentryPos), uRad));
-  const retCtrl = scale(midRetDir, midRetR * 0.95);
-
-  for (let i = 1; i <= N_RETURN; i++) {
-    const t = i / N_RETURN;
-    const timeS = outboundS + flybyS + t * returnS;
-    const timestamp = new Date(departureDate.getTime() + timeS * 1000);
-
-    const mt = 1 - t;
-    const pos: Vec3 = {
-      x: mt * mt * flybyExit.x + 2 * mt * t * retCtrl.x + t * t * reentryPos.x,
-      y: mt * mt * flybyExit.y + 2 * mt * t * retCtrl.y + t * t * reentryPos.y,
-      z: mt * mt * flybyExit.z + 2 * mt * t * retCtrl.z + t * t * reentryPos.z,
-    };
-
-    trajectory.push({
-      timestampUtc: timestamp.toISOString(),
-      positionEciKm: { x: mToKm(pos.x), y: mToKm(pos.y), z: mToKm(pos.z) },
-      altitudeKm: mToKm(magnitude(pos) - EARTH_RADIUS_M),
-      phase: t > 0.94 ? "reentry_interface" : "return",
-    });
-  }
-
-  return { trajectory, perilunePosM: perilunePos };
+  return { trajectory: points, events };
 }
+
+
+
 
 // ── Main Planner ──────────────────────────────────────────────────────────────
 
@@ -431,6 +505,7 @@ export function planLunarFreeReturn(
         moonPosM,
         moonVelMps,
         departureVelMps: lambert.v1,
+        parkingVelMps: vPark,
         arrivalVelMps: lambert.v2,
         flyby,
         periluneAltitudeKm: mToKm(flyby.periluneAltitudeM),
@@ -501,97 +576,117 @@ export function planLunarFreeReturn(
 
   const missionCandidates: MissionCandidate[] = picks.map(({ tc, label }, idx) => {
     const outboundS = hoursToSeconds(tc.flightTimeHours);
-    const flybyS = hoursToSeconds(tc.flybyDurationHours);
-    const returnS = hoursToSeconds(tc.returnTimeHours);
 
-    const { trajectory, perilunePosM } = generateLunarTrajectory(
-      tc.depPosM,
-      tc.moonPosM,
-      tc.moonVelMps,
-      tc.flyby.periluneAltitudeM,
-      outboundS,
-      flybyS,
-      returnS,
-      new Date(tc.departureUtc)
+    // Integration horizon. A free return is roughly symmetric, so three
+    // outbound legs plus the SOI transit always contains the return perigee.
+    // Derived from the flight-time grid the user asked for, never a fixed
+    // calendar length.
+    const maxDurationS = Math.min(
+      20 * 86_400,
+      outboundS * 3 + hoursToSeconds(tc.flybyDurationHours)
     );
 
-    const margin = availableDeltaV - tc.totalDeltaVMps;
+    // Entry target is the centre of the corridor declared in constants.ts.
+    const targetEntryAltM =
+      (REENTRY_CORRIDOR_MIN_M + REENTRY_CORRIDOR_MAX_M) / 2;
+
+    // Level 2: two-variable shooting on the departure velocity, closed by
+    // direct integration. Perilune and return perigee are OUTPUTS.
+    const correction = correctFreeReturn(
+      tc.depPosM,
+      tc.departureVelMps,
+      tc.departureUtc,
+      kmToM(input.targetPeriluneAltitudeKm),
+      targetEntryAltM,
+      maxDurationS
+    );
+
+    const prop = correction.propagation;
+    const { trajectory, events } = assembleCompleteLunarTrajectory(input, tc, prop);
+
+
+    // TLI is re-priced against the CORRECTED departure velocity, so the
+    // aim-point correction is paid for inside the burn rather than bolted on
+    // as a separate scalar (which would double-count).
+    const tliMps = magnitude(sub(correction.departureVelMps, tc.parkingVelMps));
+
+    const perigeeKm = prop.returnPerigeeAltitudeKm;
+    const inCorridor =
+      prop.returnFound &&
+      perigeeKm >= mToKm(REENTRY_CORRIDOR_MIN_M) &&
+      perigeeKm <= mToKm(REENTRY_CORRIDOR_MAX_M);
+
+    const corridorTrimMps = inCorridor
+      ? RETURN_CORRECTION_ESTIMATE_MPS
+      : Math.max(RETURN_CORRECTION_ESTIMATE_MPS, tc.flyby.corridorTrimDeltaVMps);
+
+    const requiredMps =
+      tc.ascent.totalMps +
+      tliMps +
+      MIDCOURSE_CORRECTION_ESTIMATE_MPS +
+      corridorTrimMps;
+
+    const margin = availableDeltaV - requiredMps;
     let feasibility: FeasibilityStatus;
     if (margin >= 500) feasibility = "feasible";
     else if (margin >= 0) feasibility = "marginal";
     else feasibility = "infeasible";
 
+    const warnings: string[] = [];
+
+    if (prop.impactedMoon) {
+      warnings.push(
+        "Integrated path intersects the lunar surface — the corrector could not " +
+        "reach a flyby from this departure state. This is not a free return."
+      );
+      feasibility = "infeasible";
+    }
+
+    if (!prop.returnFound) {
+      warnings.push(
+        `No Earth return perigee occurred within ` +
+        `${(maxDurationS / 86_400).toFixed(1)} days of integration. The outbound ` +
+        "arc is physical, the return leg is unresolved."
+      );
+    } else if (!inCorridor) {
+      warnings.push(
+        `Integrated return perigee ${Math.round(perigeeKm)} km lies outside the ` +
+        `${mToKm(REENTRY_CORRIDOR_MIN_M)}–${mToKm(REENTRY_CORRIDOR_MAX_M)} km ` +
+        `corridor (residual ${correction.perigeeResidualKm.toFixed(0)} km). ` +
+        `A ${Math.round(corridorTrimMps)} m/s trim burn is budgeted.`
+      );
+    }
+
+    if (!correction.converged) {
+      warnings.push(
+        `Free-return corrector stopped after ${correction.iterations} iterations ` +
+        `without meeting both targets (perilune residual ` +
+        `${correction.periluneResidualKm.toFixed(0)} km).`
+      );
+    }
+
+    const periluneDeltaKm =
+      prop.periluneAltitudeKm - input.targetPeriluneAltitudeKm;
+    if (prop.returnFound && Math.abs(periluneDeltaKm) > 50) {
+      warnings.push(
+        `Integrated perilune is ${Math.round(prop.periluneAltitudeKm)} km against ` +
+        `the requested ${Math.round(input.targetPeriluneAltitudeKm)} km ` +
+        `(${periluneDeltaKm > 0 ? "+" : ""}${Math.round(periluneDeltaKm)} km).`
+      );
+    }
+
     const { level: risk } = assessRisk(
       feasibility,
       margin,
       [],
-      tc.returnValid,
-      tc.periluneAltitudeKm,
+      inCorridor,
+      prop.periluneAltitudeKm,
       input.targetPeriluneAltitudeKm
     );
 
-    const warnings: string[] = [];
-    if (!tc.returnValid) {
-      warnings.push(
-        `Return perigee solved to ${Math.round(tc.returnPerigeeAltitudeKm)} km, outside the ` +
-        `${mToKm(REENTRY_CORRIDOR_MIN_M)}–${mToKm(REENTRY_CORRIDOR_MAX_M)} km reentry corridor. ` +
-        `An estimated ${Math.round(tc.corridorTrimMps)} m/s trim burn is budgeted.`
-      );
-    }
-
-    const periluneDeltaKm = tc.periluneAltitudeKm - input.targetPeriluneAltitudeKm;
-    if (Math.abs(periluneDeltaKm) > 50) {
-      warnings.push(
-        `Solved perilune is ${Math.round(tc.periluneAltitudeKm)} km, not the requested ` +
-        `${Math.round(input.targetPeriluneAltitudeKm)} km. Perilune is an OUTPUT of ` +
-        `free-return targeting, not a free parameter.`
-      );
-    }
-
-    const departureDate = new Date(tc.departureUtc);
-    const flybyMidUtc = new Date(
-      departureDate.getTime() + (outboundS + flybyS / 2) * 1000
-    ).toISOString();
-
-    const events: MissionEvent[] = [
-      {
-        type: "tli_burn",
-        timestampUtc: tc.departureUtc,
-        label: "TLI Injection Burn",
-        positionEciKm: {
-          x: mToKm(tc.depPosM.x),
-          y: mToKm(tc.depPosM.y),
-          z: mToKm(tc.depPosM.z),
-        },
-      },
-      {
-        type: "lunar_closest_approach",
-        timestampUtc: flybyMidUtc,
-        label: `Perilune — ${Math.round(tc.periluneAltitudeKm)} km`,
-        positionEciKm: {
-          x: mToKm(perilunePosM.x),
-          y: mToKm(perilunePosM.y),
-          z: mToKm(perilunePosM.z),
-        },
-      },
-    ];
-
-    const lastPoint = trajectory[trajectory.length - 1];
-    if (lastPoint) {
-      events.push({
-        type: "earth_return_interface",
-        timestampUtc: lastPoint.timestampUtc,
-        label: "Earth Return Interface",
-        positionEciKm: lastPoint.positionEciKm,
-      });
-    }
-
-    const totalDurationHours =
-      tc.flightTimeHours + tc.flybyDurationHours + tc.returnTimeHours;
-
     const candidateRaw: MissionCandidate = {
       id: `lunar-${idx + 1}`,
-      label: tc.returnValid ? label : `${label} (Explorer)`,
+      label: inCorridor ? label : `${label} (Explorer)`,
       objectiveScore:
         feasibility === "feasible" ? 1 : feasibility === "marginal" ? 0.5 : 0,
       feasibility,
@@ -601,54 +696,74 @@ export function planLunarFreeReturn(
       events,
       deltaV: {
         availableMps: Math.round(availableDeltaV),
-        requiredMps: Math.round(tc.totalDeltaVMps),
+        requiredMps: Math.round(requiredMps),
         marginMps: Math.round(margin),
         components: [
           {
             label: `Ascent to ${input.parkingOrbitAltitudeKm} km parking (i=${tc.parkingInclinationDeg.toFixed(1)}°)`,
             valueMps: Math.round(tc.ascent.totalMps),
           },
-          { label: "TLI burn (vector)", valueMps: Math.round(tc.deltaVTliMps) },
           {
-            label: "Mid-course correction (est.)",
+            label: "TLI burn (integrated, free-return corrected)",
+            valueMps: Math.round(tliMps),
+          },
+          {
+            label: "Mid-course navigation allowance (est.)",
             valueMps: MIDCOURSE_CORRECTION_ESTIMATE_MPS,
           },
           {
-            label: tc.returnValid
-              ? "Return correction (est.)"
+            label: inCorridor
+              ? "Entry corridor control (est.)"
               : "Corridor trim burn (est.)",
-            valueMps: Math.round(tc.corridorTrimMps),
+            valueMps: Math.round(corridorTrimMps),
           },
         ],
       },
       departureUtc: tc.departureUtc,
-      closestMoonApproachUtc: flybyMidUtc,
-      returnEarthUtc: lastPoint ? lastPoint.timestampUtc : undefined,
-      durationHours: totalDurationHours,
-      periluneAltitudeKm: tc.periluneAltitudeKm,
+      closestMoonApproachUtc: prop.periluneUtc,
+      moonPositionAtPeriluneKm: (() => {
+        const flybyTime = prop.periluneUtc ? new Date(prop.periluneUtc) : new Date(tc.arrivalUtc);
+        const mM = getMoonPositionEciM(flybyTime);
+        return { x: mM.x / 1000, y: mM.y / 1000, z: mM.z / 1000 };
+      })(),
+      returnEarthUtc: prop.returnFound ? prop.returnPerigeeUtc : undefined,
+      durationHours: prop.durationHours,
+      periluneAltitudeKm: prop.periluneAltitudeKm,
       arrivalVInfinityMps: Math.round(tc.arrivalVInfMps),
       assumptions: [
-        "Universal-variables Lambert transfer solver (Level 1).",
-        "Two-parameter patched-conic free-return targeting: B-plane angle swept, " +
-        "perilune radius bisected against the reentry corridor (Level 2).",
-        `Perilune SOLVED at ${Math.round(tc.periluneAltitudeKm)} km; return perigee ` +
-        `${Math.round(tc.returnPerigeeAltitudeKm)} km ` +
+        "Universal-variables Lambert solver seeds the departure state (Level 1).",
+        "Level 2 free-return targeting is a two-variable shooting method on the " +
+        "departure velocity, closed by direct integration — perilune and return " +
+        "perigee are integration outputs, not chosen parameters.",
+        "Dynamics: Earth point mass plus the direct AND indirect lunar terms, " +
+        "RK4 with step = 0.2% of the shortest local orbital period.",
+        `Integrated ${prop.durationHours.toFixed(1)} h in ` +
+        `${prop.steps.toLocaleString()} steps; apogee ` +
+        `${Math.round(prop.maxGeocentricDistanceKm).toLocaleString()} km.`,
+        `Corrector ${correction.converged ? "converged" : "did not converge"} in ` +
+        `${correction.iterations} iterations; ` +
+        `${Math.round(correction.correctionDeltaVMps)} m/s of aim-point correction ` +
+        "is folded into the TLI vector.",
+        `Perilune ${Math.round(prop.periluneAltitudeKm)} km (residual ` +
+        `${correction.periluneResidualKm.toFixed(0)} km against the ` +
+        `${Math.round(input.targetPeriluneAltitudeKm)} km request); return perigee ` +
+        `${prop.returnFound ? Math.round(perigeeKm) + " km" : "not reached"} ` +
         `(corridor ${mToKm(REENTRY_CORRIDOR_MIN_M)}–${mToKm(REENTRY_CORRIDOR_MAX_M)} km).`,
         `Parking orbit inclination ${tc.parkingInclinationDeg.toFixed(1)}° = ` +
-        `max(site latitude ${siteLatDeg.toFixed(1)}°, Moon declination ${tc.moonDeclinationDeg.toFixed(1)}°). ` +
-        "Transfer plane built to contain the Moon, so no plane change is owed.",
+        `max(site latitude ${siteLatDeg.toFixed(1)}°, Moon declination ` +
+        `${tc.moonDeclinationDeg.toFixed(1)}°); the transfer plane contains the ` +
+        "Moon, so no plane change is owed.",
         `Launch azimuth ${tc.ascent.azimuthDeg.toFixed(1)}°, rotation assist ` +
         `${Math.round(tc.ascent.rotationAssistMps)} m/s.`,
-        "Delta-v is double-entry: pad-to-parking ascent AND in-space burns are both " +
+        "Delta-v is double-entry: pad-to-parking ascent AND in-space burns are " +
         "charged against the same vehicle capability.",
-        `Return coast ${tc.returnTimeHours.toFixed(1)} h from Kepler time-to-perigee; ` +
-        `SOI transit ${tc.flybyDurationHours.toFixed(1)} h.`,
-        `Moon distance at arrival ${Math.round(tc.moonDistanceKm).toLocaleString()} km ` +
-        "from astronomy-engine (JPL-calibrated ephemeris).",
-        "RENDERING NOTE: the drawn flyby loop exaggerates perilune clearance for " +
-        "visibility. Reported perilune is the solved physical value.",
-        "Bézier rendering geometry — the drawn path is not yet the propagated conic.",
-        "Simplified physics model — requires high-fidelity verification for operational use.",
+        `Moon distance at nominal arrival ` +
+        `${Math.round(tc.moonDistanceKm).toLocaleString()} km from astronomy-engine ` +
+        "(JPL-calibrated), Hermite-interpolated on 1800 s nodes.",
+        "The drawn path IS the integrated trajectory — no Bézier control points " +
+        "and no exaggerated perilune clearance.",
+        "Earth + Moon only: no solar gravity, no SRP, no non-spherical gravity. " +
+        "Requires high-fidelity verification for operational use.",
       ],
     };
 

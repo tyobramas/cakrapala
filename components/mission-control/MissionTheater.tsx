@@ -41,6 +41,7 @@ import {
 } from "lucide-react";
 import { gmstRad, launchSiteEciM } from "@/lib/mission-control/ascentModel";
 import { moonOrbitPathEciKm } from "@/lib/mission-control/moonOrbitPath";
+import { getMoonPositionEciM } from "@/lib/mission-control/ephemeris";
 
 
 
@@ -110,7 +111,13 @@ function getSunDirectionECI(dateUtc?: string): THREE.Vector3 {
   ).normalize();
 }
 
-// ── Physically-based Moon phase ShaderMaterial (hard terminator + earthshine) ─
+// ── Moon ShaderMaterial — visualization mode: always bright, sun affects terminator shape ─
+// In a space mission visualizer, the Moon must ALWAYS be visible regardless of phase.
+// We use a dual-light model:
+//   - Primary: sun direction (controls lit vs shadow terminator)
+//   - Minimum: camera-facing ambient so Moon is never invisible in visualization
+const MOON_VISUAL_RADIUS = 1.737 * 2.8; // ≈ 4.86 scene-units, clearly smaller than Earth (6.378)
+
 function createPhaseMoonMaterial(moonTexture: THREE.Texture, sunDir: THREE.Vector3): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     uniforms: {
@@ -133,12 +140,27 @@ function createPhaseMoonMaterial(moonTexture: THREE.Texture, sunDir: THREE.Vecto
       varying vec2 vUv;
       void main() {
         vec4 texColor = texture2D(moonTexture, vUv);
-        float diffuse = max(0.0, dot(normalize(vWorldNormal), normalize(sunDirection)));
-        float ambient = 0.04; // faint earthshine on dark limb
-        float light = ambient + (1.0 - ambient) * diffuse;
-        // Blue earthshine tint on shadow side
-        vec3 earthshine = vec3(0.08, 0.12, 0.28) * (1.0 - diffuse) * 0.15;
-        gl_FragColor = vec4(texColor.rgb * light + earthshine, 1.0);
+        vec3 norm = normalize(vWorldNormal);
+        vec3 sun  = normalize(sunDirection);
+
+        // Realistic solar terminator
+        float cosTheta = dot(norm, sun);
+        float terminator = smoothstep(-0.05, 0.12, cosTheta);
+        float solarLight = max(0.0, cosTheta) * terminator;
+
+        // Visualization fill light: always illuminate the Moon enough to be seen.
+        // Uses a soft top-front key light (camera-general direction) to ensure
+        // the Moon is NEVER invisible even at new moon phase.
+        float fillLight = max(0.0, dot(norm, normalize(vec3(0.3, 0.5, 1.0)))) * 0.55;
+
+        // Combine: solar light dominates lit side, fill ensures visibility everywhere
+        float light = max(solarLight * 1.4, fillLight) + 0.08; // 0.08 = earthshine base
+
+        // Subtle cool earthshine on shadow side
+        vec3 earthshine = vec3(0.08, 0.15, 0.40) * (1.0 - terminator) * 0.20;
+
+        vec3 color = texColor.rgb * clamp(light, 0.0, 1.6) + earthshine;
+        gl_FragColor = vec4(clamp(color, 0.0, 1.0), 1.0);
       }
     `,
   });
@@ -209,31 +231,57 @@ export default function MissionTheater({
           camera.position.set(0, 26, 0.1);
           controls.target.set(0, 0, 0);
         } else {
-          // Lunar polar view: compute bounding center and look down from above
+          // Lunar polar view — look straight down (+Y) over the entire Earth–Moon plane
           const pts: THREE.Vector3[] = [new THREE.Vector3(0, 0, 0)];
           if (cand && cand.trajectory.length > 0) {
-            cand.trajectory.forEach((pt) => {
-              const rp = eciKmToRendererPosition(pt.positionEciKm);
+            const step = Math.max(1, Math.floor(cand.trajectory.length / 500));
+            for (let i = 0; i < cand.trajectory.length; i += step) {
+              const rp = eciKmToRendererPosition(cand.trajectory[i].positionEciKm);
               pts.push(new THREE.Vector3(rp.x, rp.y, rp.z));
-            });
+            }
           }
-          if (moonGroupRef.current) {
-            pts.push(moonGroupRef.current.position.clone());
+          if (moonGroupRef.current) pts.push(moonGroupRef.current.position.clone());
+          else if (moonKm) {
+            const mp = eciKmToRendererPosition(moonKm);
+            pts.push(new THREE.Vector3(mp.x, mp.y, mp.z));
           }
           const box = new THREE.Box3().setFromPoints(pts);
           const center = new THREE.Vector3();
           box.getCenter(center);
           const size = new THREE.Vector3();
           box.getSize(size);
-          const maxDim = Math.max(size.x, size.y, size.z, 60);
-
-          camera.position.set(center.x, center.y + maxDim * 1.5, center.z + 0.1);
+          // FOV-based height for top-down view (use XZ plane dimensions)
+          const halfFovRad = (camera.fov * Math.PI) / 180 / 2;
+          const halfXZ = Math.sqrt((size.x / 2) ** 2 + (size.z / 2) ** 2);
+          const tanH = Math.tan(halfFovRad);
+          const tanW = tanH * camera.aspect;
+          const fovFactor = Math.min(tanH, tanW);
+          const height = (halfXZ / fovFactor) * 1.4;
+          camera.position.set(center.x, center.y + height, center.z + 0.1);
           controls.target.copy(center);
         }
-      } else if (mode === "Focus Moon Encounter" && moonGroupRef.current) {
-        const mPos = moonGroupRef.current.position;
-        camera.position.set(mPos.x + 12, mPos.y + 8, mPos.z + 16);
-        controls.target.copy(mPos);
+      } else if (mode === "Focus Moon Encounter") {
+        // Zoom into Moon — get Moon position from ref or prop
+        let mPos: THREE.Vector3 | null = null;
+        if (moonGroupRef.current) {
+          mPos = moonGroupRef.current.position.clone();
+        } else if (moonKm) {
+          const mp = eciKmToRendererPosition(moonKm);
+          mPos = new THREE.Vector3(mp.x, mp.y, mp.z);
+        }
+        if (mPos) {
+          // Pull back ~30 scene units from Moon (≈ 30,000 km, fills ~40% of screen)
+          const halfFovRad = (camera.fov * Math.PI) / 180 / 2;
+          const moonRad = MOON_VISUAL_RADIUS;
+          const moonDist = moonRad / Math.tan(halfFovRad) * 2.8;
+          const viewDir = new THREE.Vector3(0.4, 0.3, 1.0).normalize();
+          camera.position.copy(mPos).addScaledVector(viewDir, moonDist);
+          controls.target.copy(mPos);
+        } else {
+          // fallback if moon not yet in scene
+          camera.position.set(250, 100, 300);
+          controls.target.set(200, 50, 250);
+        }
       } else {
         // Default "Fit Full Trajectory"
         if (type === "satellite_launch") {
@@ -256,26 +304,43 @@ export default function MissionTheater({
           }
           controls.target.set(0, 0, 0);
         } else {
-          // Lunar mission framing: dynamically calculate bounding center of Earth + Moon + Trajectory
-          const pts: THREE.Vector3[] = [new THREE.Vector3(0, 0, 0)];
-          if (cand && cand.trajectory.length > 0) {
-            cand.trajectory.forEach((pt) => {
-              const rp = eciKmToRendererPosition(pt.positionEciKm);
-              pts.push(new THREE.Vector3(rp.x, rp.y, rp.z));
-            });
-          }
+          // ── Lunar "Fit All" — robustly frames Earth, Moon & Full Trajectory Loop ──
+          let moonPos: THREE.Vector3 | null = null;
           if (moonGroupRef.current) {
-            pts.push(moonGroupRef.current.position.clone());
+            moonPos = moonGroupRef.current.position.clone();
+          } else if (cand?.moonPositionAtPeriluneKm) {
+            const mp = eciKmToRendererPosition(cand.moonPositionAtPeriluneKm);
+            moonPos = new THREE.Vector3(mp.x, mp.y, mp.z);
+          } else if (moonKm) {
+            const mp = eciKmToRendererPosition(moonKm);
+            moonPos = new THREE.Vector3(mp.x, mp.y, mp.z);
           }
+
+          const pts: THREE.Vector3[] = [new THREE.Vector3(0, 0, 0)];
+          if (moonPos) pts.push(moonPos);
+          if (cand && cand.trajectory && cand.trajectory.length > 0) {
+            const step = Math.max(1, Math.floor(cand.trajectory.length / 300));
+            for (let i = 0; i < cand.trajectory.length; i += step) {
+              const rp = eciKmToRendererPosition(cand.trajectory[i].positionEciKm);
+              pts.push(new THREE.Vector3(rp.x, rp.y, rp.z));
+            }
+          }
+
           const box = new THREE.Box3().setFromPoints(pts);
           const center = new THREE.Vector3();
           box.getCenter(center);
           const size = new THREE.Vector3();
           box.getSize(size);
-          const maxDim = Math.max(size.x, size.y, size.z, 60);
 
-          // Position camera pulled back at an elevated angle to frame Earth, Moon, and entire Figure-8 loop perfectly
-          camera.position.set(center.x, center.y + maxDim * 0.60, center.z + maxDim * 1.10);
+          const halfFovRad = (camera.fov * Math.PI) / 180 / 2;
+          const maxDim = Math.max(size.x, size.y, size.z, 200);
+          const tanH = Math.tan(halfFovRad);
+          const tanW = tanH * camera.aspect;
+          const fovFactor = Math.min(tanH, tanW);
+          const camDist = (maxDim / 2 / fovFactor) * 1.35;
+
+          const camDir = new THREE.Vector3(0.08, 0.45, 0.89).normalize();
+          camera.position.copy(center).addScaledVector(camDir, camDist);
           controls.target.copy(center);
         }
       }
@@ -285,6 +350,7 @@ export default function MissionTheater({
     },
     []
   );
+
 
   // ── Trajectory & Scene Builder ─────────────────────────────────────────
   const renderMissionTrajectory = useCallback(
@@ -383,17 +449,34 @@ export default function MissionTheater({
         // Standby Moon in Lunar Mode at true astronomical position
         if (type === "lunar_free_return" && moonKm) {
           const textureLoader = new THREE.TextureLoader();
-          const moonRadius = 1.737;
+          // Moon radius: visually ~2.2× real to stay legible at 384-unit distance,
+          // but still clearly smaller than Earth (6.378 units) at 3.82 units.
+          const moonRadius = MOON_VISUAL_RADIUS;
           const moonGroup = new THREE.Group();
           moonGroup.name = "moonGroup";
 
           const moonTex = textureLoader.load("/textures/planets/moon.jpg");
           moonTex.colorSpace = THREE.SRGBColorSpace;
+          moonTex.anisotropy = 8;
           const sunDir = getSunDirectionECI(launchDateUtcRef.current);
           const moonMat = createPhaseMoonMaterial(moonTex, sunDir);
-          const moonGeo = new THREE.SphereGeometry(moonRadius, 32, 32);
+          const moonGeo = new THREE.SphereGeometry(moonRadius, 48, 48);
           const moon = new THREE.Mesh(moonGeo, moonMat);
           moonGroup.add(moon);
+
+          // Bright corona / glow halo around the Moon so it pops against space
+          const moonGlow = new THREE.Mesh(
+            new THREE.SphereGeometry(moonRadius * 1.18, 32, 32),
+            new THREE.MeshBasicMaterial({
+              color: 0xd4c8b0,
+              transparent: true,
+              opacity: 0.28,
+              side: THREE.BackSide,
+              depthWrite: false,
+              blending: THREE.AdditiveBlending,
+            })
+          );
+          moonGroup.add(moonGlow);
 
           const mPos = eciKmToRendererPosition(moonKm);
           moonGroup.position.set(mPos.x, mPos.y, mPos.z);
@@ -410,10 +493,12 @@ export default function MissionTheater({
           });
 
           const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPoints);
+          // Very faint ring: only a subtle reference, must NOT dominate the view
           const ringMat = new THREE.LineBasicMaterial({
-            color: 0x475569,
+            color: 0x334155,
             transparent: true,
-            opacity: 0.35,
+            opacity: 0.08,
+            depthWrite: false,
           });
           trajGroup.add(new THREE.Line(ringGeo, ringMat));
         }
@@ -434,50 +519,49 @@ export default function MissionTheater({
         // 2. Render Moon for Lunar Missions (Positioned at True Ephemeris Center)
         if (type === "lunar_free_return") {
           const textureLoader = new THREE.TextureLoader();
-          const moonRadius = 1.737; // 1,737 km in scene units
+          // Moon radius: visually ~2.2× real to stay legible at 384-unit distance,
+          // but still clearly smaller than Earth (6.378 units) at 3.82 units.
+          const moonRadius = MOON_VISUAL_RADIUS;
           const moonGroup = new THREE.Group();
           moonGroup.name = "moonGroup";
 
           const moonTex = textureLoader.load("/textures/planets/moon.jpg");
           moonTex.colorSpace = THREE.SRGBColorSpace;
+          moonTex.anisotropy = 8;
           const sunDir = getSunDirectionECI(launchDateUtcRef.current);
           const moonMat = createPhaseMoonMaterial(moonTex, sunDir);
-          const moonGeo = new THREE.SphereGeometry(moonRadius, 48, 48);
+          const moonGeo = new THREE.SphereGeometry(moonRadius, 64, 64);
           const moon = new THREE.Mesh(moonGeo, moonMat);
           moonGroup.add(moon);
 
-          // Moon Soft Atmospheric / Surface Glow Aura
+          // Warm corona glow aura
           const moonGlow = new THREE.Mesh(
-            new THREE.SphereGeometry(moonRadius * 1.15, 32, 32),
+            new THREE.SphereGeometry(moonRadius * 1.18, 32, 32),
             new THREE.MeshBasicMaterial({
-              color: 0xe2e8f0,
+              color: 0xd4c8a8,
               transparent: true,
-              opacity: 0.20,
+              opacity: 0.28,
               side: THREE.BackSide,
               depthWrite: false,
+              blending: THREE.AdditiveBlending,
             })
           );
           moonGroup.add(moonGlow);
 
-          // Exact Moon ephemeris center position
-          const periluneEvt = cand.events.find((e) => e.type === "lunar_closest_approach");
-          let moonCenterKm: Vec3 = moonKm || { x: 384400, y: 0, z: 0 };
-          if (periluneEvt) {
-            const mag =
-              Math.sqrt(
-                periluneEvt.positionEciKm.x ** 2 +
-                periluneEvt.positionEciKm.y ** 2 +
-                periluneEvt.positionEciKm.z ** 2
-              ) || 1;
-            const pNormX = periluneEvt.positionEciKm.x / mag;
-            const pNormY = periluneEvt.positionEciKm.y / mag;
-            const pNormZ = periluneEvt.positionEciKm.z / mag;
-            const periR = 1.737 + (cand.periluneAltitudeKm || 200) / 1000;
-            moonCenterKm = {
-              x: periluneEvt.positionEciKm.x - pNormX * periR,
-              y: periluneEvt.positionEciKm.y - pNormY * periR,
-              z: periluneEvt.positionEciKm.z - pNormZ * periR,
-            };
+          // Exact Moon ephemeris center position at arrival / perilune epoch
+          let moonCenterKm: Vec3;
+          if (cand.moonPositionAtPeriluneKm) {
+            moonCenterKm = cand.moonPositionAtPeriluneKm;
+          } else if (cand.closestMoonApproachUtc) {
+            const mM = getMoonPositionEciM(new Date(cand.closestMoonApproachUtc));
+            moonCenterKm = { x: mM.x / 1000, y: mM.y / 1000, z: mM.z / 1000 };
+          } else {
+            const periluneEvt = cand.events.find((e) => e.type === "lunar_closest_approach");
+            if (periluneEvt) {
+              moonCenterKm = periluneEvt.positionEciKm;
+            } else {
+              moonCenterKm = moonKm || { x: 384400, y: 0, z: 0 };
+            }
           }
           const mPos = eciKmToRendererPosition(moonCenterKm);
           moonGroup.position.set(mPos.x, mPos.y, mPos.z);
@@ -493,10 +577,12 @@ export default function MissionTheater({
             return new THREE.Vector3(rp.x, rp.y, rp.z);
           });
           const ringGeo = new THREE.BufferGeometry().setFromPoints(ringPoints);
+          // Very faint ring: only a subtle reference, must NOT dominate the view
           const ringMat = new THREE.LineBasicMaterial({
-            color: 0x475569,
+            color: 0x334155,
             transparent: true,
-            opacity: 0.35,
+            opacity: 0.08,
+            depthWrite: false,
           });
           trajGroup.add(new THREE.Line(ringGeo, ringMat));
         }
@@ -613,9 +699,14 @@ export default function MissionTheater({
                     ? 0xf59e0b
                     : event.type === "lunar_closest_approach"
                       ? 0xd946ef
-                      : 0xef4444;
+                      : 0x38bdf8;
 
-          const markerRadius = type === "satellite_launch" ? 0.09 : 0.6;
+          const markerRadius =
+            event.type === "lunar_closest_approach"
+              ? 0.45
+              : type === "satellite_launch"
+                ? 0.09
+                : 0.14;
 
           // Inner Solid Core Sphere
           const markerGeo = new THREE.SphereGeometry(markerRadius, 16, 16);
