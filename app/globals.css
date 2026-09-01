@@ -114,6 +114,12 @@ canvas {
   border-color: rgba(56, 189, 248, 0.35);
 }
 
+/* Ops Screen High-Performance Easing */
+.duration-120 {
+  transition-duration: 120ms;
+  transition-timing-function: cubic-bezier(0.2, 0, 0.4, 1);
+}
+
 /* Hide Next.js dev indicator floating badge in bottom-left corner */
 nextjs-portal,
 #next-dev-indicator,

@@ -112,6 +112,9 @@ export function calculateImpactKineticEnergy(
  * Computes deterministic 3D radar coordinates for an asteroid relative to Earth
  * Converts Lunar Distance, Approach Angle (derived from approach time & velocity), and Inclination
  */
+/** 1 Lunar Distance (LD) in 3D Scene Units */
+export const LD_TO_WORLD = 6.0;
+
 export function computeAsteroidRadar3D(
   neo: AsteroidNeoObject,
   index: number,
@@ -142,12 +145,11 @@ export function computeAsteroidRadar3D(
   const angleRad = (approachAngleDeg * Math.PI) / 180;
   const incRad = (inclinationDeg * Math.PI) / 180;
 
-  // Scale distance logarithmically or radially for 3D Radar scene (1 LD is around radius 6 in 3D radar units)
-  // Mapping formula: radarRadius = Math.log10(1 + distanceLd) * 8 + 3
-  const radarRadius = Math.min(65, Math.max(4.5, Math.sqrt(distanceLd) * 4.2 + 2.5));
+  // Strict linear spatial scaling: 1 LD = LD_TO_WORLD scene units
+  const radarRadius = Math.max(2.5, distanceLd * LD_TO_WORLD);
 
   const x = Math.cos(angleRad) * Math.cos(incRad) * radarRadius;
-  const y = Math.sin(incRad) * radarRadius * 0.7; // slight vertical compression for clarity
+  const y = Math.sin(incRad) * radarRadius * 0.35; // gentle vertical projection
   const z = Math.sin(angleRad) * Math.cos(incRad) * radarRadius;
 
   return {

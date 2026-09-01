@@ -3,35 +3,47 @@
 import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { AsteroidNeoObject, AsteroidFeedSummary } from "@/lib/asteroid/types";
+import { OPS, OPS_TYPE } from "@/lib/ui/opsTheme";
+import { OpsModeProvider, useOpsMode } from "@/lib/ui/opsMode";
+import ModeToggle from "@/components/ui/ModeToggle";
 import Asteroid3DRadarScene from "./Asteroid3DRadarScene";
 import AsteroidTelemetryHUD from "./AsteroidTelemetryHUD";
 import AsteroidFeedPanel from "./AsteroidFeedPanel";
 import AsteroidDetailModal from "./AsteroidDetailModal";
-import {
-  ChevronLeft,
-  RefreshCw,
-} from "lucide-react";
+import ScaleRuler, { Landmark } from "./ScaleRuler";
+import { ChevronLeft, RefreshCw } from "lucide-react";
 
 export default function AsteroidTrackerLayout() {
+  return (
+    <OpsModeProvider>
+      <TrackerShell />
+    </OpsModeProvider>
+  );
+}
+
+function TrackerShell() {
+  const { isOps } = useOpsMode();
   const [selectedDate, setSelectedDate] = useState<string>(() => {
     return new Date().toISOString().split("T")[0];
   });
   const [asteroids, setAsteroids] = useState<AsteroidNeoObject[]>([]);
   const [summary, setSummary] = useState<AsteroidFeedSummary | null>(null);
   const [selectedAsteroid, setSelectedAsteroid] = useState<AsteroidNeoObject | null>(null);
+  const [selectedLandmark, setSelectedLandmark] = useState<Landmark | null>(null);
   const [isInspectorOpen, setIsInspectorOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [lastFetchedAt, setLastFetchedAt] = useState<Date | null>(null);
 
   // Fetch asteroid data from API
   const fetchAsteroids = useCallback(async (date: string) => {
     setIsLoading(true);
     try {
-      // Fetch 1 day or range
       const res = await fetch(`/api/asteroids?start_date=${date}&end_date=${date}`);
       if (res.ok) {
         const data = await res.json();
         setAsteroids(data.asteroids || []);
         setSummary(data.summary || null);
+        setLastFetchedAt(new Date());
         if (data.asteroids && data.asteroids.length > 0) {
           setSelectedAsteroid(data.asteroids[0]);
         }
@@ -53,67 +65,99 @@ export default function AsteroidTrackerLayout() {
   };
 
   return (
-    <div className="h-screen w-screen overflow-hidden flex flex-col bg-[#020617] text-white select-none font-mono">
+    <div
+      className="h-screen w-screen overflow-hidden flex flex-col select-none font-mono"
+      style={{ background: OPS.bg, color: OPS.text }}
+    >
       {/* ── Top Master Header ──────────────────────────────────────────────── */}
-      <header className="h-12 bg-[#050b18] border-b border-slate-800 flex items-center justify-between px-4 z-30 shrink-0">
+      <header
+        className="h-11 flex items-center justify-between px-3 z-30 shrink-0 border-b"
+        style={{ background: OPS.panel, borderColor: OPS.line }}
+      >
         {/* Left: Brand & Module Switcher */}
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="flex items-center gap-2 text-cyan-400 hover:text-cyan-300 transition-colors"
+            className="flex items-center gap-2 transition-colors duration-[120ms]"
+            style={{ color: OPS.text }}
           >
-            <span className="font-orbitron font-black tracking-[0.2em] text-sm bg-gradient-to-r from-cyan-400 to-indigo-400 bg-clip-text text-transparent">
+            <span className="font-orbitron font-bold tracking-[0.28em] text-xs">
               CAKRAPALA
             </span>
           </Link>
 
-          <div className="h-4 w-px bg-slate-800 hidden sm:block" />
+          <div className="h-3 w-px" style={{ background: OPS.line }} />
 
           {/* Module Breadcrumb & Navigation */}
-          <div className="flex items-center gap-1.5 text-xs">
-            <span className="px-2 py-0.5 rounded bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 font-bold text-[10px]">
+          <div className="flex items-center gap-2">
+            <span
+              className="px-1.5 py-0.5 border text-[10px] font-semibold tracking-wider"
+              style={{ borderColor: OPS.line, color: OPS.textDim }}
+            >
               SYS-03
             </span>
-            <span className="font-bold text-white tracking-wider hidden md:inline">
-              ASTEROID DEFENSE &amp; NEO RADAR
+            <span className={OPS_TYPE.label + " hidden sm:inline"} style={{ color: OPS.textDim }}>
+              {isOps ? "PLANETARY DEFENSE & NEO RADAR" : "Near-Earth Asteroid Radar"}
             </span>
           </div>
         </div>
 
-        {/* Right: Back to Home + Refresh Button */}
-        <div className="flex items-center gap-2 text-xs">
-          <Link
-            href="/"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all text-xs font-bold group"
-          >
-            <ChevronLeft className="w-4 h-4 text-cyan-400 group-hover:-translate-x-0.5 transition-transform" />
-            <span>BACK TO HOME</span>
-          </Link>
+        {/* Right: Mode Toggle + Refresh Button + Exit Radar */}
+        <div className="flex items-center gap-2">
+          {/* OPS / PUBLIC Segmented Mode Toggle */}
+          <ModeToggle />
 
           <button
             onClick={() => fetchAsteroids(selectedDate)}
-            className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-cyan-300 transition-colors"
+            className="p-1 border transition-colors duration-[120ms] cursor-pointer"
+            style={{ borderColor: OPS.line, color: OPS.textDim }}
             title="Refresh NASA Telemetry Feed"
           >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? "animate-spin text-cyan-400" : ""}`} />
+            <RefreshCw
+              className={`w-3.5 h-3.5 ${isLoading ? "animate-spin" : ""}`}
+              style={{ color: isLoading ? OPS.accent : "currentColor" }}
+            />
           </button>
+
+          <Link
+            href="/"
+            className="flex items-center gap-1.5 px-2.5 py-1 border transition-colors duration-[120ms] text-[11px] font-medium"
+            style={{ borderColor: OPS.line, color: OPS.textDim }}
+          >
+            <ChevronLeft className="w-3 h-3" style={{ color: OPS.accent }} />
+            <span>BACK TO HOME</span>
+          </Link>
         </div>
       </header>
 
-      {/* ── Sub-Header Telemetry HUD Bar ───────────────────────────────────── */}
-      <AsteroidTelemetryHUD summary={summary} isLoading={isLoading} />
+      {/* ── Sub-Header Telemetry HUD Strip ─────────────────────────────────── */}
+      <AsteroidTelemetryHUD
+        summary={summary}
+        isLoading={isLoading}
+        lastFetchedAt={lastFetchedAt}
+      />
 
-      {/* ── Main Viewport Area ─────────────────────────────────────────────── */}
+      {/* ── Main Viewport Area (Flush Panels, 1px Hairline Divider) ─────────── */}
       <div className="relative flex-1 flex overflow-hidden">
-        {/* Center: 3D Proximity Radar Canvas */}
-        <div className="flex-1 h-full relative">
-          <Asteroid3DRadarScene
-            asteroids={asteroids}
+        {/* Center: 3D Proximity Radar Canvas + Bottom Scale Ruler */}
+        <div className="flex-1 h-full flex flex-col relative overflow-hidden">
+          <div className="flex-1 w-full relative min-h-0">
+            <Asteroid3DRadarScene
+              asteroids={asteroids}
+              selectedAsteroid={selectedAsteroid}
+              onSelectAsteroid={(neo: AsteroidNeoObject) => {
+                setSelectedAsteroid(neo);
+              }}
+              selectedLandmark={selectedLandmark}
+              isLoading={isLoading}
+            />
+          </div>
+
+          {/* Interactive Logarithmic Scale & Uncertainty Band Ruler */}
+          <ScaleRuler
             selectedAsteroid={selectedAsteroid}
-            onSelectAsteroid={(neo) => {
-              setSelectedAsteroid(neo);
-            }}
-            isLoading={isLoading}
+            selectedLandmark={selectedLandmark}
+            onSelectLandmark={setSelectedLandmark}
           />
         </div>
 
@@ -121,7 +165,7 @@ export default function AsteroidTrackerLayout() {
         <AsteroidFeedPanel
           asteroids={asteroids}
           selectedAsteroid={selectedAsteroid}
-          onSelectAsteroid={(neo) => setSelectedAsteroid(neo)}
+          onSelectAsteroid={(neo: AsteroidNeoObject) => setSelectedAsteroid(neo)}
           onOpenInspector={handleOpenInspector}
           selectedDate={selectedDate}
           onChangeDate={(d) => setSelectedDate(d)}
@@ -129,7 +173,7 @@ export default function AsteroidTrackerLayout() {
         />
       </div>
 
-      {/* ── Deep Dive Asteroid Detail Modal ─────────────────────────────────── */}
+      {/* ── Deep Dive Asteroid Detail Modal (Preserved intact) ──────────────── */}
       <AsteroidDetailModal
         asteroid={selectedAsteroid}
         isOpen={isInspectorOpen}

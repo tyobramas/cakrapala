@@ -2,140 +2,235 @@
 
 import React, { useEffect, useState } from "react";
 import { AsteroidFeedSummary } from "@/lib/asteroid/types";
-import {
-  ShieldAlert,
-  ShieldCheck,
-  Zap,
-  Target,
-  Gauge,
-  Clock,
-  Radio,
-  Sparkles,
-} from "lucide-react";
+import { OPS, OPS_TYPE } from "@/lib/ui/opsTheme";
+import { useOpsMode } from "@/lib/ui/opsMode";
 
 interface AsteroidTelemetryHUDProps {
   summary: AsteroidFeedSummary | null;
   isLoading?: boolean;
+  lastFetchedAt?: Date | null;
 }
 
-export default function AsteroidTelemetryHUD({ summary, isLoading }: AsteroidTelemetryHUDProps) {
-  const [utcTime, setUtcTime] = useState<string>("");
-  const [gmstTime, setGmstTime] = useState<string>("");
+export default function AsteroidTelemetryHUD({
+  summary,
+  isLoading,
+  lastFetchedAt,
+}: AsteroidTelemetryHUDProps) {
+  const { isOps } = useOpsMode();
+  const [fetchAgeSec, setFetchAgeSec] = useState<number>(0);
+  const [fetchAgeStr, setFetchAgeStr] = useState<string>("0s");
+  const [fetchAgePublicStr, setFetchAgePublicStr] = useState<string>("just now");
+  const [fetchTimeZ, setFetchTimeZ] = useState<string>("00:00:00Z");
 
   useEffect(() => {
-    const updateClocks = () => {
-      const now = new Date();
-      setUtcTime(now.toUTCString().slice(17, 25) + " UTC");
+    if (lastFetchedAt) {
+      const h = String(lastFetchedAt.getUTCHours()).padStart(2, "0");
+      const m = String(lastFetchedAt.getUTCMinutes()).padStart(2, "0");
+      const s = String(lastFetchedAt.getUTCSeconds()).padStart(2, "0");
+      setFetchTimeZ(`${h}:${m}:${s}Z`);
+    }
+  }, [lastFetchedAt]);
 
-      // Calculate Greenwich Mean Sidereal Time (GMST)
-      const d = now.getTime() / 86400000 + 2440587.5 - 2451545.0;
-      let gmstHours = (18.697374558 + 24.06570982441908 * d) % 24;
-      if (gmstHours < 0) gmstHours += 24;
-      const gh = String(Math.floor(gmstHours)).padStart(2, "0");
-      const gm = String(Math.floor((gmstHours % 1) * 60)).padStart(2, "0");
-      const gs = String(Math.floor(((gmstHours % 1) * 60 % 1) * 60)).padStart(2, "0");
-      setGmstTime(`${gh}:${gm}:${gs} GMST`);
-    };
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!lastFetchedAt) return;
+      const elapsedSec = Math.floor((Date.now() - lastFetchedAt.getTime()) / 1000);
+      setFetchAgeSec(elapsedSec);
 
-    updateClocks();
-    const interval = setInterval(updateClocks, 1000);
-    return () => clearInterval(interval);
-  }, []);
+      if (elapsedSec < 60) {
+        setFetchAgeStr(`${elapsedSec}s`);
+        setFetchAgePublicStr("just now");
+      } else {
+        const mins = Math.floor(elapsedSec / 60);
+        const secs = String(elapsedSec % 60).padStart(2, "0");
+        setFetchAgeStr(`${mins}m${secs}s`);
+        setFetchAgePublicStr(`${mins} min ago`);
+      }
+    }, 1000);
 
-  const defcon = summary?.defconLevel || 5;
+    return () => clearInterval(timer);
+  }, [lastFetchedAt]);
+
   const isHazardPresent = (summary?.hazardousCount || 0) > 0;
+  const statusLabel = isHazardPresent ? "ELEVATED" : "NOMINAL";
+
+  // Data Age Color Indicator for OPS mode
+  const ageColor =
+    !lastFetchedAt
+      ? OPS.textFaint
+      : fetchAgeSec < 300
+      ? OPS.safe // < 5 minutes: green / fresh
+      : fetchAgeSec >= 900
+      ? OPS.caution // > 15 minutes: caution / stale
+      : OPS.textDim;
 
   return (
-    <div className="w-full bg-[#050b18]/90 backdrop-blur-xl border-b border-slate-800/80 px-4 py-2.5">
-      <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-3 font-mono">
-        {/* Left: Planetary Defense Threat Status */}
-        <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-start">
+    <div
+      className="w-full px-3.5 py-2 select-none border-b"
+      style={{ background: OPS.panel, borderColor: OPS.line }}
+    >
+      {isOps ? (
+        /* ── OPS MODE: Dense Aerospace Telemetry Strip ───────────────────────── */
+        <div className="w-full flex flex-col md:flex-row items-center justify-between gap-3 font-mono">
+          {/* Left: Planetary Defense Domain Status */}
+          <div className="flex items-center gap-2.5 shrink-0">
+            <span className={OPS_TYPE.label} style={{ color: OPS.textDim }}>
+              PLANETARY DEFENSE
+            </span>
+            {/* Status lamp (6px round dot) */}
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ background: isHazardPresent ? OPS.caution : OPS.safe }}
+            />
+            <span className="text-[11px] font-mono tracking-wide" style={{ color: OPS.text }}>
+              {isLoading
+                ? "CALCULATING THREAT MATRIX..."
+                : `${statusLabel} · ${summary?.totalTracked || 0} TRACKED · ${
+                    summary?.hazardousCount || 0
+                  } PHA · TORINO 0`}
+            </span>
+          </div>
+
+          {/* Center/Right: Label-Above-Value Metric Strip with 1px Vertical Dividers */}
           <div
-            className={`flex items-center gap-2.5 px-3 py-1.5 rounded-xl border transition-all ${
-              isHazardPresent
-                ? "bg-red-500/15 border-red-500/50 text-red-300 shadow-[0_0_20px_rgba(239,68,68,0.25)]"
-                : "bg-emerald-500/10 border-emerald-500/30 text-emerald-300"
-            }`}
+            className="flex items-center gap-0 divide-x overflow-x-auto"
+            style={{ borderColor: OPS.line }}
           >
-            {isHazardPresent ? (
-              <ShieldAlert className="w-5 h-5 text-red-400 animate-pulse" />
-            ) : (
-              <ShieldCheck className="w-5 h-5 text-emerald-400" />
-            )}
-            <div>
-              <div className="text-[10px] text-slate-400 tracking-widest leading-none">
-                PLANETARY DEFENSE
+            {/* Metric 1: Tracked */}
+            <div className="px-3.5 first:pl-0 text-right" style={{ borderColor: OPS.line }}>
+              <div className={OPS_TYPE.label} style={{ color: OPS.textDim }}>TRACKED</div>
+              <div className={OPS_TYPE.value + " leading-tight mt-0.5"} style={{ color: OPS.text }}>
+                {isLoading ? "—" : summary?.totalTracked || 0}
               </div>
-              <div className="text-xs font-bold tracking-tight">
-                {isLoading ? "CALCULATING THREAT..." : summary?.defconTitle || "DEFCON 5 — RADAR ACTIVE"}
+            </div>
+
+            {/* Metric 2: Closest */}
+            <div className="px-3.5 text-right" style={{ borderColor: OPS.line }}>
+              <div className={OPS_TYPE.label} style={{ color: OPS.textDim }}>CLOSEST</div>
+              <div className={OPS_TYPE.value + " leading-tight mt-0.5"} style={{ color: OPS.text }}>
+                {isLoading
+                  ? "—"
+                  : summary?.closestObject
+                  ? `${summary.closestObject.distanceLd.toFixed(2)} LD`
+                  : "N/A"}
+              </div>
+              {summary?.closestObject && (
+                <div className={OPS_TYPE.meta + " leading-none"} style={{ color: OPS.textFaint }}>
+                  {((summary.closestObject.distanceKm || 0) / 1e6).toFixed(2)} M km
+                </div>
+              )}
+            </div>
+
+            {/* Metric 3: Max Velocity */}
+            <div className="px-3.5 text-right" style={{ borderColor: OPS.line }}>
+              <div className={OPS_TYPE.label} style={{ color: OPS.textDim }}>MAX VEL</div>
+              <div className={OPS_TYPE.value + " leading-tight mt-0.5"} style={{ color: OPS.text }}>
+                {isLoading
+                  ? "—"
+                  : summary?.fastestObject
+                  ? Math.round(summary.fastestObject.velocityKmh).toLocaleString()
+                  : "N/A"}
+              </div>
+              <div className={OPS_TYPE.meta + " leading-none"} style={{ color: OPS.textFaint }}>
+                km/h
+              </div>
+            </div>
+
+            {/* Metric 4: Largest */}
+            <div className="px-3.5 text-right" style={{ borderColor: OPS.line }}>
+              <div className={OPS_TYPE.label} style={{ color: OPS.textDim }}>LARGEST</div>
+              <div className={OPS_TYPE.value + " leading-tight mt-0.5"} style={{ color: OPS.text }}>
+                {isLoading
+                  ? "—"
+                  : summary?.largestObject
+                  ? `${summary.largestObject.diameterMeters} m`
+                  : "N/A"}
               </div>
             </div>
           </div>
 
-          {/* Time Sync Indicators */}
-          <div className="hidden lg:flex items-center gap-2.5 text-[11px] text-slate-400 bg-slate-900/60 px-3 py-1.5 rounded-xl border border-slate-800">
-            <Clock className="w-3.5 h-3.5 text-cyan-400" />
-            <span>{utcTime || "00:00:00 UTC"}</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-indigo-300">{gmstTime || "00:00:00 GMST"}</span>
+          {/* Far Right: Provenance & Color-Coded Age */}
+          <div className="shrink-0 hidden xl:block">
+            <span className={OPS_TYPE.meta} style={{ color: OPS.textFaint }}>
+              SRC NASA/JPL SBDB · NeoWs · FETCH {fetchTimeZ} · AGE{" "}
+              <span style={{ color: ageColor, fontWeight: 600 }}>{fetchAgeStr}</span>
+            </span>
           </div>
         </div>
-
-        {/* Right: Key Telemetry Metric Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 w-full md:w-auto">
-          {/* Card 1: Active NEO Count */}
-          <div className="bg-slate-900/70 border border-slate-800/80 px-3 py-1.5 rounded-xl flex items-center gap-2.5">
-            <Radio className="w-4 h-4 text-cyan-400 shrink-0" />
+      ) : (
+        /* ── PUBLIC MODE: Plain Language Contextual Summary ─────────────────── */
+        <div className="w-full flex flex-col md:flex-row items-center justify-between gap-3 font-mono">
+          {/* Left: Clear Natural Language Threat Headline */}
+          <div className="flex items-center gap-2.5">
+            <span
+              className="w-2 h-2 rounded-full shrink-0"
+              style={{ background: isHazardPresent ? OPS.caution : OPS.safe }}
+            />
             <div>
-              <div className="text-[9px] text-slate-400 uppercase tracking-wider leading-none">TRACKED OBJECTS</div>
-              <div className="text-xs font-bold text-white mt-0.5">
-                {isLoading ? "..." : `${summary?.totalTracked || 0} NEOs`}
-                {isHazardPresent && (
-                  <span className="ml-1 text-[10px] text-red-400 font-normal">
-                    ({summary?.hazardousCount} PHA)
-                  </span>
-                )}
+              <div className="text-xs font-semibold" style={{ color: OPS.text }}>
+                {isLoading
+                  ? "Loading asteroid tracking data..."
+                  : isHazardPresent
+                  ? `Potential hazard monitored — ${summary?.hazardousCount || 0} of ${
+                      summary?.totalTracked || 0
+                    } asteroids classified as PHA`
+                  : `No threat detected — ${summary?.totalTracked || 0} asteroids tracked today`}
+              </div>
+              <div className="text-[11px]" style={{ color: OPS.textDim }}>
+                {summary?.closestObject
+                  ? `Closest passes at ${summary.closestObject.distanceLd.toFixed(1)}× the Moon's distance (~${(
+                      (summary.closestObject.distanceKm || 0) / 1e6
+                    ).toFixed(1)} million km). Data from NASA, updated ${fetchAgePublicStr}.`
+                  : `Data from NASA JPL, updated ${fetchAgePublicStr}.`}
               </div>
             </div>
           </div>
 
-          {/* Card 2: Closest Flyby */}
-          <div className="bg-slate-900/70 border border-slate-800/80 px-3 py-1.5 rounded-xl flex items-center gap-2.5">
-            <Target className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div className="truncate">
-              <div className="text-[9px] text-slate-400 uppercase tracking-wider leading-none">CLOSEST FLYBY</div>
-              <div className="text-xs font-bold text-emerald-300 mt-0.5 truncate">
-                {isLoading ? "..." : summary?.closestObject ? `${summary.closestObject.distanceLd.toFixed(2)} LD` : "N/A"}
-                <span className="text-[9px] text-slate-400 ml-1 font-normal">
-                  ({Math.round((summary?.closestObject?.distanceKm || 0) / 1000).toLocaleString()}k km)
-                </span>
+          {/* Right: Human-Friendly Key Metrics */}
+          <div
+            className="flex items-center gap-0 divide-x text-xs"
+            style={{ borderColor: OPS.line }}
+          >
+            <div className="px-3 first:pl-0 text-right" style={{ borderColor: OPS.line }}>
+              <div className="text-[9px] uppercase tracking-wider" style={{ color: OPS.textDim }}>
+                Tracked Today
+              </div>
+              <div className="text-xs font-bold" style={{ color: OPS.text }}>
+                {summary?.totalTracked || 0} asteroids
               </div>
             </div>
-          </div>
 
-          {/* Card 3: Fastest Velocity */}
-          <div className="bg-slate-900/70 border border-slate-800/80 px-3 py-1.5 rounded-xl flex items-center gap-2.5">
-            <Gauge className="w-4 h-4 text-amber-400 shrink-0" />
-            <div>
-              <div className="text-[9px] text-slate-400 uppercase tracking-wider leading-none">MAX VELOCITY</div>
-              <div className="text-xs font-bold text-amber-300 mt-0.5">
-                {isLoading ? "..." : summary?.fastestObject ? `${Math.round(summary.fastestObject.velocityKmh).toLocaleString()} km/h` : "N/A"}
+            <div className="px-3 text-right" style={{ borderColor: OPS.line }}>
+              <div className="text-[9px] uppercase tracking-wider" style={{ color: OPS.textDim }}>
+                Closest Approach
+              </div>
+              <div className="text-xs font-bold" style={{ color: OPS.text }}>
+                {summary?.closestObject ? `${summary.closestObject.distanceLd.toFixed(1)}× Moon` : "N/A"}
               </div>
             </div>
-          </div>
 
-          {/* Card 4: Largest Object */}
-          <div className="bg-slate-900/70 border border-slate-800/80 px-3 py-1.5 rounded-xl flex items-center gap-2.5">
-            <Sparkles className="w-4 h-4 text-indigo-400 shrink-0" />
-            <div className="truncate">
-              <div className="text-[9px] text-slate-400 uppercase tracking-wider leading-none">LARGEST DIAMETER</div>
-              <div className="text-xs font-bold text-indigo-300 mt-0.5 truncate">
-                {isLoading ? "..." : summary?.largestObject ? `${summary.largestObject.diameterMeters} meters` : "N/A"}
+            <div className="px-3 text-right" style={{ borderColor: OPS.line }}>
+              <div className="text-[9px] uppercase tracking-wider" style={{ color: OPS.textDim }}>
+                Peak Speed
+              </div>
+              <div className="text-xs font-bold" style={{ color: OPS.text }}>
+                {summary?.fastestObject
+                  ? `${Math.round(summary.fastestObject.velocityKmh).toLocaleString()} km/h`
+                  : "N/A"}
+              </div>
+            </div>
+
+            <div className="px-3 text-right" style={{ borderColor: OPS.line }}>
+              <div className="text-[9px] uppercase tracking-wider" style={{ color: OPS.textDim }}>
+                Largest Object
+              </div>
+              <div className="text-xs font-bold" style={{ color: OPS.text }}>
+                {summary?.largestObject ? `${summary.largestObject.diameterMeters} meters` : "N/A"}
               </div>
             </div>
           </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
