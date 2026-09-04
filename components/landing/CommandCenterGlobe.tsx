@@ -16,7 +16,14 @@
 import { useRef, useEffect, useState } from "react";
 import * as THREE from "three";
 
-export default function CommandCenterGlobe() {
+interface CommandCenterGlobeProps {
+  /** "card" keeps the existing framed look. "fullscreen" fills the viewport. */
+  variant?: "card" | "fullscreen";
+}
+
+export default function CommandCenterGlobe({
+  variant = "card",
+}: CommandCenterGlobeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [ready, setReady] = useState(false);
 
@@ -25,21 +32,45 @@ export default function CommandCenterGlobe() {
     if (!container) return;
 
     let disposed = false;
+    const full = variant === "fullscreen";
 
-    // ── Constants & Dimensions ─────────────────────────────────────────
-    const EARTH_RADIUS = 3.4;
+    // ── Framing ────────────────────────────────────────────────────────
+    // Fullscreen pushes the sphere down and out past both screen edges so
+    // only the limb arc is visible, matching a cupola-window composition.
+    const EARTH_RADIUS = full ? 12.5 : 3.4;
+    const EARTH_CENTER_Y = full ? -14.1 : -2.15;
+    const CAMERA_FOV = full ? 55 : 48;
+    const CAMERA_Z = full ? 4.9 : 4.4;
+    // Milky Way is bright and luminous in fullscreen matching NASA reference imagery
+    const SKY_OPACITY = full ? 0.95 : 0.65;
+    const STAR_OPACITY = full ? 0.75 : 0.85;
+
+    // Orbital motion. From a forward-facing window the surface always flows
+    // straight DOWN the screen, so the spin axis is +X regardless of the
+    // orbit's inclination — inclination only changes which terrain appears.
+    const SPIN_AXIS = full
+      ? new THREE.Vector3(1, 0, 0)
+      : new THREE.Vector3(0, 1, 0);
+
+    // ISS-like period 92.68 min -> 2*pi/5560.8 s = 1.130e-3 rad/s = 0.0647 deg/s.
+    // At true rate a visitor sees 2 degrees in 30 s, so it is scaled for display.
+    const ORBIT_RATE_RAD_S = (2 * Math.PI) / (92.68 * 60);
+    const TIME_SCALE = full ? 45 : 20;
+    const SPIN_RATE_RAD_S = ORBIT_RATE_RAD_S * TIME_SCALE;
+
+    let spinAngle = 0;
+    let lastFrameMs = performance.now();
 
     // ── Scene, Camera & Renderer ───────────────────────────────────────
     const scene = new THREE.Scene();
 
-    // 48° FOV provides a grand, wide-angle cinematic curve matching real orbit photos
     const camera = new THREE.PerspectiveCamera(
-      48,
+      CAMERA_FOV,
       container.clientWidth / container.clientHeight,
       0.1,
       2000
     );
-    camera.position.set(0, 0.45, 4.4);
+    camera.position.set(0, 0.45, CAMERA_Z);
     camera.lookAt(0, -0.4, 0);
 
     const renderer = new THREE.WebGLRenderer({
@@ -66,11 +97,13 @@ export default function CommandCenterGlobe() {
       map: milkyWayTexture,
       side: THREE.BackSide,
       transparent: true,
-      opacity: 0.65,
+      opacity: SKY_OPACITY,
     });
     const skyDome = new THREE.Mesh(skyGeo, skyMat);
-    skyDome.rotation.x = 0.35;
-    skyDome.rotation.y = -1.1;
+    // Align Milky Way: in fullscreen, galactic core is centered horizontally & runs level across the sky
+    skyDome.rotation.x = full ? -0.10 : 0.35;
+    skyDome.rotation.y = full ? -0.45 : -1.1;
+    skyDome.rotation.z = full ? 0.06 : 0.0;
     // Fix mirrored sky: BackSide sphere flips texture horizontally.
     // Negate scale.x to restore correct East/West orientation matching real sky (e.g. Stellarium).
     skyDome.scale.x = -1;
@@ -112,30 +145,32 @@ export default function CommandCenterGlobe() {
       size: 0.6,
       vertexColors: true,
       transparent: true,
-      opacity: 0.85,
+      opacity: STAR_OPACITY,
       sizeAttenuation: true,
       blending: THREE.AdditiveBlending,
     });
     const stars = new THREE.Points(starGeo, starMat);
     scene.add(stars);
 
+    // ── Solar Vector (Calculated in World Space) ──────────────────────
+    // Direct Sun position high-right creates brilliant daylit Earth on the right,
+    // a glowing twilight terminator ribbon across center, and deep starry night on the left.
+    const sunDirection = new THREE.Vector3(1.7, 0.12, 0.45).normalize();
+
     // ── Earth Assembly Group ──────────────────────────────────────────
-    // Placed below camera line so the curved horizon apex lands at ~25-30% from the top
     const earthGroup = new THREE.Group();
-    earthGroup.position.set(0, -2.15, 0);
-    earthGroup.rotation.z = -0.12; // Realistic orbital axial tilt
-    earthGroup.rotation.x = 0.08;  // Slight pitch forward for optimal landmass visibility
+    earthGroup.position.set(0, EARTH_CENTER_Y, 0);
+    if (full) {
+      earthGroup.rotation.z = -0.06;
+      earthGroup.rotation.x = 0.05;
+    } else {
+      earthGroup.rotation.z = -0.38; // 22° axial tilt in card mode
+    }
     scene.add(earthGroup);
 
-    // Group for continuous spinning layers
-    const earthSpinGroup = new THREE.Group();
-    earthGroup.add(earthSpinGroup);
-
-    // ── Earth Sphere Mesh ─────────────────────────────────────────────
-    const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 128, 128);
-
+    // ── Texture Loading ───────────────────────────────────────────────
     let texturesLoaded = 0;
-    const totalTextures = 4;
+    const totalTextures = 5;
 
     const onTextureLoaded = () => {
       texturesLoaded++;
@@ -171,68 +206,238 @@ export default function CommandCenterGlobe() {
     nightMap.anisotropy = maxAniso;
     nightMap.minFilter = THREE.LinearMipmapLinearFilter;
 
-    const earthMat = new THREE.MeshPhongMaterial({
-      map: dayMap,
-      bumpMap: bumpMap,
-      bumpScale: 0.045,
-      specularMap: specMap,
-      specular: new THREE.Color(0xb8e2f8),
-      shininess: 40,
-      emissiveMap: nightMap,
-      emissive: new THREE.Color(0xffd085),
-      emissiveIntensity: 0.9,
-    });
-
-    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
-    earthSpinGroup.add(earthMesh);
-
-    // ── Dynamic Cloud Layer ───────────────────────────────────────────
-    const cloudTex = textureLoader.load("/textures/planets/earth_clouds.png");
+    const cloudTex = textureLoader.load("/textures/planets/earth_clouds.png", onTextureLoaded, undefined, onTextureError);
     cloudTex.colorSpace = THREE.SRGBColorSpace;
-    const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.003, 128, 128);
-    const cloudMat = new THREE.MeshStandardMaterial({
-      map: cloudTex,
-      transparent: true,
-      opacity: 0.32,
-      blending: THREE.NormalBlending,
-      roughness: 1.0,
-      metalness: 0.0,
-      depthWrite: false,
-    });
-    const cloudsMesh = new THREE.Mesh(cloudGeo, cloudMat);
-    earthSpinGroup.add(cloudsMesh);
+    cloudTex.anisotropy = maxAniso;
 
-    // ── Atmospheric Rayleigh Limb Glow (Photorealistic Horizon Glow) ──
-    const atmosGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.012, 128, 128);
-    const atmosMat = new THREE.ShaderMaterial({
+    // ── Custom Photorealistic Day/Night Earth Material ────────────────
+    const earthMat = new THREE.ShaderMaterial({
+      uniforms: {
+        dayTexture: { value: dayMap },
+        nightTexture: { value: nightMap },
+        bumpMap: { value: bumpMap },
+        specularMap: { value: specMap },
+        uSunDirection: { value: sunDirection },
+        uBumpScale: { value: 0.035 },
+      },
       vertexShader: `
-        varying vec3 vNormal;
-        varying vec3 vViewDir;
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        varying vec2 vUv;
+
         void main() {
-          vNormal = normalize(normalMatrix * normal);
+          vUv = uv;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D dayTexture;
+        uniform sampler2D nightTexture;
+        uniform sampler2D bumpMap;
+        uniform sampler2D specularMap;
+        uniform vec3 uSunDirection;
+        uniform float uBumpScale;
+
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        varying vec2 vUv;
+
+        void main() {
+          vec3 worldNormal = normalize(vWorldNormal);
+          vec3 viewDir = normalize(cameraPosition - vWorldPosition);
+
+          // Topographic elevation bump perturbation
+          vec2 dU = vec2(0.00025, 0.0);
+          vec2 dV = vec2(0.0, 0.00025);
+          float hC = texture2D(bumpMap, vUv).r;
+          float hU = texture2D(bumpMap, vUv + dU).r;
+          float hV = texture2D(bumpMap, vUv + dV).r;
+          float diffU = (hU - hC) * uBumpScale;
+          float diffV = (hV - hC) * uBumpScale;
+
+          vec3 up = abs(worldNormal.y) < 0.999 ? vec3(0.0, 1.0, 0.0) : vec3(1.0, 0.0, 0.0);
+          vec3 tangent = normalize(cross(up, worldNormal));
+          vec3 bitangent = cross(worldNormal, tangent);
+          vec3 perturbedNormal = normalize(worldNormal - tangent * diffU - bitangent * diffV);
+
+          float rawNL = dot(worldNormal, uSunDirection);
+          float dotNL = dot(perturbedNormal, uSunDirection);
+
+          // 1. Day Surface (NASA Blue Marble 4K)
+          float dayDiffuse = clamp(dotNL, 0.0, 1.0);
+          float dayFactor = smoothstep(-0.02, 0.08, rawNL);
+          
+          vec3 dayColor = texture2D(dayTexture, vUv).rgb;
+          // Natural color calibration: rich vegetation greens, desert ochres, deep sea blues
+          dayColor = pow(dayColor, vec3(0.96)) * 1.08;
+
+          // 2. Specular Ocean Glint (Sunlight reflection on water)
+          float specMask = texture2D(specularMap, vUv).r;
+          vec3 halfVec = normalize(uSunDirection + viewDir);
+          float dotNH = max(0.0, dot(perturbedNormal, halfVec));
+          float specPower = pow(dotNH, 64.0);
+          float specIntensity = specPower * specMask * max(0.0, dotNL);
+          vec3 specGlint = vec3(1.0, 1.0, 1.0) * specIntensity * 1.2;
+
+          // 3. Night City Lights (NASA Black Marble 4K)
+          float nightFactor = 1.0 - smoothstep(-0.05, 0.05, rawNL);
+          vec3 nightSample = texture2D(nightTexture, vUv).rgb;
+          vec3 cityTone = nightSample * vec3(1.42, 1.22, 0.92);
+          cityTone = pow(cityTone, vec3(1.12)) * 3.0;
+          vec3 nightLights = cityTone * nightFactor;
+
+          // 4. Starlight ambient illumination (deep dark indigo for unpopulated land & ocean)
+          vec3 nightOceanAmbient = mix(vec3(0.002, 0.005, 0.012), vec3(0.006, 0.009, 0.016), dayColor.g) * nightFactor;
+
+          // Composite physical surface: natural daylight + specular glint + night lights (NO yellow artificial glow)
+          vec3 finalColor = (dayColor * dayDiffuse + specGlint) * dayFactor
+                          + nightLights
+                          + nightOceanAmbient;
+
+          gl_FragColor = vec4(finalColor, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+      toneMapped: true,
+    });
+
+    // ── Orbital Pitch Group & Earth Mesh ──────────────────────────────
+    const orbitPitchGroup = new THREE.Group();
+    earthGroup.add(orbitPitchGroup);
+
+    const earthGeo = new THREE.SphereGeometry(EARTH_RADIUS, 128, 128);
+    const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+    if (full) {
+      // ISS 51.6° orbital inclination: ground track sweeps across populated continents
+      // (Europe, Africa, Asia, Americas) avoiding the Antarctic polar cap
+      earthMesh.rotation.z = THREE.MathUtils.degToRad(51.6);
+      earthMesh.rotation.y = THREE.MathUtils.degToRad(25);
+    }
+    orbitPitchGroup.add(earthMesh);
+
+    // ── Dynamic Cloud Layer with Day/Night Shading ─────────────────────
+    const cloudMat = new THREE.ShaderMaterial({
+      uniforms: {
+        cloudTexture: { value: cloudTex },
+        uSunDirection: { value: sunDirection },
+      },
+      vertexShader: `
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        varying vec2 vUv;
+
+        void main() {
+          vUv = uv;
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
+          gl_Position = projectionMatrix * viewMatrix * worldPos;
+        }
+      `,
+      fragmentShader: `
+        uniform sampler2D cloudTexture;
+        uniform vec3 uSunDirection;
+
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        varying vec2 vUv;
+
+        void main() {
+          float cloudDensity = texture2D(cloudTexture, vUv).r;
+          if (cloudDensity < 0.04) discard;
+
+          float dotNL = dot(vWorldNormal, uSunDirection);
+          float dayFactor = smoothstep(-0.04, 0.10, dotNL);
+
+          // Natural cloud colors: crisp white in day, dark silhouetted at night — NO yellow tint
+          vec3 dayCloudColor = vec3(1.0, 1.0, 1.0) * clamp(dotNL, 0.15, 1.0);
+          vec3 nightCloudColor = vec3(0.02, 0.03, 0.05);
+
+          vec3 cloudColor = mix(nightCloudColor, dayCloudColor, dayFactor);
+          float alpha = smoothstep(0.05, 0.85, cloudDensity) * (mix(0.18, 0.36, dayFactor));
+
+          gl_FragColor = vec4(cloudColor, alpha);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
+        }
+      `,
+      transparent: true,
+      blending: THREE.NormalBlending,
+      depthWrite: false,
+      toneMapped: true,
+    });
+
+    const cloudPitchGroup = new THREE.Group();
+    earthGroup.add(cloudPitchGroup);
+
+    const cloudGeo = new THREE.SphereGeometry(EARTH_RADIUS * 1.0035, 128, 128);
+    const cloudsMesh = new THREE.Mesh(cloudGeo, cloudMat);
+    if (full) {
+      cloudsMesh.rotation.z = THREE.MathUtils.degToRad(51.6);
+      cloudsMesh.rotation.y = THREE.MathUtils.degToRad(25);
+    }
+    cloudPitchGroup.add(cloudsMesh);
+
+    // ── Atmospheric Rayleigh Limb Glow (Sun-Aware Scattering) ─────────
+    const atmosGeo = new THREE.SphereGeometry(EARTH_RADIUS * (full ? 1.016 : 1.012), 128, 128);
+    const atmosMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uSunDirection: { value: sunDirection },
+      },
+      vertexShader: `
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
+        varying vec3 vViewDir;
+
+        void main() {
+          vec4 worldPos = modelMatrix * vec4(position, 1.0);
+          vWorldPosition = worldPos.xyz;
+          vWorldNormal = normalize((modelMatrix * vec4(normal, 0.0)).xyz);
           vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
-          vViewDir = normalize(-mvPos.xyz);
+          vViewDir = normalize(cameraPosition - worldPos.xyz);
           gl_Position = projectionMatrix * mvPos;
         }
       `,
       fragmentShader: `
-        varying vec3 vNormal;
+        uniform vec3 uSunDirection;
+        varying vec3 vWorldNormal;
+        varying vec3 vWorldPosition;
         varying vec3 vViewDir;
+
         void main() {
-          float rim = 1.0 - max(0.0, dot(vNormal, vViewDir));
-          
-          // Pure horizon scattering curve
-          float intensity = pow(rim, 3.8) * 2.2;
-          
-          // Smooth transition from deep ocean blue -> vivid cyan -> white-blue limb
-          vec3 deepBlue = vec3(0.05, 0.28, 0.90);
-          vec3 electricCyan = vec3(0.32, 0.78, 1.0);
-          vec3 limbWhite = vec3(0.88, 0.95, 1.0);
-          
-          vec3 color = mix(deepBlue, electricCyan, smoothstep(0.4, 0.85, rim));
-          color = mix(color, limbWhite, smoothstep(0.85, 1.0, rim));
-          
-          gl_FragColor = vec4(color, clamp(intensity, 0.0, 0.95));
+          float rim = 1.0 - max(0.0, dot(vWorldNormal, vViewDir));
+          // Sharp limb concentration: airglow is only visible at the tangential atmospheric horizon
+          float limbRim = smoothstep(0.50, 0.98, rim);
+          float baseIntensity = pow(limbRim, 2.8) * 2.5;
+
+          float dotSun = dot(vWorldNormal, uSunDirection);
+          float dayLimb = smoothstep(-0.06, 0.18, dotSun);
+          float nightLimb = 1.0 - smoothstep(-0.12, 0.06, dotSun);
+
+          // Pure ISS airglow: deep blue, cyan, and white limb — NO yellow
+          vec3 deepBlue = vec3(0.02, 0.38, 0.95);
+          vec3 electricCyan = vec3(0.0, 0.92, 0.98);
+          vec3 turquoiseAirglow = vec3(0.08, 0.98, 0.85);
+          vec3 limbWhite = vec3(0.90, 0.98, 1.0);
+
+          vec3 dayColor = mix(deepBlue, electricCyan, smoothstep(0.35, 0.78, rim));
+          dayColor = mix(dayColor, turquoiseAirglow, smoothstep(0.78, 0.92, rim));
+          dayColor = mix(dayColor, limbWhite, smoothstep(0.92, 1.0, rim));
+
+          vec3 nightAirglowColor = vec3(0.04, 0.50, 0.32);
+
+          vec3 color = dayColor * dayLimb + nightAirglowColor * nightLimb * 0.25;
+          float intensity = baseIntensity * (dayLimb * 1.0 + nightLimb * 0.20);
+
+          // Subtle vertical airglow curtain shafts
+          float shafts = max(0.0, sin(vWorldPosition.x * 2.2) * 0.08 + sin(vWorldPosition.x * 5.1 + 0.8) * 0.06);
+          intensity += shafts * pow(limbRim, 3.2) * (dayLimb * 0.6 + nightLimb * 0.15);
+
+          gl_FragColor = vec4(color, clamp(intensity, 0.0, 0.98));
         }
       `,
       blending: THREE.AdditiveBlending,
@@ -243,21 +448,6 @@ export default function CommandCenterGlobe() {
     const atmosMesh = new THREE.Mesh(atmosGeo, atmosMat);
     earthGroup.add(atmosMesh);
 
-    // ── Solar & Orbital Lighting ──────────────────────────────────────
-    // Direct Sun position high-right creates brilliant daylit Earth & sparkling oceans
-    const sunLight = new THREE.DirectionalLight(0xfff6ec, 3.8);
-    sunLight.position.set(5.5, 7.5, 6.0);
-    scene.add(sunLight);
-
-    // Ambient space illumination to prevent pitch-black areas
-    const ambientLight = new THREE.AmbientLight(0x0f1c30, 0.55);
-    scene.add(ambientLight);
-
-    // Soft cyan atmospheric fill light from the side
-    const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.45);
-    fillLight.position.set(-5.0, 2.5, 3.5);
-    scene.add(fillLight);
-
     // ── Animation Loop ────────────────────────────────────────────────
     let animId: number;
     let startTime = performance.now();
@@ -266,11 +456,25 @@ export default function CommandCenterGlobe() {
       animId = requestAnimationFrame(animate);
       const elapsed = (performance.now() - startTime) * 0.001;
 
-      // Rotate the entire earthSpinGroup (Earth + Clouds rotate together seamlessly)
-      earthSpinGroup.rotation.y += 0.00045;
+      const nowMs = performance.now();
+      const dt = Math.min((nowMs - lastFrameMs) / 1000, 0.1);
+      lastFrameMs = nowMs;
 
-      // Subtle atmospheric shimmer & skybox drift
-      skyDome.rotation.y += 0.00004;
+      spinAngle += SPIN_RATE_RAD_S * dt;
+
+      if (full) {
+        // Forward cupola flight: surface and clouds flow downwards together in unison
+        orbitPitchGroup.quaternion.setFromAxisAngle(SPIN_AXIS, spinAngle);
+        cloudPitchGroup.quaternion.setFromAxisAngle(SPIN_AXIS, spinAngle);
+      } else {
+        // Card mode: planetary horizontal rotation
+        orbitPitchGroup.rotation.y = spinAngle;
+        cloudPitchGroup.rotation.y = spinAngle;
+      }
+
+      // Subtle cosmic Milky Way drift (Milky Way rotates slowly while starfield points remain fixed)
+      const skyDriftRate = full ? 0.0012 : 0.0024; // rad/s
+      skyDome.rotation.y += skyDriftRate * dt;
 
       // Subtle orbital breathing / float for cinematic feeling
       camera.position.x = Math.sin(elapsed * 0.35) * 0.035;
@@ -315,11 +519,17 @@ export default function CommandCenterGlobe() {
       skyMat.dispose();
       starGeo.dispose();
       starMat.dispose();
+      dayMap.dispose();
+      bumpMap.dispose();
+      specMap.dispose();
+      nightMap.dispose();
+      cloudTex.dispose();
+      milkyWayTexture.dispose();
       if (container.contains(renderer.domElement)) {
         container.removeChild(renderer.domElement);
       }
     };
-  }, []);
+  }, [variant]);
 
   return (
     <div className="relative w-full h-full select-none overflow-hidden">
@@ -339,37 +549,43 @@ export default function CommandCenterGlobe() {
       )}
 
       {/* Top Left: Live Telemetry Badge */}
-      <div className="absolute top-3 left-3 z-10 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/70 border border-cyan-500/30 backdrop-blur-xl">
-        <span className="relative flex h-2 w-2">
-          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
-          <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
-        </span>
-        <span className="text-[10px] font-mono font-bold text-cyan-400 tracking-wider">
-          LOW EARTH ORBIT
-        </span>
-        <span className="text-slate-700 text-xs">│</span>
-        <span className="text-[9px] font-mono text-slate-300">
-          ALT 418.4 KM
-        </span>
-      </div>
+      {variant === "card" && (
+        <div className="absolute top-3 left-3 z-10 pointer-events-none flex items-center gap-2 px-3 py-1.5 rounded-xl bg-black/70 border border-cyan-500/30 backdrop-blur-xl">
+          <span className="relative flex h-2 w-2">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75" />
+            <span className="relative inline-flex rounded-full h-2 w-2 bg-cyan-500" />
+          </span>
+          <span className="text-[10px] font-mono font-bold text-cyan-400 tracking-wider">
+            LOW EARTH ORBIT
+          </span>
+          <span className="text-slate-700 text-xs">│</span>
+          <span className="text-[9px] font-mono text-slate-300">
+            ALT 418.4 KM
+          </span>
+        </div>
+      )}
 
       {/* Top Right: Flight Status */}
-      <div className="absolute top-3 right-3 z-10 pointer-events-none flex items-center gap-2">
-        <div className="px-3 py-1.5 rounded-xl bg-black/70 border border-slate-800/80 backdrop-blur-xl text-[9px] font-mono text-slate-300">
-          VELOCITY: <strong className="text-cyan-300 font-bold">27,580 KM/H</strong>
+      {variant === "card" && (
+        <div className="absolute top-3 right-3 z-10 pointer-events-none flex items-center gap-2">
+          <div className="px-3 py-1.5 rounded-xl bg-black/70 border border-slate-800/80 backdrop-blur-xl text-[9px] font-mono text-slate-300">
+            VELOCITY: <strong className="text-cyan-300 font-bold">27,580 KM/H</strong>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Bottom Center: Telemetry Info */}
-      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
-        <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-black/75 border border-slate-800/80 backdrop-blur-xl text-[9px] font-mono text-slate-400 shadow-xl">
-          <span className="text-cyan-300 font-bold">4K NASA BLUE MARBLE</span>
-          <span className="text-slate-700">│</span>
-          <span className="text-indigo-300 font-bold">8K MILKY WAY</span>
-          <span className="text-slate-700">│</span>
-          <span className="text-emerald-400 font-bold">LEO POV • 418 KM</span>
+      {variant === "card" && (
+        <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none">
+          <div className="flex items-center gap-3 px-4 py-1.5 rounded-full bg-black/75 border border-slate-800/80 backdrop-blur-xl text-[9px] font-mono text-slate-400 shadow-xl">
+            <span className="text-cyan-300 font-bold">4K NASA BLUE MARBLE</span>
+            <span className="text-slate-700">│</span>
+            <span className="text-indigo-300 font-bold">8K MILKY WAY</span>
+            <span className="text-slate-700">│</span>
+            <span className="text-emerald-400 font-bold">LEO POV • 418 KM</span>
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }

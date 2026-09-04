@@ -195,27 +195,6 @@ export default function HeroSection() {
         <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] rounded-full bg-blue-950/15 blur-[250px]" />
       </div>
 
-      {/* ── Top Mission Status Strip ─────────────────────────────────── */}
-      <div className="relative z-20 max-w-[1600px] mx-auto mb-4">
-        <div className="flex flex-wrap items-center justify-between gap-2 px-3 sm:px-4 py-2 rounded-2xl bg-[#080d1a]/80 border border-slate-800/60 backdrop-blur-2xl font-mono text-[9px] sm:text-[10px] tracking-wider">
-          <div className="flex items-center gap-2 sm:gap-3 text-slate-400">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-emerald-400 font-bold">ALL SYSTEMS NOMINAL</span>
-            </span>
-            <span className="text-slate-600 hidden sm:inline">│</span>
-            <span className="hidden sm:inline">DEEP SPACE COMMAND CENTER</span>
-          </div>
-          <div className="flex items-center gap-2 sm:gap-3 text-slate-400">
-            <span>SATS ONLINE: <strong className="text-cyan-300">{catalogCounts.satellites}</strong></span>
-            <span className="text-slate-600">│</span>
-            <span className="flex items-center gap-1">
-              <Shield className="w-3 h-3 text-emerald-400" />
-              <span className="text-emerald-400 font-bold">LOCKED</span>
-            </span>
-          </div>
-        </div>
-      </div>
 
       {/* ══════════════════════════════════════════════════════════════════
           MAIN COMMAND CENTER: LEFT DATA + CENTER GLOBE + RIGHT DATA

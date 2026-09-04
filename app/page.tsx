@@ -1,9 +1,8 @@
 import type { Metadata } from "next";
+import NavbarArc from "@/components/landing/NavbarArc";
 import Navbar from "@/components/landing/Navbar";
 import CosmicCanvas from "@/components/landing/CosmicCanvas";
-import HeroSection from "@/components/landing/HeroSection";
-import ExplorationModules from "@/components/landing/ExplorationModules";
-import Footer from "@/components/landing/Footer";
+import HeroOrbital from "@/components/landing/HeroOrbital";
 
 export const metadata: Metadata = {
   title: "Cakrapala — Deep Space Observatory & IBM Granite AI Co-Pilot",
@@ -13,21 +12,13 @@ export const metadata: Metadata = {
 
 export default function LandingPage() {
   return (
-    <div className="relative min-h-screen bg-[#020617] text-slate-100 overflow-x-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
-      {/* Background Deep Space Realistic Starfield */}
+    <main className="relative h-screen w-screen bg-[#020617] text-slate-100 overflow-hidden selection:bg-cyan-500/30 selection:text-cyan-200">
       <CosmicCanvas />
-
-      {/* Top Aerospace Navbar */}
       <Navbar />
+      <NavbarArc />
 
-      {/* 1. ISS Command Center — 3D Earth Globe + Data Analytics */}
-      <HeroSection />
-
-      {/* 2. Primary Observatory Exploration Modules */}
-      <ExplorationModules />
-
-      {/* 3. Futuristic NASA-grade Footer */}
-      <Footer />
-    </div>
+      {/* Full-viewport LEO cupola hero — Single view landing experience */}
+      <HeroOrbital />
+    </main>
   );
 }

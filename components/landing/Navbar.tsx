@@ -18,19 +18,20 @@ import {
   Menu,
   X,
   Compass,
-  Orbit,
-  Sparkles,
-  Satellite,
+  Globe2,
+  RadioTower,
+  Telescope,
+  Radar,
+  SatelliteDish,
+  Atom,
   ChevronRight,
-  Crosshair,
   Terminal,
-  BookOpen,
-  Rocket,
 } from "lucide-react";
 import AstronomyTerminal from "@/components/ai/AstronomyTerminal";
 
 export default function Navbar() {
   const pathname = usePathname();
+  const isLanding = pathname === "/";
   const [timeUtc, setTimeUtc] = useState<string>("");
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
   const [isAiTerminalOpen, setIsAiTerminalOpen] = useState<boolean>(false);
@@ -51,7 +52,7 @@ export default function Navbar() {
       shortLabel: "SOLAR",
       href: "/solar-system",
       code: "SYS-01",
-      icon: Orbit,
+      icon: Globe2,
       desc: "3D Keplerian Planetary Orrery",
     },
     {
@@ -60,7 +61,7 @@ export default function Navbar() {
       shortLabel: "MISSION",
       href: "/mission-control",
       code: "SYS-02",
-      icon: Rocket,
+      icon: RadioTower,
       desc: "AI-Assisted Mission Planning & Analysis",
     },
     {
@@ -69,7 +70,7 @@ export default function Navbar() {
       shortLabel: "SKY MAP",
       href: "/sky",
       code: "SYS-03",
-      icon: Sparkles,
+      icon: Telescope,
       desc: "IAU Sky Map & Earth Observatory",
     },
     {
@@ -78,7 +79,7 @@ export default function Navbar() {
       shortLabel: "ASTEROIDS",
       href: "/explore",
       code: "SYS-04",
-      icon: Crosshair,
+      icon: Radar,
       desc: "NASA NeoWs Planetary Defense Radar",
     },
     {
@@ -87,7 +88,7 @@ export default function Navbar() {
       shortLabel: "SATS",
       href: "/iss",
       code: "SYS-05",
-      icon: Satellite,
+      icon: SatelliteDish,
       desc: "Real-Time SGP4 Orbital Fleet Tracker",
     },
     {
@@ -96,7 +97,7 @@ export default function Navbar() {
       shortLabel: "CODEX",
       href: "/codex",
       code: "SYS-06",
-      icon: BookOpen,
+      icon: Atom,
       desc: "Universal Astronomical Encyclopedia",
     },
   ];
@@ -118,7 +119,11 @@ export default function Navbar() {
   }, []);
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 px-2 sm:px-4 lg:px-6 pt-2 pb-1.5 transition-all select-none bg-gradient-to-b from-[#020617]/95 via-[#020617]/85 to-transparent backdrop-blur-md">
+    <header
+      className={`fixed top-0 left-0 right-0 z-50 px-2 sm:px-4 lg:px-6 pt-2 pb-1.5 transition-all select-none bg-gradient-to-b from-[#020617]/95 via-[#020617]/85 to-transparent backdrop-blur-md ${
+        isLanding ? "lg:hidden" : ""
+      }`}
+    >
       <div className="max-w-[1600px] mx-auto flex items-center justify-between gap-1.5 sm:gap-3">
         
         {/* ── Left: Official Cakrapala Brand Logo ───────────────────────────── */}
