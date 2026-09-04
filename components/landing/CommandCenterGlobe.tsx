@@ -100,14 +100,19 @@ export default function CommandCenterGlobe({
       opacity: SKY_OPACITY,
     });
     const skyDome = new THREE.Mesh(skyGeo, skyMat);
-    // Align Milky Way: in fullscreen, galactic core is centered horizontally & runs level across the sky
-    skyDome.rotation.x = full ? -0.10 : 0.35;
-    skyDome.rotation.y = full ? -0.45 : -1.1;
-    skyDome.rotation.z = full ? 0.06 : 0.0;
+    // Align Milky Way: in fullscreen, diagonal aesthetic tilt (~30°) across the deep space sky
+    skyDome.rotation.x = full ? 0.08 : 0.35;
+    skyDome.rotation.y = full ? -0.42 : -1.1;
+    skyDome.rotation.z = full ? -0.52 : 0.0;
     // Fix mirrored sky: BackSide sphere flips texture horizontally.
     // Negate scale.x to restore correct East/West orientation matching real sky (e.g. Stellarium).
     skyDome.scale.x = -1;
-    scene.add(skyDome);
+
+    // ── Celestial Sphere Assembly (Milky Way Sky Dome + Starfield) ────
+    // Grouped together so the entire cosmos moves as a physically unified celestial sphere
+    const celestialGroup = new THREE.Group();
+    celestialGroup.add(skyDome);
+    scene.add(celestialGroup);
 
     // ── Multi-Temperature Starfield ───────────────────────────────────
     const starCount = 2800;
@@ -150,7 +155,7 @@ export default function CommandCenterGlobe({
       blending: THREE.AdditiveBlending,
     });
     const stars = new THREE.Points(starGeo, starMat);
-    scene.add(stars);
+    celestialGroup.add(stars);
 
     // ── Solar Vector (Calculated in World Space) ──────────────────────
     // Direct Sun position high-right creates brilliant daylit Earth on the right,
@@ -472,9 +477,13 @@ export default function CommandCenterGlobe({
         cloudPitchGroup.rotation.y = spinAngle;
       }
 
-      // Subtle cosmic Milky Way drift (Milky Way rotates slowly while starfield points remain fixed)
-      const skyDriftRate = full ? 0.0012 : 0.0024; // rad/s
-      skyDome.rotation.y += skyDriftRate * dt;
+      // Majestic slow vertical celestial drift (orbital pitch flow)
+      // In fullscreen, the entire starry cosmos glides slowly downwards in harmony with Earth's forward flight
+      if (full) {
+        celestialGroup.rotation.x -= 0.0006 * dt; // slow vertical descent (rad/s)
+      } else {
+        celestialGroup.rotation.y += 0.0015 * dt;
+      }
 
       // Subtle orbital breathing / float for cinematic feeling
       camera.position.x = Math.sin(elapsed * 0.35) * 0.035;
