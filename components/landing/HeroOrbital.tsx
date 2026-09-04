@@ -124,7 +124,7 @@ export default function HeroOrbital() {
                 <span className="relative h-1.5 w-1.5 rounded-full bg-cyan-300 shadow-[0_0_8px_#22d3ee]" />
               </span>
               <span className="font-mono text-[9px] sm:text-[10px] tracking-[0.26em] text-cyan-300 font-semibold uppercase drop-shadow-[0_0_8px_rgba(34,211,238,0.7)]">
-                J.A.R.V.I.S. // NEURAL LINK
+                SYS-AI // NEURAL LINK
               </span>
               <span className="h-[1px] w-8 sm:w-12 bg-gradient-to-r from-cyan-400/80 to-transparent" />
               <span className="font-mono text-[8px] sm:text-[9px] tracking-widest text-cyan-400/70">
