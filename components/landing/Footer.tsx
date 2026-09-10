@@ -10,9 +10,7 @@ import Image from "next/image";
 import {
   Orbit,
   Sparkles,
-  Globe,
   Radio,
-  ExternalLink,
   ShieldCheck,
   Cpu,
   Database,
@@ -228,6 +226,15 @@ export default function Footer() {
             <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-[10px] font-bold">
               VERIFIED ASTRONOMY DATA
             </span>
+
+            <Link
+              href="/stats"
+              className="text-slate-600 hover:text-amber-400 transition-colors flex items-center gap-1 text-[10px] opacity-70 hover:opacity-100"
+              title="Telemetry & Security Gateway"
+            >
+              <ShieldCheck className="w-3 h-3" />
+              <span>SYS-STATS</span>
+            </Link>
           </div>
         </div>
       </div>
