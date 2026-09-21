@@ -21,6 +21,7 @@ import { LAYER_REGISTRY, resolveDisplayMode } from '@/lib/osint/registry';
 import { useLayer } from '@/lib/osint/useLayer';
 import DataAgeBadge from '@/components/osint/DataAgeBadge';
 import type { OsintGlobeHandle } from '@/components/osint/OsintGlobe';
+import { OSINT_Z_INDEX } from '@/lib/osint/constants/zIndex';
 import {
   GIBS_LAYERS,
   getDefaultBaseLayer,
@@ -368,23 +369,35 @@ export default function OsintPage() {
     return Array.from(new Set(list.filter(Boolean)));
   }, [activeLayers, activeBaseDef.attribution, imagerySettings.overlays]);
 
+  // ── Compute Layers Pending Closer Zoom ──────────────────────────────────
+  const zoomPendingLayers = useMemo(() => {
+    const list: { id: string; label: string; icon: string }[] = [];
+    if (fireEnabled && !fireZoomAllowed) list.push({ id: 'fire', label: 'Kebakaran (FIRMS)', icon: '🔥' });
+    if (airEnabled && !airZoomAllowed) list.push({ id: 'air', label: 'Lalu Lintas Udara (ADS-B)', icon: '✈️' });
+    if (seaEnabled && !seaZoomAllowed) list.push({ id: 'sea', label: 'Lalu Lintas Laut (AIS)', icon: '🚢' });
+    if (eyesEnabled && !eyesZoomAllowed) list.push({ id: 'eyes', label: 'Webcam Publik', icon: '👁️' });
+    return list;
+  }, [fireEnabled, fireZoomAllowed, airEnabled, airZoomAllowed, seaEnabled, seaZoomAllowed, eyesEnabled, eyesZoomAllowed]);
+
   // ── Viewer from globe ref ───────────────────────────────────────────────
 
   const viewer = globeRef.current?.getViewer();
 
   return (
-    <div className="relative w-screen h-screen overflow-hidden bg-slate-950">
+    <div className="relative w-screen h-[100dvh] overflow-hidden bg-slate-950">
       {/* Globe */}
-      <OsintGlobe
-        ref={globeRef}
-        onCameraAltChange={handleCameraAltChange}
-        onBBoxChange={handleBBoxChange}
-        imageryEnabled={activeLayers.has('imagery')}
-        activeBaseLayerId={imagerySettings.baseLayerId}
-        imageryDate={imagerySettings.dateStr}
-        overlaySettings={imagerySettings.overlays}
-        onTileError={setTileErrorNotice}
-      />
+      <div className="absolute inset-0" style={{ zIndex: OSINT_Z_INDEX.globe }}>
+        <OsintGlobe
+          ref={globeRef}
+          onCameraAltChange={handleCameraAltChange}
+          onBBoxChange={handleBBoxChange}
+          imageryEnabled={activeLayers.has('imagery')}
+          activeBaseLayerId={imagerySettings.baseLayerId}
+          imageryDate={imagerySettings.dateStr}
+          overlaySettings={imagerySettings.overlays}
+          onTileError={setTileErrorNotice}
+        />
+      </div>
 
       {/* Quake entities rendered on globe */}
       {viewer && quakeEnabled && (
@@ -458,13 +471,13 @@ export default function OsintPage() {
       <nav
         aria-label="OSINT layer controls"
         className="
-          absolute z-10
-          left-3 top-1/2 -translate-y-1/2
-          flex flex-col gap-2
-          md:flex-col md:left-3 md:top-1/2 md:-translate-y-1/2
+          absolute left-3 top-1/2 -translate-y-1/2
+          p-1.5 rounded-2xl bg-slate-900/85 border border-slate-700/60
+          shadow-[0_8px_32px_rgba(0,0,0,0.7)] backdrop-blur-md flex flex-col gap-2
           max-md:flex-row max-md:left-1/2 max-md:-translate-x-1/2 max-md:top-3
           max-md:translate-y-0
         "
+        style={{ zIndex: OSINT_Z_INDEX.layerRail }}
       >
         {LAYER_ORDER.map((layerId) => {
           const config = LAYER_REGISTRY[layerId];
@@ -520,265 +533,288 @@ export default function OsintPage() {
         })}
       </nav>
 
-      {/* ── Top Bar / Badges (top-left) ──────────────────────────────────── */}
-      <div className="absolute z-10 top-4 left-20 max-md:left-4 max-md:top-20 flex flex-wrap items-center gap-2">
-        {/* Quake freshness badge */}
-        {quakeEnabled && quake.status !== 'idle' && (
-          <DataAgeBadge
-            name={LAYER_REGISTRY.quake.nameId}
-            ageMs={quake.ageMs}
-            status={quake.status}
-            refreshMs={LAYER_REGISTRY.quake.refreshMs}
-          />
-        )}
+      {/* ── Top-Right Chrome: Badges, Imagery & Layer Controls ───────────────── */}
+      <div
+        className="
+          absolute top-3 right-3 max-md:top-16 max-md:right-2
+          flex flex-wrap justify-end items-center gap-2
+          max-w-[calc(100vw-80px)] md:max-w-[720px] max-md:max-w-[calc(100vw-16px)]
+          pointer-events-none
+        "
+        style={{ zIndex: OSINT_Z_INDEX.topBar }}
+      >
+        <div className="flex flex-wrap justify-end items-center gap-2 pointer-events-auto">
+          {/* Aggregated Zoom Chip when 1 or more layers require closer altitude */}
+          {zoomPendingLayers.length > 0 && (
+            <div className="relative group">
+              <div
+                className="
+                  flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                  bg-slate-900/90 hover:bg-slate-800/90 border border-amber-500/40
+                  text-amber-200 text-xs font-mono shadow-lg backdrop-blur-md
+                  cursor-help transition-all duration-150
+                "
+                title="Perbesar globe (zoom-in) untuk mengaktifkan pemuatan data layer ini"
+              >
+                <span>🔍</span>
+                <span className="font-semibold">
+                  {zoomPendingLayers.length === 1
+                    ? `Zoom untuk memuat ${zoomPendingLayers[0].label.split(' ')[0]}`
+                    : `Zoom untuk memuat (${zoomPendingLayers.length} layer)`}
+                </span>
+                {zoomPendingLayers.length > 1 && (
+                  <span className="text-[10px] text-amber-400/80">▾</span>
+                )}
+              </div>
 
-        {/* Fire freshness badge / Missing key warning */}
-        {fireEnabled && fire.error === 'MISSING_KEY' && (
-          <button
-            onClick={() => setIsFireControlOpen(true)}
-            className="
-              px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-500/50
-              text-[11px] text-amber-200 font-mono flex items-center gap-1.5 shadow
-              hover:bg-amber-900/80 transition-colors
-            "
-            title="Kunci MAP_KEY FIRMS belum dikonfigurasi pada environment server"
-          >
-            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-            <span>Kebakaran: Perlu konfigurasi</span>
-          </button>
-        )}
+              {zoomPendingLayers.length > 1 && (
+                <div
+                  className="
+                    absolute top-full right-0 mt-1.5 hidden group-hover:flex
+                    flex-col gap-1.5 p-2.5 rounded-xl bg-slate-900/95 border border-slate-700/80
+                    shadow-2xl backdrop-blur-md text-[11px] text-slate-300 min-w-[220px] z-30
+                  "
+                >
+                  <span className="text-[10px] uppercase font-mono text-slate-400 tracking-wider font-semibold border-b border-slate-800 pb-1">
+                    Menunggu Zoom Lebih Dekat:
+                  </span>
+                  {zoomPendingLayers.map((l) => (
+                    <div key={l.id} className="flex items-center gap-2 font-mono">
+                      <span className="text-sm">{l.icon}</span>
+                      <span className="text-slate-200">{l.label}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
-        {fireEnabled && fire.status !== 'idle' && !fire.error && (
-          <div title="Data NRT NASA FIRMS berlatensi 1-3 jam sejak pengamatan satelit.">
+          {/* Quake freshness badge */}
+          {quakeEnabled && quake.status !== 'idle' && (
             <DataAgeBadge
-              name={LAYER_REGISTRY.fire.nameId}
-              ageMs={fire.ageMs}
-              status={fire.status}
-              refreshMs={LAYER_REGISTRY.fire.refreshMs}
+              name={LAYER_REGISTRY.quake.nameId}
+              ageMs={quake.ageMs}
+              status={quake.status}
+              refreshMs={LAYER_REGISTRY.quake.refreshMs}
             />
-          </div>
-        )}
+          )}
 
-        {/* Storm freshness badge */}
-        {stormEnabled && storm.status !== 'idle' && (
-          <div title="Advisory siklon tropis diterbitkan setiap 6 jam (03/09/15/21 UTC).">
-            <DataAgeBadge
-              name={LAYER_REGISTRY.storm.nameId}
-              ageMs={storm.ageMs}
-              status={storm.status}
-              refreshMs={LAYER_REGISTRY.storm.refreshMs}
+          {/* Fire freshness badge / Missing key warning */}
+          {fireEnabled && fire.error === 'MISSING_KEY' && (
+            <button
+              onClick={() => setIsFireControlOpen(true)}
+              className="
+                px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-500/50
+                text-[11px] text-amber-200 font-mono flex items-center gap-1.5 shadow
+                hover:bg-amber-900/80 transition-colors
+              "
+              title="Kunci MAP_KEY FIRMS belum dikonfigurasi pada environment server"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+              <span>Kebakaran: Perlu konfigurasi</span>
+            </button>
+          )}
+
+          {fireEnabled && fire.status !== 'idle' && !fire.error && (
+            <div title="Data NRT NASA FIRMS berlatensi 1-3 jam sejak pengamatan satelit.">
+              <DataAgeBadge
+                name={LAYER_REGISTRY.fire.nameId}
+                ageMs={fire.ageMs}
+                status={fire.status}
+                refreshMs={LAYER_REGISTRY.fire.refreshMs}
+              />
+            </div>
+          )}
+
+          {/* Fire active chip */}
+          {fireEnabled && fireZoomAllowed && (
+            <button
+              onClick={() => setIsFireControlOpen((prev) => !prev)}
+              className="
+                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+                transition-all duration-150 hover:border-amber-500/50 cursor-pointer
+              "
+              title="Buka pengaturan deteksi kebakaran NASA FIRMS"
+              aria-label="Pengaturan deteksi kebakaran NASA FIRMS"
+            >
+              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+              <span className="font-semibold text-slate-100">
+                Api: {fireSettings.dayRange}h ({fire.entities.length} titik)
+              </span>
+              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+            </button>
+          )}
+
+          {/* Storm freshness badge */}
+          {stormEnabled && storm.status !== 'idle' && (
+            <div title="Advisory siklon tropis diterbitkan setiap 6 jam (03/09/15/21 UTC).">
+              <DataAgeBadge
+                name={LAYER_REGISTRY.storm.nameId}
+                ageMs={storm.ageMs}
+                status={storm.status}
+                refreshMs={LAYER_REGISTRY.storm.refreshMs}
+              />
+            </div>
+          )}
+
+          {/* Storm active chip */}
+          {stormEnabled && (
+            <button
+              onClick={() => setIsStormControlOpen((prev) => !prev)}
+              className="
+                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+                transition-all duration-150 hover:border-violet-500/50 cursor-pointer
+              "
+              title="Buka pengaturan siklon tropis"
+              aria-label="Pengaturan siklon tropis"
+            >
+              <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+              <span className="font-semibold text-slate-100">
+                Badai: {storm.entities.length} aktif
+              </span>
+              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+            </button>
+          )}
+
+          {/* Empty state when storm has 0 active entities */}
+          {stormEnabled && storm.status === 'ok' && storm.entities.length === 0 && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/40 text-slate-400 text-xs shadow-lg backdrop-blur-md">
+              <span>🌀</span>
+              <span>Tidak ada siklon tropis aktif saat ini</span>
+            </div>
+          )}
+
+          {/* Air freshness badge */}
+          {airEnabled && airZoomAllowed && air.status !== 'idle' && (
+            <div title="Data ADS-B langsung dari kontributor adsb.lol (ODbL)">
+              <DataAgeBadge
+                name={LAYER_REGISTRY.air.nameId}
+                ageMs={air.ageMs}
+                status={air.status}
+                refreshMs={LAYER_REGISTRY.air.refreshMs}
+              />
+            </div>
+          )}
+
+          {/* Air active chip */}
+          {airEnabled && airZoomAllowed && (
+            <button
+              onClick={() => setIsAirControlOpen((prev) => !prev)}
+              className="
+                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+                transition-all duration-150 hover:border-cyan-500/50 cursor-pointer
+              "
+              title="Buka pengaturan lalu lintas udara ADS-B"
+              aria-label="Pengaturan lalu lintas udara ADS-B"
+            >
+              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+              <span className="font-semibold text-slate-100">
+                Udara: {air.entities.length}
+                {air.entities[0]?.raw?.prunedCount
+                  ? ` (${air.entities.length} dari ${Number(air.entities[0].raw.totalFound)} terdekat)`
+                  : ' pesawat'}
+              </span>
+              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+            </button>
+          )}
+
+          {/* Sea freshness badge */}
+          {seaEnabled && seaZoomAllowed && sea.status !== 'idle' && (
+            <div title="Data AIS dari Fintraffic Digitraffic (CC BY 4.0)">
+              <DataAgeBadge
+                name={LAYER_REGISTRY.sea.nameId}
+                ageMs={sea.ageMs}
+                status={sea.status}
+                refreshMs={LAYER_REGISTRY.sea.refreshMs}
+              />
+            </div>
+          )}
+
+          {/* Coverage Notice Chip when Sea is out of coverage (e.g. Indonesia) */}
+          {seaEnabled && seaZoomAllowed && (sea.error === 'OUT_OF_COVERAGE' || (bbox && !isWithinSeaCoverage(bbox))) && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-teal-500/40 text-teal-300 text-xs shadow-lg backdrop-blur-md">
+              <span>ℹ️</span>
+              <span>Cakupan AIS saat ini terbatas pada Laut Baltik dan Norwegia. Global menyusul.</span>
+            </div>
+          )}
+
+          {/* Sea active chip */}
+          {seaEnabled && seaZoomAllowed && sea.error !== 'OUT_OF_COVERAGE' && (!bbox || isWithinSeaCoverage(bbox)) && (
+            <button
+              onClick={() => setIsSeaControlOpen((prev) => !prev)}
+              className="
+                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+                transition-all duration-150 hover:border-teal-500/50 cursor-pointer
+              "
+              title="Buka pengaturan lalu lintas laut AIS"
+              aria-label="Pengaturan lalu lintas laut AIS"
+            >
+              <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+              <span className="font-semibold text-slate-100">
+                Laut: {sea.entities.length}
+                {Boolean(sea.entities[0]?.raw?.cutCount)
+                  ? ` (${sea.entities.length} dari ${Number(sea.entities[0]?.raw?.totalFound)} terdekat)`
+                  : ' kapal'}
+              </span>
+              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+            </button>
+          )}
+
+          {/* Eyes freshness badge */}
+          {eyesEnabled && eyesZoomAllowed && eyes.status !== 'idle' && (
+            <div title="Data webcam publik (Windy & ATCS Resmi)">
+              <DataAgeBadge
+                name={LAYER_REGISTRY.eyes.nameId}
+                ageMs={eyes.ageMs}
+                status={eyes.status}
+                refreshMs={LAYER_REGISTRY.eyes.refreshMs}
+                entityCount={eyes.entities.length}
+                noPulse={true}
+              />
+            </div>
+          )}
+
+          {/* Eyes active chip / control popover */}
+          {eyesEnabled && eyesZoomAllowed && (
+            <EyesControl
+              filters={eyesSettings}
+              onChange={setEyesSettings}
             />
-          </div>
-        )}
+          )}
 
-        {/* Storm active chip */}
-        {stormEnabled && (
-          <button
-            onClick={() => setIsStormControlOpen((prev) => !prev)}
-            className="
-              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-              transition-all duration-150 hover:border-violet-500/50 cursor-pointer
-            "
-            title="Buka pengaturan siklon tropis"
-            aria-label="Pengaturan siklon tropis"
-          >
-            <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-            <span className="font-semibold text-slate-100">
-              Badai: {storm.entities.length} aktif
-            </span>
-            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-          </button>
-        )}
-
-        {/* Empty state when storm has 0 active entities */}
-        {stormEnabled && storm.status === 'ok' && storm.entities.length === 0 && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/40 text-slate-400 text-xs shadow-lg backdrop-blur-md">
-            <span>🌀</span>
-            <span>Tidak ada siklon tropis aktif saat ini</span>
-          </div>
-        )}
-
-        {/* Air freshness badge */}
-        {airEnabled && airZoomAllowed && air.status !== 'idle' && (
-          <div title="Data ADS-B langsung dari kontributor adsb.lol (ODbL)">
-            <DataAgeBadge
-              name={LAYER_REGISTRY.air.nameId}
-              ageMs={air.ageMs}
-              status={air.status}
-              refreshMs={LAYER_REGISTRY.air.refreshMs}
-            />
-          </div>
-        )}
-
-        {/* Zoom Chip when Air is enabled but zoom is too wide */}
-        {airEnabled && !airZoomAllowed && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/80 border border-cyan-500/40 text-cyan-200 text-xs shadow-lg backdrop-blur-md">
-            <span>🔍</span>
-            <span>Zoom untuk memuat lalu lintas udara</span>
-          </div>
-        )}
-
-        {/* Air active chip */}
-        {airEnabled && airZoomAllowed && (
-          <button
-            onClick={() => setIsAirControlOpen((prev) => !prev)}
-            className="
-              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-              transition-all duration-150 hover:border-cyan-500/50 cursor-pointer
-            "
-            title="Buka pengaturan lalu lintas udara ADS-B"
-            aria-label="Pengaturan lalu lintas udara ADS-B"
-          >
-            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-            <span className="font-semibold text-slate-100">
-              Udara: {air.entities.length}
-              {air.entities[0]?.raw?.prunedCount
-                ? ` (${air.entities.length} dari ${Number(air.entities[0].raw.totalFound)} terdekat)`
-                : ' pesawat'}
-            </span>
-            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-          </button>
-        )}
-
-        {/* Sea freshness badge */}
-        {seaEnabled && seaZoomAllowed && sea.status !== 'idle' && (
-          <div title="Data AIS dari Fintraffic Digitraffic (CC BY 4.0)">
-            <DataAgeBadge
-              name={LAYER_REGISTRY.sea.nameId}
-              ageMs={sea.ageMs}
-              status={sea.status}
-              refreshMs={LAYER_REGISTRY.sea.refreshMs}
-            />
-          </div>
-        )}
-
-        {/* Zoom Chip when Sea is enabled but in aggregate mode */}
-        {seaEnabled && !seaZoomAllowed && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-teal-200 text-xs shadow-lg backdrop-blur-md">
-            <span>🔍</span>
-            <span>Zoom untuk memuat lalu lintas laut</span>
-          </div>
-        )}
-
-        {/* Coverage Notice Chip when Sea is out of coverage (e.g. Indonesia) */}
-        {seaEnabled && seaZoomAllowed && (sea.error === 'OUT_OF_COVERAGE' || (bbox && !isWithinSeaCoverage(bbox))) && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-teal-500/40 text-teal-300 text-xs shadow-lg backdrop-blur-md">
-            <span>ℹ️</span>
-            <span>Cakupan AIS saat ini terbatas pada Laut Baltik dan Norwegia. Cakupan global menyusul.</span>
-          </div>
-        )}
-
-        {/* Sea active chip */}
-        {seaEnabled && seaZoomAllowed && sea.error !== 'OUT_OF_COVERAGE' && (!bbox || isWithinSeaCoverage(bbox)) && (
-          <button
-            onClick={() => setIsSeaControlOpen((prev) => !prev)}
-            className="
-              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-              transition-all duration-150 hover:border-teal-500/50 cursor-pointer
-            "
-            title="Buka pengaturan lalu lintas laut AIS"
-            aria-label="Pengaturan lalu lintas laut AIS"
-          >
-            <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-            <span className="font-semibold text-slate-100">
-              Laut: {sea.entities.length}
-              {Boolean(sea.entities[0]?.raw?.cutCount)
-                ? ` (menampilkan ${sea.entities.length} dari ${Number(sea.entities[0]?.raw?.totalFound)} terdekat)`
-                : ' kapal'}
-            </span>
-            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-          </button>
-        )}
-
-        {/* Zoom Chip when Eyes is enabled but zoom is too wide */}
-        {eyesEnabled && !eyesZoomAllowed && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-lime-950/80 border border-lime-500/40 text-lime-200 text-xs shadow-lg backdrop-blur-md">
-            <span>🔍</span>
-            <span>Zoom untuk memuat webcam</span>
-          </div>
-        )}
-
-        {/* Eyes freshness badge */}
-        {eyesEnabled && eyesZoomAllowed && eyes.status !== 'idle' && (
-          <div title="Data webcam publik (Windy & ATCS Resmi)">
-            <DataAgeBadge
-              name={LAYER_REGISTRY.eyes.nameId}
-              ageMs={eyes.ageMs}
-              status={eyes.status}
-              refreshMs={LAYER_REGISTRY.eyes.refreshMs}
-              entityCount={eyes.entities.length}
-              noPulse={true}
-            />
-          </div>
-        )}
-
-        {/* Eyes active chip / control popover */}
-        {eyesEnabled && eyesZoomAllowed && (
-          <EyesControl
-            filters={eyesSettings}
-            onChange={setEyesSettings}
-          />
-        )}
-
-        {/* Zoom Chip when Fire is enabled but zoom is too wide */}
-        {fireEnabled && !fireZoomAllowed && (
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs shadow-lg backdrop-blur-md">
-            <span>🔍</span>
-            <span>Zoom untuk memuat data kebakaran</span>
-          </div>
-        )}
-
-        {/* Fire active chip */}
-        {fireEnabled && fireZoomAllowed && (
-          <button
-            onClick={() => setIsFireControlOpen((prev) => !prev)}
-            className="
-              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-              transition-all duration-150 hover:border-amber-500/50 cursor-pointer
-            "
-            title="Buka pengaturan deteksi kebakaran NASA FIRMS"
-            aria-label="Pengaturan deteksi kebakaran NASA FIRMS"
-          >
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-            <span className="font-semibold text-slate-100">
-              Api: {fireSettings.dayRange}h ({fire.entities.length} titik)
-            </span>
-            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-          </button>
-        )}
-
-        {/* Imagery Chip with nominal resolution & date */}
-        {activeLayers.has('imagery') && (
-          <button
-            onClick={() => setIsImageryControlOpen((prev) => !prev)}
-            className="
-              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-              transition-all duration-150 hover:border-slate-500 cursor-pointer
-            "
-            title="Buka pengaturan citra satelit NASA GIBS"
-            aria-label="Pengaturan citra satelit NASA GIBS"
-          >
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="font-semibold text-slate-100">
-              Citra: {imagerySettings.dateStr}
-            </span>
-            <span className="text-slate-500">·</span>
-            <span className="text-slate-300 font-sans">
-              {activeBaseDef.label.split(' ')[0]} {activeBaseDef.resolution}
-            </span>
-            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-          </button>
-        )}
+          {/* Imagery Chip with nominal resolution & date */}
+          {activeLayers.has('imagery') && (
+            <button
+              onClick={() => setIsImageryControlOpen((prev) => !prev)}
+              className="
+                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+                transition-all duration-150 hover:border-slate-500 cursor-pointer
+              "
+              title="Buka pengaturan citra satelit NASA GIBS"
+              aria-label="Pengaturan citra satelit NASA GIBS"
+            >
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+              <span className="font-semibold text-slate-100">
+                Citra: {imagerySettings.dateStr}
+              </span>
+              <span className="text-slate-500">·</span>
+              <span className="text-slate-300 font-sans">
+                {activeBaseDef.label.split(' ')[0]} {activeBaseDef.resolution}
+              </span>
+              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Imagery Control Popover ──────────────────────────────────────── */}
@@ -1092,8 +1128,11 @@ export default function OsintPage() {
 
       {/* ── Attribution Chip (bottom-right, permanent) ──────────────────── */}
       {activeAttributions.length > 0 && (
-        <div className="absolute z-10 bottom-2 right-2 max-w-md">
-          <div className="bg-black/60 backdrop-blur-sm rounded px-2.5 py-1 text-[10px] text-slate-400 leading-tight flex items-center justify-between gap-2">
+        <div
+          className="absolute bottom-7 right-2 max-w-md pointer-events-auto"
+          style={{ zIndex: OSINT_Z_INDEX.attribution }}
+        >
+          <div className="bg-black/70 backdrop-blur-sm rounded-lg px-2.5 py-1 text-[10px] text-slate-400 leading-tight flex items-center justify-between gap-2 border border-slate-800/80 shadow-lg">
             <div>
               {activeAttributions.map((attr, i) => (
                 <span key={i}>

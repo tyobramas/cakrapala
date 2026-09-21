@@ -93,6 +93,7 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const gibsOverlaysRef = useRef<Map<string, any>>(new Map());
 
+    const creditContainerRef = useRef<HTMLDivElement>(null);
     const currentBaseIdRef = useRef<string | null>(null);
     const currentDateRef = useRef<string | null>(null);
     const tileErrorCountRef = useRef<number>(0);
@@ -172,12 +173,44 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
       if (viewerRef.current) return;
 
       let isMounted = true;
+      let resizeTimeout: ReturnType<typeof setTimeout> | null = null;
+
+      const handleResize = () => {
+        if (resizeTimeout) clearTimeout(resizeTimeout);
+        resizeTimeout = setTimeout(() => {
+          const v = viewerRef.current;
+          if (!v || v.isDestroyed()) return;
+          v.resize();
+          if (v.scene?.requestRenderMode) {
+            v.scene.requestRender();
+          }
+        }, 100);
+      };
+
+      const resizeObserver = new ResizeObserver(handleResize);
+      resizeObserver.observe(container);
+
+      window.addEventListener('resize', handleResize);
+      window.addEventListener('orientationchange', handleResize);
 
       (async () => {
         setCesiumBaseUrl();
 
         const Cesium = await getCesium();
         if (!isMounted) return;
+
+        // Delay construction until container dimensions > 0 (max 60 frames ~ 1s)
+        let attempts = 0;
+        while (
+          isMounted &&
+          container &&
+          (container.clientWidth === 0 || container.clientHeight === 0) &&
+          attempts < 60
+        ) {
+          attempts++;
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+        if (!isMounted || !container) return;
 
         if (hasCesiumToken()) {
           Cesium.Ion.defaultAccessToken = getCesiumToken();
@@ -193,15 +226,27 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
           );
         const baseLayer = new Cesium.ImageryLayer(tmsProvider);
 
+        const creditContainer = creditContainerRef.current ?? undefined;
+
         const viewer = new Cesium.Viewer(container, {
           ...opts,
           baseLayer,
+          ...(creditContainer ? { creditContainer } : {}),
         });
 
         viewerRef.current = viewer;
 
         // Dark globe atmosphere.
         viewer.scene.globe.enableLighting = true;
+
+        // Ensure canvas buffer fits container on next frame
+        requestAnimationFrame(() => {
+          if (!isMounted || !viewer || viewer.isDestroyed()) return;
+          viewer.resize();
+          if (viewer.scene?.requestRenderMode) {
+            viewer.scene.requestRender();
+          }
+        });
 
         // Listen for camera moves — throttled by Cesium's requestRenderMode.
         viewer.camera.moveEnd.addEventListener(handleCameraMove);
@@ -221,6 +266,11 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
 
       return () => {
         isMounted = false;
+        if (resizeTimeout) clearTimeout(resizeTimeout);
+        resizeObserver.disconnect();
+        window.removeEventListener('resize', handleResize);
+        window.removeEventListener('orientationchange', handleResize);
+
         const viewer = viewerRef.current;
         if (viewer && !viewer.isDestroyed()) {
           viewer.camera.moveEnd.removeEventListener(handleCameraMove);
@@ -355,11 +405,56 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
     }, [imageryEnabled, activeBaseLayerId, imageryDate, overlaySettings]);
 
     return (
-      <div
-        ref={containerRef}
-        className="w-full h-full"
-        aria-label="OSINT 3D globe"
-      />
+      <div className="osint-cesium-root relative w-full h-full" aria-label="OSINT 3D globe">
+        <div
+          ref={containerRef}
+          className="w-full h-full"
+        />
+
+        <div
+          ref={creditContainerRef}
+          className="osint-cesium-credit-dock"
+        />
+
+        <style jsx global>{`
+          .osint-cesium-root {
+            position: relative;
+            width: 100%;
+            height: 100%;
+          }
+          .osint-cesium-root .cesium-viewer,
+          .osint-cesium-root .cesium-viewer-cesiumWidgetContainer,
+          .osint-cesium-root .cesium-widget,
+          .osint-cesium-root .cesium-widget canvas {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            display: block;
+          }
+          .osint-cesium-credit-dock {
+            position: absolute;
+            bottom: 4px;
+            right: 8px;
+            max-width: 65vw;
+            font-family: monospace;
+            font-size: 9px;
+            color: #94a3b8;
+            pointer-events: auto;
+            z-index: 10;
+          }
+          .osint-cesium-credit-dock a {
+            color: #38bdf8;
+            text-decoration: underline;
+            pointer-events: auto;
+          }
+          .osint-cesium-credit-dock img {
+            display: inline-block;
+            vertical-align: middle;
+            max-height: 14px;
+          }
+        `}</style>
+      </div>
     );
   },
 );
