@@ -83,29 +83,32 @@ export default function StormLayer({
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Cesium = (window as any).Cesium;
-    if (!Cesium) return;
+    let handler: any = null;
+    let isMounted = true;
 
-    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    import('cesium').then((Cesium) => {
+      if (!isMounted || !viewer || viewer.isDestroyed()) return;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    handler.setInputAction((click: any) => {
-      const picked = viewer.scene.pick(click.position);
-      if (!picked || !picked.id) return;
+      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
-      const entityId: string =
-        typeof picked.id === 'string' ? picked.id : picked.id?.id;
-      if (!entityId || !entityId.startsWith('storm:')) return;
+      handler.setInputAction((click: any) => {
+        const picked = viewer.scene.pick(click.position);
+        if (!picked || !picked.id) return;
 
-      const osint = osintMapRef.current.get(entityId);
-      if (osint && onSelectRef.current) {
-        onSelectRef.current(osint);
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+        const entityId: string =
+          typeof picked.id === 'string' ? picked.id : picked.id?.id;
+        if (!entityId || !entityId.startsWith('storm:')) return;
+
+        const osint = osintMapRef.current.get(entityId);
+        if (osint && onSelectRef.current) {
+          onSelectRef.current(osint);
+        }
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
 
     return () => {
-      if (!handler.isDestroyed()) {
+      isMounted = false;
+      if (handler && !handler.isDestroyed()) {
         handler.destroy();
       }
     };
@@ -115,109 +118,113 @@ export default function StormLayer({
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Cesium = (window as any).Cesium;
-    if (!Cesium) return;
+    let isMounted = true;
 
-    const currentIds = new Set<string>();
+    import('cesium').then((Cesium) => {
+      if (!isMounted || !viewer || viewer.isDestroyed()) return;
 
-    for (const entity of entities) {
-      currentIds.add(entity.id);
-      osintMapRef.current.set(entity.id, entity);
+      const currentIds = new Set<string>();
 
-      const alertLevel = String(entity.raw?.alertLevel ?? 'Green');
-      const colorHex = getAlertColorHex(alertLevel);
-      const iconUri = generateCycloneSvg(colorHex);
+      for (const entity of entities) {
+        currentIds.add(entity.id);
+        osintMapRef.current.set(entity.id, entity);
 
-      const size = Math.round(26 + entity.severity * 18); // 26px .. 44px
-      const position = Cesium.Cartesian3.fromDegrees(
-        entity.position.lon,
-        entity.position.lat,
-        0,
-      );
+        const alertLevel = String(entity.raw?.alertLevel ?? 'Green');
+        const colorHex = getAlertColorHex(alertLevel);
+        const iconUri = generateCycloneSvg(colorHex);
 
-      // Label text based on display mode
-      let labelText = '';
-      if (mode === 'icons') {
-        labelText = entity.raw?.name ? String(entity.raw.name) : entity.label;
-      } else if (mode === 'detail') {
-        const windKt = entity.raw?.windKt ? `${Math.round(Number(entity.raw.windKt))} kt` : '';
-        const pres = entity.raw?.pressureMb ? `${Math.round(Number(entity.raw.pressureMb))} mb` : '';
-        const specs = [windKt, pres].filter(Boolean).join(' · ');
-        labelText = `${entity.label}${specs ? `\n${specs}` : ''}`;
-      }
+        const size = Math.round(26 + entity.severity * 18); // 26px .. 44px
+        const position = Cesium.Cartesian3.fromDegrees(
+          entity.position.lon,
+          entity.position.lat,
+          0,
+        );
 
-      // Check if entity already exists
-      const existing = entityMapRef.current.get(entity.id);
-
-      if (existing) {
-        // Update existing entity
-        existing.position = position;
-        if (existing.billboard) {
-          existing.billboard.image = iconUri;
-          existing.billboard.width = size;
-          existing.billboard.height = size;
+        // Label text based on display mode
+        let labelText = '';
+        if (mode === 'icons') {
+          labelText = entity.raw?.name ? String(entity.raw.name) : entity.label;
+        } else if (mode === 'detail') {
+          const windKt = entity.raw?.windKt ? `${Math.round(Number(entity.raw.windKt))} kt` : '';
+          const pres = entity.raw?.pressureMb ? `${Math.round(Number(entity.raw.pressureMb))} mb` : '';
+          const specs = [windKt, pres].filter(Boolean).join(' · ');
+          labelText = `${entity.label}${specs ? `\n${specs}` : ''}`;
         }
 
-        if (existing.label) {
-          existing.label.text = labelText;
-          existing.label.show = labelText.length > 0;
-        }
-      } else {
-        // Create new entity
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const entityOptions: any = {
-          id: entity.id,
-          name: entity.label,
-          position,
-          billboard: {
-            image: iconUri,
-            width: size,
-            height: size,
-            verticalOrigin: Cesium.VerticalOrigin.CENTER,
-            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-          },
-        };
+        // Check if entity already exists
+        const existing = entityMapRef.current.get(entity.id);
 
-        if (labelText) {
-          entityOptions.label = {
-            text: labelText,
-            font: '11px sans-serif',
-            fillColor: Cesium.Color.WHITE,
-            outlineColor: Cesium.Color.BLACK,
-            outlineWidth: 2,
-            style: Cesium.LabelStyle.FILL_AND_OUTLINE,
-            pixelOffset: new Cesium.Cartesian2(0, size / 2 + 10),
-            horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-            verticalOrigin: Cesium.VerticalOrigin.TOP,
-            disableDepthTestDistance: Number.POSITIVE_INFINITY,
-            show: true,
+        if (existing) {
+          // Update existing entity
+          existing.position = position;
+          if (existing.billboard) {
+            existing.billboard.image = iconUri;
+            existing.billboard.width = size;
+            existing.billboard.height = size;
+          }
+
+          if (existing.label) {
+            existing.label.text = labelText;
+            existing.label.show = labelText.length > 0;
+          }
+        } else {
+          // Create new entity
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const entityOptions: any = {
+            id: entity.id,
+            name: entity.label,
+            position,
+            billboard: {
+              image: iconUri,
+              width: size,
+              height: size,
+              verticalOrigin: Cesium.VerticalOrigin.CENTER,
+              horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+            },
           };
+
+          if (labelText) {
+            entityOptions.label = {
+              text: labelText,
+              font: '11px sans-serif',
+              fillColor: Cesium.Color.WHITE,
+              outlineColor: Cesium.Color.BLACK,
+              outlineWidth: 2,
+              style: Cesium.LabelStyle.FILL_AND_OUTLINE,
+              pixelOffset: new Cesium.Cartesian2(0, size / 2 + 10),
+              horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+              verticalOrigin: Cesium.VerticalOrigin.TOP,
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
+              show: true,
+            };
+          }
+
+          const created = viewer.entities.add(entityOptions);
+          entityMapRef.current.set(entity.id, created);
         }
-
-        const created = viewer.entities.add(entityOptions);
-        entityMapRef.current.set(entity.id, created);
       }
-    }
 
-    // Remove entities that no longer exist
-    for (const [id, cesiumEntity] of entityMapRef.current.entries()) {
-      if (!currentIds.has(id)) {
-        viewer.entities.remove(cesiumEntity);
-        entityMapRef.current.delete(id);
-        osintMapRef.current.delete(id);
+      // Remove entities that no longer exist
+      for (const [id, cesiumEntity] of entityMapRef.current.entries()) {
+        if (!currentIds.has(id)) {
+          viewer.entities.remove(cesiumEntity);
+          entityMapRef.current.delete(id);
+          osintMapRef.current.delete(id);
+        }
       }
-    }
+
+      viewer.scene.requestRender();
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [viewer, entities, mode]);
 
   // ── Lazy Geometry Loading (Track & Uncertainty Cones) ───────────────────────
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Cesium = (window as any).Cesium;
-    if (!Cesium) return;
 
     // Clean up previous geometry entities
     for (const geomEntity of geometryEntitiesRef.current) {
@@ -226,6 +233,7 @@ export default function StormLayer({
     geometryEntitiesRef.current = [];
 
     if (!selectedEntity || selectedEntity.layer !== 'storm') {
+      viewer.scene?.requestRender();
       return;
     }
 
@@ -238,12 +246,15 @@ export default function StormLayer({
     let isMounted = true;
     const cacheKey = eventId && episodeId ? `${eventId}:${episodeId}` : undefined;
 
-    fetchStormGeometry(geometryUrl, cacheKey).then((data) => {
-      if (!isMounted || !data) return;
+    import('cesium').then((Cesium) => {
+      if (!isMounted || !viewer || viewer.isDestroyed()) return;
 
-      const createdList: any[] = [];
-      const alertColor = getAlertColorHex(selectedEntity.raw?.alertLevel as string);
-      const trackCesiumColor = Cesium.Color.fromCssColorString(alertColor);
+      fetchStormGeometry(geometryUrl, cacheKey).then((data) => {
+        if (!isMounted || !data || !viewer || viewer.isDestroyed()) return;
+
+        const createdList: any[] = [];
+        const alertColor = getAlertColorHex(selectedEntity.raw?.alertLevel as string);
+        const trackCesiumColor = Cesium.Color.fromCssColorString(alertColor);
 
       // 1. Uncertainty cones (semi-transparent polygons)
       for (const cone of data.uncertaintyCones) {
@@ -312,6 +323,8 @@ export default function StormLayer({
       }
 
       geometryEntitiesRef.current = createdList;
+      viewer.scene.requestRender();
+    });
     });
 
     return () => {
@@ -320,6 +333,7 @@ export default function StormLayer({
         viewer.entities.remove(geomEntity);
       }
       geometryEntitiesRef.current = [];
+      if (!viewer.isDestroyed()) viewer.scene.requestRender();
     };
   }, [viewer, selectedEntity]);
 
@@ -338,6 +352,7 @@ export default function StormLayer({
         viewer.entities.remove(geomEntity);
       }
       geometryEntitiesRef.current = [];
+      viewer.scene.requestRender();
     };
   }, [viewer]);
 

@@ -8,7 +8,7 @@
 //   - View cone (semi-transparent lime polygon) if headingDeg is available.
 //   - Mode 'icons': icon only, no thumbnails (L2 quota & rate-limit compliance).
 //   - Mode 'detail': icon + title.
-//   - Inactive webcams (>24h since last updated) displayed dimmed with "(Tidak aktif)".
+//   - Inactive webcams (>24h since last updated) displayed dimmed with "(Inactive)".
 //   - Diffing based on entity id with clean primitive unmount.
 //   - Zero continuous polling (refreshMs = 0).
 // ─────────────────────────────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ const EyesLayer = memo(function EyesLayer({
         else if (isOfficial && isActive) iconUri = ICONS.officialCamera;
 
         const opacity = isActive ? 1.0 : 0.45;
-        const labelText = isActive ? entity.label : `${entity.label} (Tidak aktif)`;
+        const labelText = isActive ? entity.label : `${entity.label} (Inactive)`;
 
         let state = states.get(id);
 
@@ -193,6 +193,7 @@ const EyesLayer = memo(function EyesLayer({
               height: isSelected ? 34 : 26,
               color: new Cesium.Color(1.0, 1.0, 1.0, opacity),
               scaleByDistance: new Cesium.NearFarScalar(5e3, 1.2, 5e6, 0.5),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
             },
             label: displayMode === 'detail'
               ? {
@@ -275,6 +276,10 @@ const EyesLayer = memo(function EyesLayer({
           }
           states.delete(id);
         }
+      }
+
+      if (viewer && !viewer.isDestroyed()) {
+        viewer.scene.requestRender();
       }
     });
 

@@ -143,21 +143,16 @@ export default function FireLayer({
       const currentMap = entityMapRef.current;
       const newOsintMap = new Map<string, OsintEntity>();
 
-      // Mode aggregate: hapus seluruh entitas individual
-      if (displayMode === 'aggregate') {
-        for (const [id, cesiumEntity] of currentMap) {
-          viewer.entities.remove(cesiumEntity);
-          currentMap.delete(id);
-        }
-        osintMapRef.current = newOsintMap;
-        viewer.scene.requestRender();
-        return;
-      }
+      // Mode aggregate: tampilkan hotspot paling terkemuka/intensif bila data ada
+      const activeEnts =
+        displayMode === 'aggregate'
+          ? [...ents].sort((a, b) => b.severity - a.severity).slice(0, 50)
+          : ents;
 
       const showLabels = displayMode === 'detail';
-      const incomingIds = new Set(ents.map((e) => e.id));
+      const incomingIds = new Set(activeEnts.map((e) => e.id));
 
-      // Hapus entitas yang sudah tidak ada
+      // Hapus entitas yang sudah tidak ada atau tidak memenuhi syarat
       for (const [id, cesiumEntity] of currentMap) {
         if (!incomingIds.has(id)) {
           viewer.entities.remove(cesiumEntity);
@@ -166,12 +161,13 @@ export default function FireLayer({
       }
 
       // Tambah atau perbarui entitas
-      for (const ent of ents) {
+      for (const ent of activeEnts) {
         newOsintMap.set(ent.id, ent);
 
         const existing = currentMap.get(ent.id);
         const opacity = calculateAgeOpacity(ent.observedAt, dayRange);
-        const size = calculatePointSize(ent.severity);
+        const rawSize = calculatePointSize(ent.severity);
+        const size = displayMode === 'aggregate' ? Math.max(8, rawSize) : rawSize;
         const color = interpolateFireColor(ent.severity, opacity, Cesium);
 
         const confidence = (ent.raw as { confidence?: string })?.confidence;

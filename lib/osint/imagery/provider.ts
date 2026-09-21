@@ -76,6 +76,103 @@ export interface GibsProviderOptions {
 }
 
 /**
+ * Creates NASA GIBS compliant GeographicTilingScheme (EPSG:4326).
+ * GIBS in EPSG:4326 uses 512px tiles with custom matrix dimensions (2x1, 3x2, 5x3, 10x5...).
+ */
+export function createGibsGeographicTilingScheme(Cesium: typeof import('cesium')) {
+  const scheme = new Cesium.GeographicTilingScheme();
+  const tilePixels = 512;
+  const rectangle = Cesium.Rectangle.MAX_VALUE;
+
+  const getLevelInfo = (level: number) => {
+    let width: number, height: number;
+    if (level === 0) {
+      width = 2;
+      height = 1;
+    } else if (level === 1) {
+      width = 3;
+      height = 2;
+    } else if (level === 2) {
+      width = 5;
+      height = 3;
+    } else {
+      const mult = Math.pow(2, level - 3);
+      width = 10 * mult;
+      height = 5 * mult;
+    }
+    const resolution = 0.009817477042468103 / Math.pow(2, level);
+    return { width, height, resolution };
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (scheme as any).getNumberOfXTilesAtLevel = function (level: number) {
+    return getLevelInfo(level).width;
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (scheme as any).getNumberOfYTilesAtLevel = function (level: number) {
+    return getLevelInfo(level).height;
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (scheme as any).tileXYToRectangle = function (x: number, y: number, level: number, result?: any) {
+    const { resolution } = getLevelInfo(level);
+    const xTileWidth = resolution * tilePixels;
+    const yTileHeight = resolution * tilePixels;
+
+    const west = x * xTileWidth + rectangle.west;
+    const east = (x + 1) * xTileWidth + rectangle.west;
+    const north = rectangle.north - y * yTileHeight;
+    const south = rectangle.north - (y + 1) * yTileHeight;
+
+    if (!result) {
+      result = new Cesium.Rectangle(0, 0, 0, 0);
+    }
+    result.west = west;
+    result.south = south;
+    result.east = east;
+    result.north = north;
+    return result;
+  };
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (scheme as any).positionToTileXY = function (position: any, level: number, result?: any) {
+    if (!Cesium.Rectangle.contains(rectangle, position)) {
+      return undefined;
+    }
+
+    const { width: xTiles, height: yTiles, resolution } = getLevelInfo(level);
+    const xTileWidth = resolution * tilePixels;
+    const yTileHeight = resolution * tilePixels;
+
+    let longitude = position.longitude;
+    if (rectangle.east < rectangle.west) {
+      longitude += Cesium.Math.TWO_PI;
+    }
+
+    let xTileCoordinate = Math.floor((longitude - rectangle.west) / xTileWidth);
+    if (xTileCoordinate >= xTiles) {
+      xTileCoordinate = xTiles - 1;
+    }
+
+    const latitude = position.latitude;
+    let yTileCoordinate = Math.floor((rectangle.north - latitude) / yTileHeight);
+    if (yTileCoordinate >= yTiles) {
+      yTileCoordinate = yTiles - 1;
+    }
+
+    if (!result) {
+      result = new Cesium.Cartesian2(0, 0);
+    }
+    result.x = xTileCoordinate;
+    result.y = yTileCoordinate;
+    return result;
+  };
+
+  return scheme;
+}
+
+/**
  * Membuat instance UrlTemplateImageryProvider Cesium untuk layer GIBS.
  */
 export function createGibsImageryProvider(
@@ -87,9 +184,9 @@ export function createGibsImageryProvider(
 
   const provider = new Cesium.UrlTemplateImageryProvider({
     url: urlTemplate,
-    // WAJIB: EPSG:4326 GeographicTilingScheme (2x1 tiles at level 0)
-    tilingScheme: new Cesium.GeographicTilingScheme(),
-    // PENTING: jangan dinaikkan di atas nilai katalog untuk menghindari 404
+    tilingScheme: createGibsGeographicTilingScheme(Cesium),
+    tileWidth: 512,
+    tileHeight: 512,
     maximumLevel: layer.maximumLevel,
     credit: layer.attribution,
     hasAlphaChannel: layer.format === 'image/png',

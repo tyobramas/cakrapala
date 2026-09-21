@@ -14,6 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
+  useState,
   useRef,
   useEffect,
   useCallback,
@@ -51,6 +52,11 @@ export interface OsintGlobeHandle {
   flyTo(lat: number, lon: number, altM?: number): void;
 }
 
+let globalViewerConstructionCount = 0;
+export function getViewerConstructionCount(): number {
+  return globalViewerConstructionCount;
+}
+
 export interface OsintGlobeProps {
   /** Called whenever the camera moves with the current altitude in meters. */
   onCameraAltChange?: (altM: number) => void;
@@ -70,6 +76,12 @@ export interface OsintGlobeProps {
     message: string;
     fallbackDate: string;
   }) => void;
+  /** Notifies parent when Cesium Viewer is fully instantiated and ready. */
+  onViewerReady?: (viewer: any) => void;
+  /** Notifies parent when Cesium Viewer is being destroyed. */
+  onViewerDestroy?: () => void;
+  /** When true, disables requestRenderMode so moving layers animate at 60fps. */
+  movingLayersActive?: boolean;
 }
 
 const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
@@ -82,12 +94,17 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
       imageryDate,
       overlaySettings,
       onTileError,
+      onViewerReady,
+      onViewerDestroy,
+      movingLayersActive = false,
     },
     ref,
   ) {
     const containerRef = useRef<HTMLDivElement>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const viewerRef = useRef<any>(null);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [viewer, setViewer] = useState<any>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const gibsBaseLayerRef = useRef<any>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -228,6 +245,7 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
 
         const creditContainer = creditContainerRef.current ?? undefined;
 
+        globalViewerConstructionCount++;
         const viewer = new Cesium.Viewer(container, {
           ...opts,
           baseLayer,
@@ -235,6 +253,8 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
         });
 
         viewerRef.current = viewer;
+        setViewer(viewer);
+        onViewerReady?.(viewer);
 
         // Dark globe atmosphere.
         viewer.scene.globe.enableLighting = true;
@@ -271,11 +291,13 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
         window.removeEventListener('resize', handleResize);
         window.removeEventListener('orientationchange', handleResize);
 
-        const viewer = viewerRef.current;
-        if (viewer && !viewer.isDestroyed()) {
-          viewer.camera.moveEnd.removeEventListener(handleCameraMove);
-          destroyViewer(viewer);
+        const v = viewerRef.current;
+        if (v && !v.isDestroyed()) {
+          v.camera.moveEnd.removeEventListener(handleCameraMove);
+          destroyViewer(v);
         }
+        onViewerDestroy?.();
+        setViewer(null);
         viewerRef.current = null;
         gibsBaseLayerRef.current = null;
         gibsOverlaysRef.current.clear();
@@ -284,10 +306,20 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
       };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+    // ── Dynamically toggle requestRenderMode for moving layers (air, sea) ────
+    useEffect(() => {
+      if (!viewer || viewer.isDestroyed()) return;
+      if (viewer.scene) {
+        viewer.scene.requestRenderMode = !movingLayersActive;
+        if (movingLayersActive) {
+          viewer.scene.requestRender();
+        }
+      }
+    }, [viewer, movingLayersActive]);
+
     // ── Manage GIBS Imagery Layers (Base + Overlays) ───────────────────────
 
     useEffect(() => {
-      const viewer = viewerRef.current;
       if (!viewer || viewer.isDestroyed()) return;
 
       let isMounted = true;
@@ -349,7 +381,7 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
                 }
                 callbackRefs.current.onTileError({
                   layerId: baseLayerDef.id,
-                  message: `Sebagian tile citra untuk tanggal ${safeDate} gagal dimuat dari server GIBS.`,
+                  message: `Some imagery tiles for date ${safeDate} failed to load from NASA GIBS.`,
                   fallbackDate: fallback,
                 });
               }
@@ -402,7 +434,7 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
       return () => {
         isMounted = false;
       };
-    }, [imageryEnabled, activeBaseLayerId, imageryDate, overlaySettings]);
+    }, [viewer, imageryEnabled, activeBaseLayerId, imageryDate, overlaySettings]);
 
     return (
       <div className="osint-cesium-root relative w-full h-full" aria-label="OSINT 3D globe">

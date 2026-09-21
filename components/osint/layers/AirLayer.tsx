@@ -106,29 +106,33 @@ export default function AirLayer({
   // ── Click Handler ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Cesium = (window as any).Cesium;
-    if (!Cesium) return;
 
-    const handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
+    let handler: any = null;
+    let isMounted = true;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    handler.setInputAction((click: any) => {
-      const picked = viewer.scene.pick(click.position);
-      if (!picked || !picked.id) return;
+    import('cesium').then((Cesium) => {
+      if (!isMounted || !viewer || viewer.isDestroyed()) return;
 
-      const entityId: string =
-        typeof picked.id === 'string' ? picked.id : picked.id?.id;
-      if (!entityId || !entityId.startsWith('air:')) return;
+      handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
-      const state = aircraftMapRef.current.get(entityId);
-      if (state && onSelectRef.current) {
-        onSelectRef.current(state.entity);
-      }
-    }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+      handler.setInputAction((click: any) => {
+        const picked = viewer.scene.pick(click.position);
+        if (!picked || !picked.id) return;
+
+        const entityId: string =
+          typeof picked.id === 'string' ? picked.id : picked.id?.id;
+        if (!entityId || !entityId.startsWith('air:')) return;
+
+        const state = aircraftMapRef.current.get(entityId);
+        if (state && onSelectRef.current) {
+          onSelectRef.current(state.entity);
+        }
+      }, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+    });
 
     return () => {
-      if (!handler.isDestroyed()) {
+      isMounted = false;
+      if (handler && !handler.isDestroyed()) {
         handler.destroy();
       }
     };
@@ -137,27 +141,29 @@ export default function AirLayer({
   // ── Ingest new entity polls & perform ID diffing ───────────────────────────
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Cesium = (window as any).Cesium;
-    if (!Cesium) return;
 
-    const now = Date.now();
-    const activeHexIds = new Set<string>();
+    let isMounted = true;
 
-    for (const ent of entities) {
-      activeHexIds.add(ent.id);
+    import('cesium').then((Cesium) => {
+      if (!isMounted || !viewer || viewer.isDestroyed()) return;
 
-      const lat = ent.position.lat;
-      const lon = ent.position.lon;
-      const altM = ent.position.altM ?? 0;
-      const headingDeg = ent.headingDeg;
-      const speedMs = ent.speedMs ?? 0;
-      const onGround = Boolean(ent.raw?.onGround);
-      const fresh = Boolean(ent.raw?.fresh ?? true);
-      const isMilitary = Boolean(ent.raw?.isMilitary);
-      const observedEpoch = new Date(ent.observedAt).getTime();
+      const now = Date.now();
+      const activeHexIds = new Set<string>();
 
-      const existing = aircraftMapRef.current.get(ent.id);
+      for (const ent of entities) {
+        activeHexIds.add(ent.id);
+
+        const lat = ent.position.lat;
+        const lon = ent.position.lon;
+        const altM = ent.position.altM ?? 0;
+        const headingDeg = ent.headingDeg;
+        const speedMs = ent.speedMs ?? 0;
+        const onGround = Boolean(ent.raw?.onGround);
+        const fresh = Boolean(ent.raw?.fresh ?? true);
+        const isMilitary = Boolean(ent.raw?.isMilitary);
+        const observedEpoch = new Date(ent.observedAt).getTime();
+
+        const existing = aircraftMapRef.current.get(ent.id);
 
       if (existing) {
         // Update existing aircraft target telemetry
@@ -245,144 +251,158 @@ export default function AirLayer({
         });
       }
     }
+
+      viewer.scene.requestRender();
+    });
+
+    return () => {
+      isMounted = false;
+    };
   }, [viewer, entities, mode]);
 
   // ── High-Performance Animation Loop (Cesium scene.preRender) ──────────────
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const Cesium = (window as any).Cesium;
-    if (!Cesium) return;
 
-    const scene = viewer.scene;
+    let isMounted = true;
+    let removeListener: (() => void) | null = null;
 
-    const onPreRender = () => {
-      const now = Date.now();
-      const currentMode = modeRef.current;
-      const filters = filterRef.current;
+    import('cesium').then((Cesium) => {
+      if (!isMounted || !viewer || viewer.isDestroyed()) return;
 
-      const minAltM = filters?.minAltFt !== undefined ? filters.minAltFt * 0.3048 : -Infinity;
-      const maxAltM = filters?.maxAltFt !== undefined ? filters.maxAltFt * 0.3048 : Infinity;
-      const hideGround = filters?.hideOnGround ?? true;
-      const militaryOnly = filters?.militaryOnly ?? false;
-      const showTrails = filters?.showTrails ?? true;
+      const scene = viewer.scene;
 
-      const toDelete: string[] = [];
+      const onPreRender = () => {
+        const now = Date.now();
+        const currentMode = modeRef.current;
+        const filters = filterRef.current;
 
-      for (const [id, state] of aircraftMapRef.current.entries()) {
-        const timeSincePoll = now - state.lastSeenPollEpoch;
+        const minAltM = filters?.minAltFt !== undefined ? filters.minAltFt * 0.3048 : -Infinity;
+        const maxAltM = filters?.maxAltFt !== undefined ? filters.maxAltFt * 0.3048 : Infinity;
+        const hideGround = filters?.hideOnGround ?? true;
+        const militaryOnly = filters?.militaryOnly ?? false;
+        const showTrails = filters?.showTrails ?? true;
 
-        // Grace period expiry check (30 seconds)
-        if (timeSincePoll > GRACE_PERIOD_MS) {
-          toDelete.push(id);
-          continue;
-        }
+        const toDelete: string[] = [];
 
-        // Apply filters
-        const passesFilter =
-          (!hideGround || !state.onGround) &&
-          (!militaryOnly || state.isMilitary) &&
-          state.currentAltM >= minAltM &&
-          state.currentAltM <= maxAltM;
+        for (const [id, state] of aircraftMapRef.current.entries()) {
+          const timeSincePoll = now - state.lastSeenPollEpoch;
 
-        if (!passesFilter) {
-          state.cesiumEntity.show = false;
-          if (state.trailEntity) state.trailEntity.show = false;
-          continue;
-        }
+          // Grace period expiry check (30 seconds)
+          if (timeSincePoll > GRACE_PERIOD_MS) {
+            toDelete.push(id);
+            continue;
+          }
 
-        state.cesiumEntity.show = true;
+          // Apply filters
+          const passesFilter =
+            (!hideGround || !state.onGround) &&
+            (!militaryOnly || state.isMilitary) &&
+            state.currentAltM >= minAltM &&
+            state.currentAltM <= maxAltM;
 
-        // Smooth position computation:
-        // 1. If fresh (seen_pos <= 30) and flying, dead reckon along heading
-        let animLat = state.targetLat;
-        let animLon = state.targetLon;
-        const animAlt = state.targetAltM;
+          if (!passesFilter) {
+            state.cesiumEntity.show = false;
+            if (state.trailEntity) state.trailEntity.show = false;
+            continue;
+          }
 
-        if (state.fresh && !state.onGround && state.speedMs >= 5 && state.headingDeg !== undefined) {
-          const dtSeconds = (now - state.observedEpoch) / 1000;
-          const projected = extrapolate(
-            state.targetLat,
-            state.targetLon,
-            state.headingDeg,
-            state.speedMs,
-            dtSeconds,
+          state.cesiumEntity.show = true;
+
+          // Smooth position computation:
+          // 1. If fresh (seen_pos <= 30) and flying, dead reckon along heading
+          let animLat = state.targetLat;
+          let animLon = state.targetLon;
+          const animAlt = state.targetAltM;
+
+          if (state.fresh && !state.onGround && state.speedMs >= 5 && state.headingDeg !== undefined) {
+            const dtSeconds = (now - state.observedEpoch) / 1000;
+            const projected = extrapolate(
+              state.targetLat,
+              state.targetLon,
+              state.headingDeg,
+              state.speedMs,
+              dtSeconds,
+            );
+            animLat = projected.lat;
+            animLon = projected.lon;
+          }
+
+          // Smooth transition (~500ms ease) from previous frame to avoid sudden jump
+          state.currentLat += (animLat - state.currentLat) * 0.25;
+          state.currentLon += (animLon - state.currentLon) * 0.25;
+          state.currentAltM += (animAlt - state.currentAltM) * 0.25;
+
+          const updatedPos = Cesium.Cartesian3.fromDegrees(
+            state.currentLon,
+            state.currentLat,
+            state.currentAltM,
           );
-          animLat = projected.lat;
-          animLon = projected.lon;
-        }
+          state.cesiumEntity.position = updatedPos;
 
-        // Smooth transition (~500ms ease) from previous frame to avoid sudden jump
-        const transitionProgress = Math.min(1, (now - state.transitionStartEpoch) / 500);
-        state.currentLat += (animLat - state.currentLat) * 0.25;
-        state.currentLon += (animLon - state.currentLon) * 0.25;
-        state.currentAltM += (animAlt - state.currentAltM) * 0.25;
-
-        const newPos = Cesium.Cartesian3.fromDegrees(
-          state.currentLon,
-          state.currentLat,
-          state.onGround ? 0 : state.currentAltM,
-        );
-
-        state.cesiumEntity.position = newPos;
-
-        // Update heading rotation
-        if (state.headingDeg !== undefined && state.cesiumEntity.billboard) {
-          state.cesiumEntity.billboard.rotation = Cesium.Math.toRadians(360 - state.headingDeg);
-        }
-
-        // Fade out during grace period
-        if (timeSincePoll > 10_000 && state.cesiumEntity.billboard) {
-          const fadeRatio = Math.max(0.1, 1 - (timeSincePoll - 10_000) / 20_000);
-          state.cesiumEntity.billboard.color = Cesium.Color.WHITE.withAlpha(fadeRatio);
-        }
-
-        // Update detail labels
-        if (state.cesiumEntity.label) {
-          state.cesiumEntity.label.show = currentMode === 'detail';
-        }
-
-        // 60-second in-memory trails in detail mode
-        if (currentMode === 'detail' && showTrails && state.trailPoints.length >= 2) {
-          const flatDegrees: number[] = [];
-          for (const [tLon, tLat, tAlt] of state.trailPoints) {
-            flatDegrees.push(tLon, tLat, tAlt);
+          if (state.headingDeg !== undefined && state.cesiumEntity.billboard) {
+            state.cesiumEntity.billboard.rotation = Cesium.Math.toRadians(360 - state.headingDeg);
           }
-          flatDegrees.push(state.currentLon, state.currentLat, state.currentAltM);
 
-          if (!state.trailEntity) {
-            const trailColorHex = state.isMilitary ? MILITARY_COLOR : CIVIL_COLOR;
-            state.trailEntity = viewer.entities.add({
-              polyline: {
-                positions: new Cesium.CallbackProperty(() => {
-                  return Cesium.Cartesian3.fromDegreesArrayHeights(flatDegrees);
-                }, false),
-                width: 1.5,
-                material: Cesium.Color.fromCssColorString(trailColorHex).withAlpha(0.4),
-              },
-            });
+          // Detail mode label updates
+          if (currentMode === 'detail' && state.cesiumEntity.label) {
+            const altFt = Math.round(state.currentAltM / 0.3048);
+            const kts = Math.round(state.speedMs * 1.94384);
+            state.cesiumEntity.label.text = `${state.entity.label}\nFL${Math.round(altFt / 100)} · ${kts}kt`;
           }
-          state.trailEntity.show = true;
-        } else if (state.trailEntity) {
-          state.trailEntity.show = false;
-        }
-      }
 
-      // Cleanup expired aircraft
-      for (const delId of toDelete) {
-        const item = aircraftMapRef.current.get(delId);
-        if (item) {
-          viewer.entities.remove(item.cesiumEntity);
-          if (item.trailEntity) viewer.entities.remove(item.trailEntity);
-          aircraftMapRef.current.delete(delId);
-        }
-      }
-    };
+          // Trail handling
+          if (showTrails && state.trailPoints.length > 1) {
+            const flatPoints: number[] = [];
+            for (const pt of state.trailPoints) {
+              flatPoints.push(pt[0], pt[1], pt[2]);
+            }
+            flatPoints.push(state.currentLon, state.currentLat, state.currentAltM);
 
-    scene.preRender.addEventListener(onPreRender);
+            const trailColorHex = state.isMilitary
+              ? '#f87171'
+              : state.onGround
+                ? '#94a3b8'
+                : '#38bdf8';
+
+            if (!state.trailEntity) {
+              state.trailEntity = viewer.entities.add({
+                id: `${id}:trail`,
+                polyline: {
+                  positions: Cesium.Cartesian3.fromDegreesArrayHeights(flatPoints),
+                  width: 1.5,
+                  material: Cesium.Color.fromCssColorString(trailColorHex).withAlpha(0.4),
+                },
+              });
+            }
+            state.trailEntity.show = true;
+          } else if (state.trailEntity) {
+            state.trailEntity.show = false;
+          }
+        }
+
+        // Cleanup expired aircraft
+        for (const delId of toDelete) {
+          const item = aircraftMapRef.current.get(delId);
+          if (item) {
+            viewer.entities.remove(item.cesiumEntity);
+            if (item.trailEntity) viewer.entities.remove(item.trailEntity);
+            aircraftMapRef.current.delete(delId);
+          }
+        }
+      };
+
+      scene.preRender.addEventListener(onPreRender);
+      removeListener = () => {
+        try {
+          scene.preRender.removeEventListener(onPreRender);
+        } catch {}
+      };
+    });
 
     return () => {
-      scene.preRender.removeEventListener(onPreRender);
+      isMounted = false;
+      if (removeListener) removeListener();
     };
   }, [viewer]);
 

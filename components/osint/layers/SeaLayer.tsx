@@ -293,6 +293,7 @@ const SeaLayer = memo(function SeaLayer({
               height: isSelected ? 36 : (isEmergency ? 32 : 26),
               color: new Cesium.Color(1.0, 1.0, 1.0, opacity),
               scaleByDistance: new Cesium.NearFarScalar(5e3, 1.2, 5e6, 0.5),
+              disableDepthTestDistance: Number.POSITIVE_INFINITY,
             },
             label: mode === 'detail'
               ? {
@@ -409,6 +410,10 @@ const SeaLayer = memo(function SeaLayer({
           states.delete(id);
         }
       });
+
+      if (viewer && !viewer.isDestroyed()) {
+        viewer.scene.requestRender();
+      }
     });
   }, [viewer, entities, displayMode, filters]);
 

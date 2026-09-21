@@ -109,7 +109,8 @@ export default function QuakeLayer({
         (click: { position: import('cesium').Cartesian2 }) => {
           const picked = viewer.scene.pick(click.position);
           if (picked?.id?.id) {
-            const osintEntity = osintMapRef.current.get(picked.id.id);
+            const rawId = picked.id.id.startsWith('quake:') ? picked.id.id.slice(6) : picked.id.id;
+            const osintEntity = osintMapRef.current.get(rawId) || osintMapRef.current.get(picked.id.id);
             if (osintEntity) {
               onSelectRef.current?.(osintEntity);
             }
@@ -140,23 +141,22 @@ export default function QuakeLayer({
       const currentMap = entityMapRef.current;
       const newOsintMap = new Map<string, OsintEntity>();
 
-      // In aggregate mode, remove all individual entities.
-      if (displayMode === 'aggregate') {
-        for (const [id, cesiumEntity] of currentMap) {
-          viewer.entities.remove(cesiumEntity);
-          currentMap.delete(id);
-        }
-        osintMapRef.current = newOsintMap;
-        viewer.scene.requestRender();
-        return;
-      }
+      // In aggregate mode (>3,000 km altitude), show significant quakes (M >= 4.5)
+      const activeEnts =
+        displayMode === 'aggregate'
+          ? ents.filter((e) => {
+              const rawMag = (e.raw as Record<string, unknown>)?.mag;
+              const mag = typeof rawMag === 'number' ? rawMag : e.severity * 9;
+              return mag >= 4.5;
+            })
+          : ents;
 
       const showLabels = displayMode === 'detail';
 
       // Build set of incoming entity IDs.
-      const incomingIds = new Set(ents.map((e) => e.id));
+      const incomingIds = new Set(activeEnts.map((e) => e.id));
 
-      // Remove entities that are no longer in the data.
+      // Remove entities that are no longer in the data or not qualified.
       for (const [id, cesiumEntity] of currentMap) {
         if (!incomingIds.has(id)) {
           viewer.entities.remove(cesiumEntity);
@@ -165,12 +165,13 @@ export default function QuakeLayer({
       }
 
       // Add or update entities.
-      for (const ent of ents) {
+      for (const ent of activeEnts) {
         newOsintMap.set(ent.id, ent);
 
         const existing = currentMap.get(ent.id);
         const opacity = ageOpacity(ent.observedAt);
-        const size = pointSize(ent.severity);
+        const rawSize = pointSize(ent.severity);
+        const size = displayMode === 'aggregate' ? Math.max(10, rawSize) : rawSize;
         const color = Cesium.Color.fromCssColorString('#e879f9').withAlpha(
           opacity,
         );
@@ -195,7 +196,7 @@ export default function QuakeLayer({
         } else {
           // Create new entity.
           const cesiumEntity = viewer.entities.add({
-            id: ent.id,
+            id: ent.id.startsWith('quake:') ? ent.id : `quake:${ent.id}`,
             position: Cesium.Cartesian3.fromDegrees(
               ent.position.lon,
               ent.position.lat,
