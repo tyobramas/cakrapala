@@ -100,6 +100,16 @@ export async function GET(
   }
 
   const config = LAYER_REGISTRY[layerParam];
+  if (config.category === 'basemap' || layerParam === 'imagery') {
+    return Response.json(
+      {
+        error: `Layer "${layerParam}" is a client-side WMTS basemap layer and cannot be fetched via API.`,
+        layer: layerParam,
+      },
+      { status: 409 },
+    );
+  }
+
   if (!config.enabled) {
     return Response.json(
       {

@@ -4,22 +4,31 @@
 // OSINT module main page.
 //
 // Layout:
-//   - Fullscreen Cesium globe
+//   - Fullscreen Cesium globe (NaturalEarthII base + NASA GIBS satellite imagery)
 //   - Left rail: 7 layer icons from registry (disabled → dimmed + "Segera" tooltip)
 //   - DataAgeBadge for active layers (top-left overlay)
+//   - Imagery Date & Nominal Resolution chip (top-left / header)
+//   - ImageryControl popover for base layer, date, and overlay settings
 //   - Attribution chip (bottom-right, permanent)
 //   - Responsive: rail → horizontal bar on mobile
-//
-// Only the quake layer is functional in this initial build.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import type { BBox, LayerId } from '@/lib/osint/types';
 import { LAYER_REGISTRY } from '@/lib/osint/registry';
 import { useLayer } from '@/lib/osint/useLayer';
 import DataAgeBadge from '@/components/osint/DataAgeBadge';
 import type { OsintGlobeHandle } from '@/components/osint/OsintGlobe';
+import {
+  GIBS_LAYERS,
+  getDefaultBaseLayer,
+  type GibsLayer,
+} from '@/lib/osint/imagery/catalog';
+import { getMaxDateForLayer } from '@/lib/osint/imagery/time';
+import ImageryControl, {
+  type ImagerySettings,
+} from '@/components/osint/ImageryControl';
 
 // Dynamic imports for Cesium components (no SSR).
 const OsintGlobe = dynamic(() => import('@/components/osint/OsintGlobe'), {
@@ -67,11 +76,28 @@ export default function OsintPage() {
   const [cameraAltM, setCameraAltM] = useState(2e7);
   const [bbox, setBBox] = useState<BBox | undefined>(undefined);
   const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
-    new Set(['quake']),
+    new Set(['quake', 'imagery']),
   );
   const [selectedEntity, setSelectedEntity] = useState<
     import('@/lib/osint/types').OsintEntity | null
   >(null);
+
+  // GIBS Imagery settings.
+  const defaultBase = useMemo(() => getDefaultBaseLayer(), []);
+  const [imagerySettings, setImagerySettings] = useState<ImagerySettings>({
+    baseLayerId: defaultBase.id,
+    dateStr: getMaxDateForLayer(defaultBase),
+    overlays: {
+      Coastlines_15m: { enabled: true, opacity: 0.8 },
+      Reference_Labels_15m: { enabled: false, opacity: 0.8 },
+    },
+  });
+  const [isImageryControlOpen, setIsImageryControlOpen] = useState(false);
+  const [tileErrorNotice, setTileErrorNotice] = useState<{
+    layerId: string;
+    message: string;
+    fallbackDate: string;
+  } | null>(null);
 
   // Quake layer hook.
   const quakeEnabled = activeLayers.has('quake');
@@ -87,26 +113,61 @@ export default function OsintPage() {
     setBBox(newBBox);
   }, []);
 
-  const toggleLayer = useCallback((layerId: LayerId) => {
-    const config = LAYER_REGISTRY[layerId];
-    if (!config.enabled) return; // Disabled layers can't be toggled.
+  const toggleLayer = useCallback(
+    (layerId: LayerId) => {
+      const config = LAYER_REGISTRY[layerId];
+      if (!config.enabled) return; // Disabled layers can't be toggled.
 
-    setActiveLayers((prev) => {
-      const next = new Set(prev);
-      if (next.has(layerId)) {
-        next.delete(layerId);
-      } else {
-        next.add(layerId);
-      }
-      return next;
-    });
+      setActiveLayers((prev) => {
+        const next = new Set(prev);
+        if (next.has(layerId)) {
+          next.delete(layerId);
+          if (layerId === 'imagery') {
+            setIsImageryControlOpen(false);
+          }
+        } else {
+          next.add(layerId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleApplyFallbackDate = useCallback((fallbackDate: string) => {
+    setImagerySettings((prev) => ({ ...prev, dateStr: fallbackDate }));
+    setTileErrorNotice(null);
   }, []);
+
+  // ── Active base layer info ──────────────────────────────────────────────
+
+  const activeBaseDef: GibsLayer =
+    GIBS_LAYERS.find((l) => l.id === imagerySettings.baseLayerId) ?? defaultBase;
 
   // ── Active attributions ─────────────────────────────────────────────────
 
-  const activeAttributions = Array.from(activeLayers)
-    .map((id) => LAYER_REGISTRY[id].attribution)
-    .filter(Boolean);
+  const activeAttributions = useMemo(() => {
+    const list: string[] = [];
+
+    // Entity layers
+    if (activeLayers.has('quake')) {
+      list.push(LAYER_REGISTRY.quake.attribution);
+    }
+
+    // Imagery layer
+    if (activeLayers.has('imagery')) {
+      list.push(activeBaseDef.attribution);
+      if (imagerySettings.overlays['Coastlines_15m']?.enabled) {
+        list.push('Coastlines: OSM / NASA GIBS');
+      }
+      if (imagerySettings.overlays['Reference_Labels_15m']?.enabled) {
+        list.push('Labels: OSM / NASA GIBS');
+      }
+    }
+
+    // Deduplicate
+    return Array.from(new Set(list.filter(Boolean)));
+  }, [activeLayers, activeBaseDef.attribution, imagerySettings.overlays]);
 
   // ── Viewer from globe ref ───────────────────────────────────────────────
 
@@ -119,6 +180,11 @@ export default function OsintPage() {
         ref={globeRef}
         onCameraAltChange={handleCameraAltChange}
         onBBoxChange={handleBBoxChange}
+        imageryEnabled={activeLayers.has('imagery')}
+        activeBaseLayerId={imagerySettings.baseLayerId}
+        imageryDate={imagerySettings.dateStr}
+        overlaySettings={imagerySettings.overlays}
+        onTileError={setTileErrorNotice}
       />
 
       {/* Quake entities rendered on globe */}
@@ -197,8 +263,8 @@ export default function OsintPage() {
         })}
       </nav>
 
-      {/* ── Data Age Badges (top-left) ──────────────────────────────────── */}
-      <div className="absolute z-10 top-4 left-20 max-md:left-4 max-md:top-20 flex flex-col gap-1.5">
+      {/* ── Top Bar / Badges (top-left) ──────────────────────────────────── */}
+      <div className="absolute z-10 top-4 left-20 max-md:left-4 max-md:top-20 flex flex-wrap items-center gap-2">
         {quakeEnabled && quake.status !== 'idle' && (
           <DataAgeBadge
             name={LAYER_REGISTRY.quake.nameId}
@@ -207,7 +273,43 @@ export default function OsintPage() {
             refreshMs={LAYER_REGISTRY.quake.refreshMs}
           />
         )}
+
+        {/* Imagery Chip with nominal resolution & date */}
+        {activeLayers.has('imagery') && (
+          <button
+            onClick={() => setIsImageryControlOpen((prev) => !prev)}
+            className="
+              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+              transition-all duration-150 hover:border-slate-500 cursor-pointer
+            "
+            title="Buka pengaturan citra satelit NASA GIBS"
+            aria-label="Pengaturan citra satelit NASA GIBS"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-semibold text-slate-100">
+              Citra: {imagerySettings.dateStr}
+            </span>
+            <span className="text-slate-500">·</span>
+            <span className="text-slate-300 font-sans">
+              {activeBaseDef.label.split(' ')[0]} {activeBaseDef.resolution}
+            </span>
+            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+          </button>
+        )}
       </div>
+
+      {/* ── Imagery Control Popover ──────────────────────────────────────── */}
+      <ImageryControl
+        isOpen={isImageryControlOpen && activeLayers.has('imagery')}
+        onClose={() => setIsImageryControlOpen(false)}
+        settings={imagerySettings}
+        onChange={setImagerySettings}
+        tileErrorNotice={tileErrorNotice}
+        onDismissError={() => setTileErrorNotice(null)}
+        onApplyFallbackDate={handleApplyFallbackDate}
+      />
 
       {/* ── Selected Entity Panel (minimal) ─────────────────────────────── */}
       {selectedEntity && (
@@ -246,8 +348,8 @@ export default function OsintPage() {
 
       {/* ── Attribution Chip (bottom-right, permanent) ──────────────────── */}
       {activeAttributions.length > 0 && (
-        <div className="absolute z-10 bottom-2 right-2 max-w-xs">
-          <div className="bg-black/60 backdrop-blur-sm rounded px-2 py-1 text-[10px] text-slate-400 leading-tight">
+        <div className="absolute z-10 bottom-2 right-2 max-w-md">
+          <div className="bg-black/60 backdrop-blur-sm rounded px-2.5 py-1 text-[10px] text-slate-400 leading-tight">
             {activeAttributions.map((attr, i) => (
               <span key={i}>
                 {i > 0 && ' · '}

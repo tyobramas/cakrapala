@@ -20,6 +20,8 @@ export interface LayerConfig {
   color: string;
   /** Default entity kind for this layer. */
   kind: EntityKind;
+  /** Category: 'entity' (polled via API) or 'basemap' (client-side WMTS) */
+  category?: 'entity' | 'basemap';
   /** Server-side cache TTL in milliseconds. */
   ttlMs: number;
   /**
@@ -44,6 +46,7 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
     nameEn: 'Earthquake',
     color: '#e879f9',
     kind: 'event',
+    category: 'entity',
     ttlMs: 45_000,
     refreshMs: 60_000,
     enabled: true,
@@ -54,13 +57,14 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
     id: 'imagery',
     nameId: 'Citra Satelit',
     nameEn: 'Satellite Imagery',
-    color: '#94a3b8',
+    color: '#38bdf8',
     kind: 'static',
+    category: 'basemap',
     ttlMs: 86_400_000,
     refreshMs: 0,
-    enabled: false,
+    enabled: true,
     requiresKey: false,
-    attribution: '',
+    attribution: 'NASA EOSDIS GIBS',
   },
   fire: {
     id: 'fire',
@@ -143,6 +147,11 @@ export function resolveDisplayMode(cameraAltM: number): DisplayMode {
 /** Type guard: is the given string a valid LayerId? */
 export function isValidLayerId(id: string): id is LayerId {
   return id in LAYER_REGISTRY;
+}
+
+/** Check if a layer is a basemap layer (client-side WMTS) rather than an entity layer. */
+export function isBasemapLayer(id: LayerId): boolean {
+  return LAYER_REGISTRY[id]?.category === 'basemap';
 }
 
 /** Returns all enabled layers. */

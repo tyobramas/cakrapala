@@ -37,6 +37,7 @@ export function useLayer(
   enabled: boolean,
 ): UseLayerResult {
   const config = LAYER_REGISTRY[layerId];
+  const isBasemap = config.category === 'basemap';
 
   const [entities, setEntities] = useState<OsintEntity[]>([]);
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
@@ -58,7 +59,7 @@ export function useLayer(
   // ── Fetch function ──────────────────────────────────────────────────────
 
   const doFetch = useCallback(async () => {
-    if (!enabledRef.current || !config.enabled) return;
+    if (!enabledRef.current || !config.enabled || isBasemap) return;
 
     // Abort any in-flight request.
     abortRef.current?.abort();
@@ -124,7 +125,7 @@ export function useLayer(
   // ── Debounced bbox watcher ──────────────────────────────────────────────
 
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || isBasemap) return;
 
     const handle = setTimeout(() => {
       doFetch();
@@ -132,7 +133,7 @@ export function useLayer(
 
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bbox?.[0], bbox?.[1], bbox?.[2], bbox?.[3], enabled]);
+  }, [bbox?.[0], bbox?.[1], bbox?.[2], bbox?.[3], enabled, isBasemap]);
 
   // ── Polling with visibility gating ──────────────────────────────────────
 
