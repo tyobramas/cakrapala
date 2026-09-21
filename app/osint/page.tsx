@@ -9,6 +9,7 @@
 //   - DataAgeBadge for active layers (top-left overlay)
 //   - Imagery Date & Nominal Resolution chip (top-left / header)
 //   - ImageryControl popover for base layer, date, and overlay settings
+//   - FireControl popover for FIRMS settings (day range, night-only, source)
 //   - Attribution chip (bottom-right, permanent)
 //   - Responsive: rail → horizontal bar on mobile
 // ─────────────────────────────────────────────────────────────────────────────
@@ -29,6 +30,10 @@ import { getMaxDateForLayer } from '@/lib/osint/imagery/time';
 import ImageryControl, {
   type ImagerySettings,
 } from '@/components/osint/ImageryControl';
+import FireControl, {
+  type FireSettings,
+} from '@/components/osint/FireControl';
+import { isBBoxAreaAllowed } from '@/lib/osint/layers/fire';
 
 // Dynamic imports for Cesium components (no SSR).
 const OsintGlobe = dynamic(() => import('@/components/osint/OsintGlobe'), {
@@ -44,6 +49,11 @@ const OsintGlobe = dynamic(() => import('@/components/osint/OsintGlobe'), {
 
 const QuakeLayer = dynamic(
   () => import('@/components/osint/layers/QuakeLayer'),
+  { ssr: false },
+);
+
+const FireLayer = dynamic(
+  () => import('@/components/osint/layers/FireLayer'),
   { ssr: false },
 );
 
@@ -76,7 +86,7 @@ export default function OsintPage() {
   const [cameraAltM, setCameraAltM] = useState(2e7);
   const [bbox, setBBox] = useState<BBox | undefined>(undefined);
   const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
-    new Set(['quake', 'imagery']),
+    new Set(['quake', 'imagery', 'fire']),
   );
   const [selectedEntity, setSelectedEntity] = useState<
     import('@/lib/osint/types').OsintEntity | null
@@ -99,9 +109,42 @@ export default function OsintPage() {
     fallbackDate: string;
   } | null>(null);
 
+  // FIRMS Fire settings.
+  const [fireSettings, setFireSettings] = useState<FireSettings>({
+    dayRange: 1,
+    includeLowConfidence: false,
+    nightOnly: false,
+    source: 'auto',
+  });
+  const [isFireControlOpen, setIsFireControlOpen] = useState(false);
+
   // Quake layer hook.
   const quakeEnabled = activeLayers.has('quake');
   const quake = useLayer('quake', bbox, cameraAltM, quakeEnabled);
+
+  // Fire layer hook:
+  // Aggregate mode restriction: only fetch if camera <= 3M meters AND area <= 60°x60°
+  const fireEnabled = activeLayers.has('fire');
+  const fireZoomAllowed = cameraAltM <= 3_000_000 && isBBoxAreaAllowed(bbox);
+  const firePollingEnabled = fireEnabled && fireZoomAllowed;
+
+  const fireExtraParams = useMemo(
+    () => ({
+      range: fireSettings.dayRange,
+      low: fireSettings.includeLowConfidence ? '1' : '0',
+      night: fireSettings.nightOnly ? '1' : '0',
+      source: fireSettings.source !== 'auto' ? fireSettings.source : undefined,
+    }),
+    [fireSettings],
+  );
+
+  const fire = useLayer(
+    'fire',
+    bbox,
+    cameraAltM,
+    firePollingEnabled,
+    fireExtraParams,
+  );
 
   // ── Callbacks ───────────────────────────────────────────────────────────
 
@@ -122,11 +165,11 @@ export default function OsintPage() {
         const next = new Set(prev);
         if (next.has(layerId)) {
           next.delete(layerId);
-          if (layerId === 'imagery') {
-            setIsImageryControlOpen(false);
-          }
+          if (layerId === 'imagery') setIsImageryControlOpen(false);
+          if (layerId === 'fire') setIsFireControlOpen(false);
         } else {
           next.add(layerId);
+          if (layerId === 'fire') setIsFireControlOpen(true);
         }
         return next;
       });
@@ -149,12 +192,17 @@ export default function OsintPage() {
   const activeAttributions = useMemo(() => {
     const list: string[] = [];
 
-    // Entity layers
+    // Quake
     if (activeLayers.has('quake')) {
       list.push(LAYER_REGISTRY.quake.attribution);
     }
 
-    // Imagery layer
+    // Fire
+    if (activeLayers.has('fire')) {
+      list.push(LAYER_REGISTRY.fire.attribution);
+    }
+
+    // Imagery
     if (activeLayers.has('imagery')) {
       list.push(activeBaseDef.attribution);
       if (imagerySettings.overlays['Coastlines_15m']?.enabled) {
@@ -193,6 +241,17 @@ export default function OsintPage() {
           viewer={viewer}
           entities={quake.entities}
           cameraAltM={cameraAltM}
+          onSelect={setSelectedEntity}
+        />
+      )}
+
+      {/* Fire entities rendered on globe */}
+      {viewer && fireEnabled && fireZoomAllowed && (
+        <FireLayer
+          viewer={viewer}
+          entities={fire.entities}
+          cameraAltM={cameraAltM}
+          dayRange={fireSettings.dayRange}
           onSelect={setSelectedEntity}
         />
       )}
@@ -265,6 +324,7 @@ export default function OsintPage() {
 
       {/* ── Top Bar / Badges (top-left) ──────────────────────────────────── */}
       <div className="absolute z-10 top-4 left-20 max-md:left-4 max-md:top-20 flex flex-wrap items-center gap-2">
+        {/* Quake freshness badge */}
         {quakeEnabled && quake.status !== 'idle' && (
           <DataAgeBadge
             name={LAYER_REGISTRY.quake.nameId}
@@ -272,6 +332,62 @@ export default function OsintPage() {
             status={quake.status}
             refreshMs={LAYER_REGISTRY.quake.refreshMs}
           />
+        )}
+
+        {/* Fire freshness badge / Missing key warning */}
+        {fireEnabled && fire.error === 'MISSING_KEY' && (
+          <button
+            onClick={() => setIsFireControlOpen(true)}
+            className="
+              px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-500/50
+              text-[11px] text-amber-200 font-mono flex items-center gap-1.5 shadow
+              hover:bg-amber-900/80 transition-colors
+            "
+            title="Kunci MAP_KEY FIRMS belum dikonfigurasi pada environment server"
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+            <span>Kebakaran: Perlu konfigurasi</span>
+          </button>
+        )}
+
+        {fireEnabled && fire.status !== 'idle' && !fire.error && (
+          <div title="Data NRT NASA FIRMS berlatensi 1-3 jam sejak pengamatan satelit.">
+            <DataAgeBadge
+              name={LAYER_REGISTRY.fire.nameId}
+              ageMs={fire.ageMs}
+              status={fire.status}
+              refreshMs={LAYER_REGISTRY.fire.refreshMs}
+            />
+          </div>
+        )}
+
+        {/* Zoom Chip when Fire is enabled but zoom is too wide */}
+        {fireEnabled && !fireZoomAllowed && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs shadow-lg backdrop-blur-md">
+            <span>🔍</span>
+            <span>Zoom untuk memuat data kebakaran</span>
+          </div>
+        )}
+
+        {/* Fire active chip */}
+        {fireEnabled && fireZoomAllowed && (
+          <button
+            onClick={() => setIsFireControlOpen((prev) => !prev)}
+            className="
+              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+              transition-all duration-150 hover:border-amber-500/50 cursor-pointer
+            "
+            title="Buka pengaturan deteksi kebakaran NASA FIRMS"
+            aria-label="Pengaturan deteksi kebakaran NASA FIRMS"
+          >
+            <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+            <span className="font-semibold text-slate-100">
+              Api: {fireSettings.dayRange}h ({fire.entities.length} titik)
+            </span>
+            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+          </button>
         )}
 
         {/* Imagery Chip with nominal resolution & date */}
@@ -311,6 +427,15 @@ export default function OsintPage() {
         onApplyFallbackDate={handleApplyFallbackDate}
       />
 
+      {/* ── Fire Control Popover ─────────────────────────────────────────── */}
+      <FireControl
+        isOpen={isFireControlOpen && activeLayers.has('fire')}
+        onClose={() => setIsFireControlOpen(false)}
+        settings={fireSettings}
+        onChange={setFireSettings}
+        error={fire.error}
+      />
+
       {/* ── Selected Entity Panel (minimal) ─────────────────────────────── */}
       {selectedEntity && (
         <div className="absolute z-10 bottom-16 left-1/2 -translate-x-1/2 max-w-sm w-full mx-4">
@@ -320,14 +445,27 @@ export default function OsintPage() {
                 <h3 className="text-sm font-semibold text-slate-100 truncate">
                   {selectedEntity.label}
                 </h3>
-                <p className="text-xs text-slate-400 mt-1">
-                  Mag:{' '}
-                  {selectedEntity.raw?.mag != null
-                    ? String(selectedEntity.raw.mag)
-                    : '–'}{' '}
-                  · Kedalaman:{' '}
-                  {Math.abs(selectedEntity.position.altM / 1000).toFixed(1)} km
-                </p>
+                {selectedEntity.layer === 'quake' && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Mag:{' '}
+                    {selectedEntity.raw?.mag != null
+                      ? String(selectedEntity.raw.mag)
+                      : '–'}{' '}
+                    · Kedalaman:{' '}
+                    {Math.abs(selectedEntity.position.altM / 1000).toFixed(1)} km
+                  </p>
+                )}
+                {selectedEntity.layer === 'fire' && (
+                  <p className="text-xs text-slate-400 mt-1">
+                    Intensitas:{' '}
+                    {selectedEntity.raw?.frp != null
+                      ? `${selectedEntity.raw.frp} MW`
+                      : '–'}{' '}
+                    · Confidence:{' '}
+                    {String(selectedEntity.raw?.confidence || 'nominal').toUpperCase()} ·{' '}
+                    {selectedEntity.raw?.daynight === 'N' ? '🌙 Malam' : '☀️ Siang'}
+                  </p>
+                )}
                 <p className="text-xs text-slate-500 mt-0.5">
                   {selectedEntity.position.lat.toFixed(3)}°,{' '}
                   {selectedEntity.position.lon.toFixed(3)}° ·{' '}

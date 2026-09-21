@@ -19,6 +19,7 @@ import { LAYER_REGISTRY, isValidLayerId } from '@/lib/osint/registry';
 import { cache } from '@/lib/osint/cache';
 import { roundBBox, bboxKey } from '@/lib/osint/geo';
 import { fetchQuakeLayer } from '@/lib/osint/layers/quake';
+import { fetchFireLayer } from '@/lib/osint/layers/fire';
 import type { BBox, LayerPayload } from '@/lib/osint/types';
 import type { LayerFetcher } from '@/lib/osint/adapter';
 
@@ -26,7 +27,7 @@ import type { LayerFetcher } from '@/lib/osint/adapter';
 
 const LAYER_FETCHERS: Partial<Record<string, LayerFetcher>> = {
   quake: fetchQuakeLayer,
-  // Future layers are added here when enabled.
+  fire: fetchFireLayer,
 };
 
 // ── Rate limiter (in-memory, sliding window) ────────────────────────────────
@@ -141,7 +142,33 @@ export async function GET(
   // 4. Build cache key.
   const bbox = bboxResult ?? undefined;
   const roundedBBoxStr = bbox ? bboxKey(roundBBox(bbox)) : 'global';
-  const cacheKey = `osint:${layerParam}:${roundedBBoxStr}`;
+
+  // Extract optional layer options (e.g. for fire)
+  const rangeParam = searchParams.get('range');
+  const sourceParam = searchParams.get('source');
+  const lowParam = searchParams.get('low');
+  const nightParam = searchParams.get('night');
+
+  let optSuffix = '';
+  const fetchOptions: Record<string, unknown> = {};
+  if (rangeParam) {
+    optSuffix += `:r=${rangeParam}`;
+    fetchOptions.dayRange = parseInt(rangeParam, 10);
+  }
+  if (sourceParam) {
+    optSuffix += `:s=${sourceParam}`;
+    fetchOptions.source = sourceParam;
+  }
+  if (lowParam === 'true' || lowParam === '1') {
+    optSuffix += ':l=1';
+    fetchOptions.includeLowConfidence = true;
+  }
+  if (nightParam === 'true' || nightParam === '1') {
+    optSuffix += ':n=1';
+    fetchOptions.nightOnly = true;
+  }
+
+  const cacheKey = `osint:${layerParam}:${roundedBBoxStr}${optSuffix}`;
 
   // 5. Fetch (with cache + dedup).
   const fetcher = LAYER_FETCHERS[layerParam];
@@ -160,6 +187,7 @@ export async function GET(
         bbox,
         cameraAltM: altResult ?? undefined,
         signal: controller.signal,
+        options: fetchOptions,
       });
     },
     config.ttlMs,

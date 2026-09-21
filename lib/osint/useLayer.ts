@@ -24,6 +24,8 @@ export interface UseLayerResult {
   /** Live age in ms, recalculated every second. */
   ageMs: number;
   status: LayerStatus;
+  /** Error code or message if fetch failed (e.g. 'MISSING_KEY', 'AREA_TOO_LARGE'). */
+  error: string | null;
   /** Manually trigger a refetch. */
   refetch: () => void;
 }
@@ -35,6 +37,7 @@ export function useLayer(
   bbox: BBox | undefined,
   cameraAltM: number | undefined,
   enabled: boolean,
+  extraParams?: Record<string, string | number | boolean | undefined>,
 ): UseLayerResult {
   const config = LAYER_REGISTRY[layerId];
   const isBasemap = config.category === 'basemap';
@@ -43,18 +46,21 @@ export function useLayer(
   const [fetchedAt, setFetchedAt] = useState<string | null>(null);
   const [upstreamAt, setUpstreamAt] = useState<string | null>(null);
   const [status, setStatus] = useState<LayerStatus>('idle');
+  const [error, setError] = useState<string | null>(null);
   const [ageMs, setAgeMs] = useState(0);
 
   // Refs to avoid stale closures.
   const abortRef = useRef<AbortController | null>(null);
   const bboxRef = useRef(bbox);
   const enabledRef = useRef(enabled);
+  const extraParamsRef = useRef(extraParams);
   const refetchFlagRef = useRef(0);
   const fetchedAtRef = useRef<string | null>(null);
   const upstreamAtRef = useRef<string | null>(null);
 
   bboxRef.current = bbox;
   enabledRef.current = enabled;
+  extraParamsRef.current = extraParams;
 
   // ── Fetch function ──────────────────────────────────────────────────────
 
@@ -76,6 +82,13 @@ export function useLayer(
       if (cameraAltM !== undefined) {
         params.set('alt', String(cameraAltM));
       }
+      if (extraParamsRef.current) {
+        for (const [k, v] of Object.entries(extraParamsRef.current)) {
+          if (v !== undefined && v !== null && v !== '') {
+            params.set(k, String(v));
+          }
+        }
+      }
 
       const qs = params.toString();
       const url = `/api/osint/${layerId}${qs ? `?${qs}` : ''}`;
@@ -88,6 +101,7 @@ export function useLayer(
       const data: LayerPayload = await response.json();
 
       if (data.error) {
+        setError(data.error);
         // Upstream error but we have previous data → stale.
         if (fetchedAtRef.current) {
           setStatus('stale');
@@ -97,6 +111,7 @@ export function useLayer(
         return;
       }
 
+      setError(null);
       setEntities(data.entities);
       setFetchedAt(data.fetchedAt);
       setUpstreamAt(data.upstreamAt);
@@ -113,7 +128,7 @@ export function useLayer(
         setStatus('error');
       }
     }
-  }, [layerId, config.enabled, cameraAltM]);
+  }, [layerId, config.enabled, cameraAltM, isBasemap]);
 
   // ── Refetch imperative handle ───────────────────────────────────────────
 
@@ -122,7 +137,9 @@ export function useLayer(
     doFetch();
   }, [doFetch]);
 
-  // ── Debounced bbox watcher ──────────────────────────────────────────────
+  // ── Debounced bbox & options watcher ────────────────────────────────────
+
+  const extraParamsKey = JSON.stringify(extraParams);
 
   useEffect(() => {
     if (!enabled || isBasemap) return;
@@ -133,12 +150,12 @@ export function useLayer(
 
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bbox?.[0], bbox?.[1], bbox?.[2], bbox?.[3], enabled, isBasemap]);
+  }, [bbox?.[0], bbox?.[1], bbox?.[2], bbox?.[3], enabled, isBasemap, extraParamsKey]);
 
   // ── Polling with visibility gating ──────────────────────────────────────
 
   useEffect(() => {
-    if (!enabled || !config.enabled || config.refreshMs <= 0) return;
+    if (!enabled || !config.enabled || config.refreshMs <= 0 || isBasemap) return;
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
@@ -175,7 +192,7 @@ export function useLayer(
       stopPolling();
       document.removeEventListener('visibilitychange', handleVisibility);
     };
-  }, [enabled, config.enabled, config.refreshMs, doFetch]);
+  }, [enabled, config.enabled, config.refreshMs, isBasemap, doFetch]);
 
   // ── Live age counter ────────────────────────────────────────────────────
 
@@ -202,5 +219,5 @@ export function useLayer(
     };
   }, []);
 
-  return { entities, fetchedAt, upstreamAt, ageMs, status, refetch };
+  return { entities, fetchedAt, upstreamAt, ageMs, status, error, refetch };
 }

@@ -16,6 +16,7 @@ export interface FetchLayerParams {
   bbox?: BBox;
   cameraAltM?: number;
   signal: AbortSignal;
+  options?: Record<string, unknown>;
 }
 
 /**
