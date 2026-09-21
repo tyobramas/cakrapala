@@ -49,9 +49,9 @@ interface AstronomyTerminalProps {
 
 const QUICK_COMMANDS = [
   {
-    label: "> /mission-planning",
+    label: "> /orbital-mechanics",
     prompt:
-      "Explain how Lambert's problem solver and patched-conic approximations are used to plan lunar free-return trajectories, including Delta-V budget calculations.",
+      "Bagaimana Hukum Kepler dan mekanika gravitasi menjelaskan orbit elips planet mengelilingi Matahari?",
   },
   {
     label: "> /asteroid-defense",

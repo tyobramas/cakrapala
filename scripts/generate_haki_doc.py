@@ -211,12 +211,12 @@ def create_document():
 
     # ── BAB 7: PANDUAN LENGKAP SEMUA MENU ────────────────────────────────────
     add_heading_1("BAB 7: PANDUAN PENGOPERASIAN LENGKAP SELURUH MENU APLIKASI")
-    add_body("Program komputer Cakrapala tersusun atas 8 modul menu utama yang saling terintegrasi. Pengguna dapat berpindah antar menu secara langsung melalui bilah navigasi atas (Navbar). Berikut panduan lengkap untuk setiap menu:")
+    add_body("Program komputer Cakrapala tersusun atas 7 modul menu utama yang saling terintegrasi. Pengguna dapat berpindah antar menu secara langsung melalui bilah navigasi atas (Navbar). Berikut panduan lengkap untuk setiap menu:")
 
     # 7.1 Landing Page
     add_heading_2("7.1. Menu 1: Landing Page & Kokpit Dirgantara (Overview Deck — '/')")
     add_body("Halaman beranda merupakan gerbang utama sistem yang menyajikan pemandangan LEO (Low Earth Orbit) beresolusi tinggi langsung dari jendela observasi wahana ruang angkasa.")
-    add_bullet("Pada layar monitor desktop, bagian atas menampilkan rel lengkung taktis yang memuat stasiun navigasi utama (Solar System, Mission Control, Sky Map, Asteroid Radar, Satellite, dan Space Codex). Stasiun yang aktif ditandai pendaran cyan laser.", "1. Navigasi Rel Melengkung (Curved NavbarArc): ")
+    add_bullet("Pada layar monitor desktop, bagian atas menampilkan rel lengkung taktis yang memuat stasiun navigasi utama (Solar System, Sky Map, Asteroid Radar, Satellite, dan Space Codex). Stasiun yang aktif ditandai pendaran cyan laser.", "1. Navigasi Rel Melengkung (Curved NavbarArc): ")
     add_bullet("Menampilkan bola dunia 3D fotorealistik yang berputar secara vertikal ke bawah, mensimulasikan pergerakan maju wahana antariksa mengitari orbit. Di latar belakang langit, galaksi Bima Sakti membentang secara diagonal (~30°) dan bergeser perlahan ke bawah selaras dengan laju orbit.", "2. Viewport 3D Bumi LEO & Bima Sakti: ")
     add_bullet("Terletak di bagian tengah atas, menampilkan identitas resmi 'CAKRAPALA DEEP SPACE OBSERVATORY' beserta ringkasan kapabilitas sistem.", "3. Banner Identitas & Tagline: ")
     add_bullet("Bilah kaca melayang di bagian bawah layar yang menyajikan data primer ISS dari API telemetri: status live (SYS-LIVE), waktu UTC, ketinggian orbit (ALT ~418 KM), kecepatan laju (VEL ~27.500 KM/H), inklinasi sudut (INC 51.6°), periode keliling (92.9 menit), dan koordinat nadir (lintang & bujur).", "4. Bilah Telemetri Waktu Nyata (Bottom Telemetry Strip): ")
@@ -255,22 +255,15 @@ def create_document():
     add_bullet("Panel kanan menyajikan telemetri hidup: NORAD Catalog ID, Altitude ketinggian (km), Orbital Velocity (km/jam), Inclination kemiringan orbit, serta status visibilitas siang/malam (Daylight / Eclipse penumbra).", "Langkah 3 (Memeriksa Telemetri Orbital): ")
     add_bullet("Lingkaran pendaran pada permukaan Bumi di bawah satelit menandakan cakupan zona komunikasi radio dan visibilitas langsung dari darat.", "Langkah 4 (Radius Jangkauan / Footprint): ")
 
-    # 7.6 Mission Control
-    add_heading_2("7.6. Menu 6: Modul Ruang Kendali Misi (Mission Control Room — '/mission-control')")
-    add_body("Pusat komando terpadu untuk memantau status keandalan armada satelit dan komunikasi jaringan luar angkasa dalam.")
-    add_bullet("Klik menu 'MISSION CONTROL' pada navbar.", "Langkah 1 (Akses): ")
-    add_bullet("Memeriksa status operasional stasiun pemancar bumi Deep Space Network (DSN) global (Goldstone USA, Madrid Spanyol, dan Canberra Australia).", "Langkah 2 (Monitoring Jaringan DSN): ")
-    add_bullet("Sistem secara otomatis memeriksa kestabilan koordinat posisi satelit dan memberikan tanda peringatan dini jika terdeteksi penyimpangan ketinggian atau hambatan atmosfer (atmospheric drag).", "Langkah 3 (Deteksi Anomali AI): ")
-
-    # 7.7 Space Codex
-    add_heading_2("7.7. Menu 7: Modul Ensiklopedia Antariksa (Space Codex — '/codex')")
+    # 7.6 Space Codex
+    add_heading_2("7.6. Menu 6: Modul Ensiklopedia Antariksa (Space Codex — '/codex')")
     add_body("Perpustakaan digital interaktif yang menyajikan pengetahuan dasar astrofisika dan dokumentasi sejarah eksplorasi antariksa.")
     add_bullet("Klik menu 'SPACE CODEX' pada navbar.", "Langkah 1 (Akses): ")
     add_bullet("Pengguna dapat menelusuri artikel glosarium astrofisika: Hukum Gravitasi Newton, Tiga Hukum Kepler, Titik Lagrange (L1-L5), Kecepatan Lolos (Escape Velocity), dan Fenomena Lubang Hitam.", "Langkah 2 (Membaca Glosarium Sains): ")
     add_bullet("Mempelajari klasifikasi warna dan suhu bintang berdasarkan standar Morgan-Keenan (O, B, A, F, G, K, M).", "Langkah 3 (Klasifikasi Bintang): ")
 
-    # 7.8 SYS-AI Terminal
-    add_heading_2("7.8. Menu 8: Modul Asisten AI Antariksa (SYS-AI Astro-Terminal)")
+    # 7.7 SYS-AI Terminal
+    add_heading_2("7.7. Menu 7: Modul Asisten AI Antariksa (SYS-AI Astro-Terminal)")
     add_body("Asisten percakapan cerdas yang dirancang khusus untuk memandu pengguna dalam memahami data astronomi dan astrofisika secara interaktif.")
     add_bullet("Klik tombol logo Cakrapala pada navbar atau klik tombol 'SYS-AI // NEURAL LINK' pada landing page.", "Langkah 1 (Membuka Terminal): ")
     add_bullet("Ketikkan pertanyaan ilmiah pada kotak teks terminal (misal: 'Bagaimana cara ISS mempertahankan ketinggian orbitnya?' atau 'Jelaskan perbedaan meteoroid, meteor, dan meteorit').", "Langkah 2 (Mengajukan Pertanyaan): ")

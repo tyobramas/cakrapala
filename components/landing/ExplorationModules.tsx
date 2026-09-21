@@ -12,7 +12,6 @@ import {
   ArrowUpRight,
   Crosshair,
   BookOpen,
-  Rocket,
   Layers,
 } from "lucide-react";
 
@@ -127,31 +126,8 @@ const MODULES: ModuleCard[] = [
     ],
   },
   {
-    id: "mission-control",
-    sysCode: "SYS-05 // MISSION CONTROL",
-    title: "AI Mission Control",
-    subtitle: "PHYSICS ASTRODYNAMICS SOLVER",
-    description: "Physics-based satellite launch orbit planner and Apollo-style Lunar Free-Return trajectory explorer with 3D flight phase graphics.",
-    href: "/mission-control",
-    badge: "AI + ASTRODYNAMICS",
-    badgeColor: "bg-emerald-500/15 text-emerald-300 border-emerald-500/40",
-    engine: "Three.js & astronomy-engine",
-    icon: Rocket,
-    gradient: "from-[#141c33]/90 to-[#0b1222]/95",
-    borderColor: "border-slate-800 hover:border-emerald-400",
-    telemetry: [
-      { label: "PLANNER A", value: "SATELLITE LAUNCH" },
-      { label: "PLANNER B", value: "LUNAR FREE-RETURN" },
-      { label: "SOLVER", value: "LAMBERT + CONIC" },
-    ],
-    features: [
-      "Continuous Figure-8 Lunar Slingshot",
-      "Dynamic Altitude Geometry Profile",
-    ],
-  },
-  {
     id: "codex",
-    sysCode: "SYS-06 // SPACE CODEX",
+    sysCode: "SYS-05 // SPACE CODEX",
     title: "Universal Codex",
     subtitle: "ASTRONOMICAL ALMANAC & LEXICON",
     description: "Interactive astrophysics encyclopedia with certified IAU definitions, orbital formulas, and integrated SYS-AI terminal queries.",
@@ -187,7 +163,7 @@ export default function ExplorationModules() {
           Observatory Mission Consoles
         </h2>
         <p className="text-slate-400 text-xs sm:text-sm leading-relaxed">
-          Six integrated aerospace flight instruments designed for scientific astrophysics exploration, orbital mechanics simulation, and education.
+          Five integrated aerospace flight instruments designed for scientific astrophysics exploration, orbital mechanics simulation, and education.
         </p>
       </div>
 

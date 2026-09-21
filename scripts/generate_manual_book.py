@@ -229,14 +229,14 @@ def generate_manual():
 
     # ── BAB 5: PANDUAN LENGKAP SEMUA MENU BESERTA SCREENSHOT ───────────────────
     add_heading_1("BAB 5: PANDUAN LENGKAP PENGOPERASIAN SEMUA MENU BESERTA TAMPILAN SCREENSHOT")
-    add_body("Aplikasi Cakrapala memiliki 9 modul antarmuka utama yang saling terhubung. Setiap modul dilengkapi screenshot tampilan nyata antarmuka, penjelasan elemen fungsi, serta panduan operasional langkah demi langkah:")
+    add_body("Aplikasi Cakrapala memiliki 8 modul antarmuka utama yang saling terhubung. Setiap modul dilengkapi screenshot tampilan nyata antarmuka, penjelasan elemen fungsi, serta panduan operasional langkah demi langkah:")
 
     # 5.1 LANDING PAGE
     add_heading_2("5.1. Modul 1: Landing Page & Kokpit Dirgantara LEO (Overview Deck — '/')")
     add_body("Modul ini merupakan gerbang utama aplikasi yang menyajikan pemandangan LEO (Low Earth Orbit) beresolusi tinggi langsung dari jendela observasi wahana ruang angkasa.")
     add_screenshot("docs/screenshots/landing.png", "Gambar 5.1: Tampilan Nyata Landing Page & Kokpit Dirgantara LEO (cakrapala.com)")
     add_heading_3("A. Penjelasan Elemen Antarmuka (UI Breakdown):")
-    add_bullet("Terletak di bagian atas layar desktop berupa rel melengkung matematis (parabola sag) yang menempatkan stasiun navigasi (Solar System, Mission Control, Sky Map, Asteroid Radar, Satellite, dan Space Codex). Stasiun aktif disorot dengan pendaran warna cyan laser.", "1. Curved NavbarArc:")
+    add_bullet("Terletak di bagian atas layar desktop berupa rel melengkung matematis (parabola sag) yang menempatkan stasiun navigasi (Solar System, Sky Map, Asteroid Radar, Satellite, dan Space Codex). Stasiun aktif disorot dengan pendaran warna cyan laser.", "1. Curved NavbarArc:")
     add_bullet("Simulasi 3D fotorealistik bola dunia yang bergerak berputar vertikal ke bawah, mensimulasikan laju maju wahana antariksa mengelilingi Bumi. Latar belakang menampilkan galaksi Bima Sakti dengan kemiringan diagonal estetik (~30°).", "2. Viewport 3D Bumi LEO & Bima Sakti:")
     add_bullet("Menampilkan logo resmi Cakrapala serta deskripsi kapabilitas: 'Orbital mechanics, planetary defense & astrometry · computed from first principles'.", "3. Banner Identitas & Tagline:")
     add_bullet("Tombol futuristik dengan retikel sudut aktif yang memicu terbukanya jendela dialog asisten kecerdasan buatan.", "4. Launcher SYS-AI // NEURAL LINK:")
@@ -336,25 +336,10 @@ def generate_manual():
     add_bullet("Gunakan tombol 'ASIA-PACIFIC' untuk memusatkan kamera ke atas wilayah kepulauan Indonesia dan Asia Tenggara.", "Langkah 3: ")
     add_bullet("Ketikkan kata kunci (misal 'Starlink') pada kotak pencarian untuk melihat sebaran konstelasi megasatelit internet.", "Langkah 4: ")
 
-    # 5.8 MISSION CONTROL
-    add_heading_2("5.8. Modul 8: Ruang Kendali Misi & Solver Lintasan Orbit (AI Mission Control — '/mission-control')")
-    add_body("Modul ruang kendali simulasi kedirgantaraan untuk menghitung kebutuhan kecepatan Delta-v roket, hambatan atmosfer, dan penyisipan wahana ke orbit LEO sasaran.")
-    add_screenshot("docs/screenshots/mission_control.png", "Gambar 5.8: Tampilan Nyata Ruang Kendali Misi Kedirgantaraan & Solver Trajektori")
-    add_heading_3("A. Penjelasan Elemen Antarmuka (UI Breakdown):")
-    add_bullet("Formulir konfigurasi di sebelah kiri: Pilihan lokasi peluncuran (Launch Site: Kennedy Space Center Florida, Kourou, Tanegashima), kelas roket (Medium Launch Vehicle), massa muatan muatan (Payload Mass kg), dan waktu lepas landas.", "1. Panel Konfigurasi Peluncuran:")
-    add_bullet("Slider pengatur ketinggian orbit sasaran (Target Altitude: 160 - 2.000 km) dan sudut inklinasi kemiringan orbit (Target Inclination derajat).", "2. Parameter Orbit Target:")
-    add_bullet("Model 3D Bumi yang menggambarkan busur trajektori penerbangan roket dari titik landas menuju titik penyisipan orbit (orbital insertion arc).", "3. Visualisasi Trajektori 3D:")
-    add_bullet("Panel status di sebelah kanan yang memuat Tsiolkovsky Delta-v Solver, model Atmospheric Drag & Gravity Loss, serta tombol eksekusi 'SOLVE TRAJECTORY (RUN ANALYSIS)'.", "4. Mesin Solver Fisika Kedirgantaraan:")
-    add_heading_3("B. Panduan Langkah Pengoperasian:")
-    add_bullet("Klik menu 'MISSION CONTROL' pada bilah navigasi atau kunjungi https://cakrapala.com/mission-control.", "Langkah 1: ")
-    add_bullet("Tentukan lokasi peluncuran roket dan masukkan perkiraan berat satelit muatan (misal 120 kg).", "Langkah 2: ")
-    add_bullet("Geser slider 'TARGET ALTITUDE' ke ketinggian yang diinginkan (misal 550 km) dan sesuaikan sudut inklinasi.", "Langkah 3: ")
-    add_bullet("Klik tombol 'RUN ANALYSIS' / 'SOLVE TRAJECTORY'. Sistem komputasi akan memecahkan persamaan astrodinamika dan memproyeksikan kurva lintasan roket pada bola dunia 3D.", "Langkah 4: ")
-
-    # 5.9 SPACE CODEX
-    add_heading_2("5.9. Modul 9: Ensiklopedia Antariksa & Almanak Astrofisika (Space Codex — '/codex')")
+    # 5.8 SPACE CODEX
+    add_heading_2("5.8. Modul 8: Ensiklopedia Antariksa & Almanak Astrofisika (Space Codex — '/codex')")
     add_body("Perpustakaan digital interaktif yang menyajikan dokumentasi ilmiah konsep astrofisika, mekanika orbital, skala bahaya antariksa, dan glosarium bersertifikasi IAU.")
-    add_screenshot("docs/screenshots/space_codex.png", "Gambar 5.9: Tampilan Nyata Ensiklopedia Antariksa (The Universal Space Codex)")
+    add_screenshot("docs/screenshots/space_codex.png", "Gambar 5.8: Tampilan Nyata Ensiklopedia Antariksa (The Universal Space Codex)")
     add_heading_3("A. Penjelasan Elemen Antarmuka (UI Breakdown):")
     add_bullet("Bilah pencarian cepat bersimbol kaca pembesar untuk menemukan istilah astronomi, persamaan rumus, satelit, atau fenomena kosmik secara instan.", "1. Mesin Pencari Ensiklopedia:")
     add_bullet("Banner sorotan di bagian atas yang menyajikan konsep metrik astronomi penting lengkap dengan formulasi matematika LaTeX (misal: Palermo Technical Impact Hazard Scale untuk kalkulasi risiko asteroid).", "2. Kartu Metrik Antariksa Terpilih (Featured Celestial Metric):")

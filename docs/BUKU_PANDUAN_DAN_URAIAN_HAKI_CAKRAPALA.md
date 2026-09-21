@@ -19,9 +19,8 @@
    - 7.3. Modul Sky Map & Peta Bintang Toposentrik
    - 7.4. Modul Radar Asteroid & Pertahanan Planet (NEO Radar)
    - 7.5. Modul Pelacak Satelit & ISS (SGP4 Real-Time Tracking)
-   - 7.6. Modul Pusat Kendali Misi (Mission Control Room)
-   - 7.7. Modul Ensiklopedia Antariksa (Space Codex)
-   - 7.8. Modul Asisten Cerdas Antariksa (Cakrapala SYS-AI Astro-Terminal)
+   - 7.6. Modul Ensiklopedia Antariksa (Space Codex)
+   - 7.7. Modul Asisten Cerdas Antariksa (Cakrapala SYS-AI Astro-Terminal)
 8. [CONTOH POTONGAN KODE PROGRAM (SOURCE CODE SAMPLE)](#8-contoh-potongan-kode-program-source-code-sample)
 9. [PANDUAN PRAKTIS PENDAFTARAN ONLINE DI PORTAL DJKI](#9-panduan-praktis-pendaftaran-online-di-portal-djki)
 
@@ -125,7 +124,7 @@ Aplikasi dapat diakses secara langsung dan instan melalui peramban web dengan la
 ## 7. PANDUAN PENGOPERASIAN MODUL LANGKAH DEMI LANGKAH
 
 ### 7.1. Antarmuka Utama (Landing Page & Flight-Deck HUD)
-1. **Navigasi Melengkung (Curved Navbar):** Pada layar desktop, navbar atas menampilkan rel lengkung taktis yang memuat stasiun navigasi utama (*Solar System, Mission Control, Sky Map, Asteroid Radar, Satellite, Space Codex*).
+1. **Navigasi Melengkung (Curved Navbar):** Pada layar desktop, navbar atas menampilkan rel lengkung taktis yang memuat stasiun navigasi utama (*Solar System, Sky Map, Asteroid Radar, Satellite, Space Codex*).
 2. **Viewport 3D Bumi LEO:** Bagian latar belakang menampilkan bumi realistis berputar vertikal secara mulus sesuai laju wahana antariksa, dihiasi bentang galaksi Bima Sakti yang melintang diagonal secara sinematik.
 3. **Bilah Telemetri Bawah (Live Telemetry Strip):** Memantau secara langsung status sistem, waktu UTC real-time, ketinggian orbit ISS (ALT ~418 KM), kecepatan laju (VEL ~27.500 KM/H), dan koordinat nadir (lintang/bujur).
 4. **Peluncur AI Terminal:** Klik tombol logo Cakrapala pada navbar tengah untuk membuka terminal interaktif kecerdasan buatan.
@@ -154,15 +153,11 @@ Aplikasi dapat diakses secara langsung dan instan melalui peramban web dengan la
 2. Globe 3D menampilkan bola dunia interaktif lengkap dengan garis lintasan orbit elips ISS dan satelit cuaca/navigasi terpilih.
 3. Pengguna dapat memilih satelit dari katalog untuk memeriksa data NORAD ID, inklinasi, apogee, perigee, dan zona jangkauan penglihatan (*footprint*).
 
-### 7.6. Modul Pusat Kendali Misi (Mission Control Room) — `/mission-control`
-1. Akses menu **MISSION CONTROL**.
-2. Modul ini menyajikan ringkasan status operasional armada satelit, telemetri kesehatan komunikasi stasiun bumi (Deep Space Network), dan deteksi anomali orbit berbasis kecerdasan buatan.
-
-### 7.7. Modul Ensiklopedia Antariksa (Space Codex) — `/codex`
+### 7.6. Modul Ensiklopedia Antariksa (Space Codex) — `/codex`
 1. Akses menu **SPACE CODEX**.
 2. Pengguna dapat membaca glosarium istilah astrofisika, sejarah misi luar angkasa dunia, klasifikasi spektral bintang (O, B, A, F, G, K, M), dan teori relativitas fisika antariksa.
 
-### 7.8. Modul Asisten Cerdas Antariksa (SYS-AI Astro-Terminal)
+### 7.7. Modul Asisten Cerdas Antariksa (SYS-AI Astro-Terminal)
 1. Klik tombol **SYS-AI // NEURAL LINK** atau ikon tengah logo Cakrapala pada navbar.
 2. Jendela terminal melayang (*floating HUD terminal*) akan muncul di layar.
 3. Pengguna dapat mengetikkan pertanyaan astronomi secara interaktif (contoh: *"Berapa kecepatan lolos gravitasi Bumi?"* atau *"Kapan ISS melintas di atas langit Jakarta?"*).

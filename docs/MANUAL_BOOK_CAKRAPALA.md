@@ -80,7 +80,7 @@ Program Cakrapala dirilis dengan arsitektur cloud *Zero-Installation*. Pengguna 
 
 ## BAB 5: PANDUAN LENGKAP PENGOPERASIAN SEMUA MENU BESERTA SCREENSHOT NYATA
 
-Aplikasi Cakrapala tersusun atas 9 modul antarmuka utama yang saling terintegrasi. Berikut penjelasan mendalam setiap modul:
+Aplikasi Cakrapala tersusun atas 8 modul antarmuka utama yang saling terintegrasi. Berikut penjelasan mendalam setiap modul:
 
 ---
 
@@ -115,7 +115,7 @@ Asisten kecerdasan buatan interaktif yang bertindak sebagai *Flight Director & P
 
 #### A. Penjelasan Elemen Antarmuka (UI Breakdown):
 1. **Header Kontrol Terminal:** Bingkai dialog bergaya CRT sci-fi retro-futuristik dengan indikator status `[NODE ONLINE]`, tombol TTS (*Text-to-Speech*), Reset Session Buffer, Maximize Screen, dan Close Window.
-2. **Bilah Perintah Cepat (Quick Chips):** Tombol pintasan untuk menanyakan topik populer secara instan (`> /mission-planning`, `> /asteroid-defense`, `> /iss-telemetry`, `> /planetarium-stars`, `> /jwst-lagrange`).
+2. **Bilah Perintah Cepat (Quick Chips):** Tombol pintasan untuk menanyakan topik populer secara instan (`> /orbital-mechanics`, `> /asteroid-defense`, `> /iss-telemetry`, `> /planetarium-stars`, `> /jwst-lagrange`).
 3. **Konsol Dialog Percakapan:** Area output yang menampilkan teks respon AI dengan efek animasi mesin ketik (*typewriter*), pemformatan Markdown matematis, tombol salin ke clipboard, dan tombol audio TTS.
 4. **Input Box Command Line:** Bilah input perintah dengan prompt terminal Linux kedirgantaraan (`$ CAKRAPALA:~$`), tombol *"SEND"*, serta kemampuan memahami bahasa Indonesia dan Inggris secara bilingual.
 
@@ -229,35 +229,12 @@ Modul komputasi skala besar yang memvisualisasikan lebih dari 1.000 satelit akti
 - **Langkah 3:** Klik tombol *"ASIA-PACIFIC"* untuk memusatkan kamera ke atas wilayah kepulauan Indonesia.
 - **Langkah 4:** Masukkan kata kunci nama satelit pada bilah pencarian untuk menemukan satelit yang diinginkan.
 
----
-
-### 5.8. Modul 8: Ruang Kendali Misi & Solver Lintasan Orbit (AI Mission Control — '/mission-control')
-
-Modul ruang kendali simulasi kedirgantaraan untuk menghitung kebutuhan kecepatan Delta-v roket, hambatan atmosfer, dan penyisipan wahana ke orbit LEO sasaran.
-
-![Ruang Kendali Misi Kedirgantaraan](screenshots/mission_control.png)
-*Gambar 5.8: Tampilan Antarmuka Ruang Kendali Misi Kedirgantaraan & Solver Trajektori*
-
-#### A. Penjelasan Elemen Antarmuka (UI Breakdown):
-1. **Panel Konfigurasi Peluncuran:** Pilihan lokasi peluncuran (*Launch Site*: Kennedy Space Center Florida, Kourou, Tanegashima), kelas roket (*Medium Launch Vehicle*), massa muatan muatan (*Payload Mass* kg), dan waktu lepas landas.
-2. **Parameter Orbit Target:** Slider pengatur ketinggian orbit sasaran (*Target Altitude*: 160 - 2.000 km) dan sudut inklinasi kemiringan orbit (*Target Inclination* derajat).
-3. **Visualisasi Trajektori 3D:** Model 3D Bumi yang menggambarkan busur trajektori penerbangan roket dari titik landas menuju titik penyisipan orbit (*orbital insertion arc*).
-4. **Mesin Solver Fisika Kedirgantaraan:** Panel status yang memuat Tsiolkovsky Delta-v Solver, model *Atmospheric Drag & Gravity Loss*, serta tombol eksekusi *"SOLVE TRAJECTORY (RUN ANALYSIS)"*.
-
-#### B. Panduan Langkah Pengoperasian:
-- **Langkah 1:** Klik menu *"MISSION CONTROL"* pada bilah navigasi atau buka `https://cakrapala.com/mission-control`.
-- **Langkah 2:** Pilih lokasi peluncuran dan masukkan perkiraan massa muatan satelit (misal: 120 kg).
-- **Langkah 3:** Geser slider *"TARGET ALTITUDE"* ke ketinggian yang diinginkan (misal: 550 km).
-- **Langkah 4:** Klik tombol *"RUN ANALYSIS"* untuk menghitung kebutuhan Delta-v roket dan melihat simulasi lintasan peluncuran pada bola dunia 3D.
-
----
-
-### 5.9. Modul 9: Ensiklopedia Antariksa & Almanak Astrofisika (Space Codex — '/codex')
+### 5.8. Modul 8: Ensiklopedia Antariksa & Almanak Astrofisika (Space Codex — '/codex')
 
 Perpustakaan digital interaktif yang menyajikan dokumentasi ilmiah konsep astrofisika, mekanika orbital, skala bahaya antariksa, dan glosarium bersertifikasi IAU.
 
 ![Ensiklopedia Antariksa Space Codex](screenshots/space_codex.png)
-*Gambar 5.9: Tampilan Antarmuka Ensiklopedia Antariksa (The Universal Space Codex)*
+*Gambar 5.8: Tampilan Antarmuka Ensiklopedia Antariksa (The Universal Space Codex)*
 
 #### A. Penjelasan Elemen Antarmuka (UI Breakdown):
 1. **Mesin Pencari Ensiklopedia:** Bilah pencarian cepat untuk mencari istilah astronomi, rumus fisika, nama satelit, atau fenomena kosmik secara instan.

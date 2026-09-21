@@ -12,7 +12,6 @@ PAGES = [
     ("asteroid_radar.png", "http://localhost:3000/explore", 6000),
     ("satellite_fleet.png", "http://localhost:3000/iss", 7000),
     ("satellite_catalog.png", "http://localhost:3000/iss/catalog", 5000),
-    ("mission_control.png", "http://localhost:3000/mission-control", 6000),
     ("space_codex.png", "http://localhost:3000/codex", 5000),
 ]
 
