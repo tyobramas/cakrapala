@@ -291,9 +291,9 @@ describe('Route handler validation', () => {
   });
 
   it('returns 409 for disabled layer', async () => {
-    const req = makeRequest('/api/osint/air');
+    const req = makeRequest('/api/osint/sea');
     const res = await GET(req, {
-      params: Promise.resolve({ layer: 'air' }),
+      params: Promise.resolve({ layer: 'sea' }),
     });
     expect(res.status).toBe(409);
     const body = await res.json();

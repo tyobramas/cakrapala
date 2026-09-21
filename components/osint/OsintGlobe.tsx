@@ -47,6 +47,8 @@ export interface OsintGlobeHandle {
   getViewer(): import('cesium').Viewer | null;
   /** Returns the current number of imagery layers attached to the viewer. */
   getImageryLayerCount(): number;
+  /** Fly camera to coordinates */
+  flyTo(lat: number, lon: number, altM?: number): void;
 }
 
 export interface OsintGlobeProps {
@@ -118,6 +120,15 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
           const v = viewerRef.current;
           if (!v || v.isDestroyed()) return 0;
           return v.imageryLayers.length;
+        },
+        flyTo: async (lat: number, lon: number, altM = 25000) => {
+          const v = viewerRef.current;
+          if (!v || v.isDestroyed()) return;
+          const Cesium = await getCesium();
+          v.camera.flyTo({
+            destination: Cesium.Cartesian3.fromDegrees(lon, lat, altM),
+            duration: 1.5,
+          });
         },
       }),
       [],

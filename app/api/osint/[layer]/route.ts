@@ -21,6 +21,8 @@ import { roundBBox, bboxKey } from '@/lib/osint/geo';
 import { fetchQuakeLayer } from '@/lib/osint/layers/quake';
 import { fetchFireLayer } from '@/lib/osint/layers/fire';
 import { fetchStormLayer } from '@/lib/osint/layers/storm';
+import { fetchAirLayer } from '@/lib/osint/layers/air';
+import { bboxToCenterRadius, roundCoord } from '@/lib/osint/layers/air/geo';
 import type { BBox, LayerPayload } from '@/lib/osint/types';
 import type { LayerFetcher } from '@/lib/osint/adapter';
 
@@ -30,6 +32,7 @@ const LAYER_FETCHERS: Partial<Record<string, LayerFetcher>> = {
   quake: fetchQuakeLayer,
   fire: fetchFireLayer,
   storm: fetchStormLayer,
+  air: fetchAirLayer,
 };
 
 // ── Rate limiter (in-memory, sliding window) ────────────────────────────────
@@ -141,11 +144,35 @@ export async function GET(
     );
   }
 
-  // 4. Build cache key.
+  // 4. Build cache key and handle layer-specific area constraints.
   const bbox = bboxResult ?? undefined;
-  const roundedBBoxStr = config.globalScope
-    ? 'global'
-    : (bbox ? bboxKey(roundBBox(bbox)) : 'global');
+
+  // Handle air layer viewport radius constraint
+  if (layerParam === 'air') {
+    if (bbox) {
+      const cr = bboxToCenterRadius(bbox);
+      if (cr.isTooLarge) {
+        return Response.json({
+          layer: 'air',
+          entities: [],
+          fetchedAt: new Date().toISOString(),
+          upstreamAt: null,
+          stale: false,
+          error: 'AREA_TOO_LARGE',
+        });
+      }
+    }
+  }
+
+  let roundedBBoxStr = 'global';
+  if (layerParam === 'air' && bbox) {
+    const cr = bboxToCenterRadius(bbox);
+    const rLat = roundCoord(cr.centerLat, 0.25);
+    const rLon = roundCoord(cr.centerLon, 0.25);
+    roundedBBoxStr = `${rLat},${rLon}:r=${cr.radiusNm}`;
+  } else if (!config.globalScope) {
+    roundedBBoxStr = bbox ? bboxKey(roundBBox(bbox)) : 'global';
+  }
 
   // Extract optional layer options (e.g. for fire & storm)
   const rangeParam = searchParams.get('range');

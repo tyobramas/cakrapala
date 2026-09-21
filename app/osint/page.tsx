@@ -16,7 +16,7 @@
 
 import { useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
-import type { BBox, LayerId } from '@/lib/osint/types';
+import type { BBox, LayerId, OsintEntity } from '@/lib/osint/types';
 import { LAYER_REGISTRY } from '@/lib/osint/registry';
 import { useLayer } from '@/lib/osint/useLayer';
 import DataAgeBadge from '@/components/osint/DataAgeBadge';
@@ -36,7 +36,10 @@ import FireControl, {
 import StormControl, {
   type StormSettings,
 } from '@/components/osint/StormControl';
+import AirControl from '@/components/osint/AirControl';
+import type { AirFilterSettings } from '@/components/osint/layers/AirLayer';
 import { isBBoxAreaAllowed } from '@/lib/osint/layers/fire';
+import { bboxToCenterRadius } from '@/lib/osint/layers/air/geo';
 
 // Dynamic imports for Cesium components (no SSR).
 const OsintGlobe = dynamic(() => import('@/components/osint/OsintGlobe'), {
@@ -62,6 +65,11 @@ const FireLayer = dynamic(
 
 const StormLayer = dynamic(
   () => import('@/components/osint/layers/StormLayer'),
+  { ssr: false },
+);
+
+const AirLayer = dynamic(
+  () => import('@/components/osint/layers/AirLayer'),
   { ssr: false },
 );
 
@@ -94,7 +102,7 @@ export default function OsintPage() {
   const [cameraAltM, setCameraAltM] = useState(2e7);
   const [bbox, setBBox] = useState<BBox | undefined>(undefined);
   const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
-    new Set(['quake', 'imagery', 'fire', 'storm']),
+    new Set(['quake', 'imagery', 'fire', 'storm', 'air']),
   );
   const [selectedEntity, setSelectedEntity] = useState<
     import('@/lib/osint/types').OsintEntity | null
@@ -131,6 +139,15 @@ export default function OsintPage() {
     allPast: false,
   });
   const [isStormControlOpen, setIsStormControlOpen] = useState(false);
+
+  // Air (ADS-B Flight Tracking) settings.
+  const [airSettings, setAirSettings] = useState<AirFilterSettings>({
+    hideOnGround: true,
+    militaryOnly: false,
+    showTrails: true,
+    maxAltFt: undefined,
+  });
+  const [isAirControlOpen, setIsAirControlOpen] = useState(false);
 
   // Quake layer hook.
   const quakeEnabled = activeLayers.has('quake');
@@ -177,6 +194,22 @@ export default function OsintPage() {
     stormExtraParams,
   );
 
+  // Air layer hook:
+  // Restricted: only fetch if camera <= 3M meters AND radius <= 250 nm
+  const airEnabled = activeLayers.has('air');
+  const airRadiusCheck = bbox ? bboxToCenterRadius(bbox) : null;
+  const airZoomAllowed =
+    cameraAltM <= 3_000_000 &&
+    (airRadiusCheck ? !airRadiusCheck.isTooLarge : false);
+  const airPollingEnabled = airEnabled && airZoomAllowed;
+
+  const air = useLayer(
+    'air',
+    bbox,
+    cameraAltM,
+    airPollingEnabled,
+  );
+
   // ── Callbacks ───────────────────────────────────────────────────────────
 
   const handleCameraAltChange = useCallback((alt: number) => {
@@ -199,10 +232,12 @@ export default function OsintPage() {
           if (layerId === 'imagery') setIsImageryControlOpen(false);
           if (layerId === 'fire') setIsFireControlOpen(false);
           if (layerId === 'storm') setIsStormControlOpen(false);
+          if (layerId === 'air') setIsAirControlOpen(false);
         } else {
           next.add(layerId);
           if (layerId === 'fire') setIsFireControlOpen(true);
           if (layerId === 'storm') setIsStormControlOpen(true);
+          if (layerId === 'air') setIsAirControlOpen(true);
         }
         return next;
       });
@@ -213,6 +248,11 @@ export default function OsintPage() {
   const handleApplyFallbackDate = useCallback((fallbackDate: string) => {
     setImagerySettings((prev) => ({ ...prev, dateStr: fallbackDate }));
     setTileErrorNotice(null);
+  }, []);
+
+  const handleFlyToAircraft = useCallback((entity: OsintEntity) => {
+    setSelectedEntity(entity);
+    globeRef.current?.flyTo(entity.position.lat, entity.position.lon, 25000);
   }, []);
 
   // ── Active base layer info ──────────────────────────────────────────────
@@ -238,6 +278,11 @@ export default function OsintPage() {
     // Storm
     if (activeLayers.has('storm')) {
       list.push(LAYER_REGISTRY.storm.attribution);
+    }
+
+    // Air
+    if (activeLayers.has('air')) {
+      list.push(LAYER_REGISTRY.air.attribution);
     }
 
     // Imagery
@@ -300,6 +345,18 @@ export default function OsintPage() {
           viewer={viewer}
           entities={storm.entities}
           cameraAltM={cameraAltM}
+          selectedEntity={selectedEntity}
+          onSelect={setSelectedEntity}
+        />
+      )}
+
+      {/* Air entities rendered on globe */}
+      {viewer && airEnabled && airZoomAllowed && (
+        <AirLayer
+          viewer={viewer}
+          entities={air.entities}
+          cameraAltM={cameraAltM}
+          filterSettings={airSettings}
           selectedEntity={selectedEntity}
           onSelect={setSelectedEntity}
         />
@@ -451,6 +508,50 @@ export default function OsintPage() {
           </div>
         )}
 
+        {/* Air freshness badge */}
+        {airEnabled && airZoomAllowed && air.status !== 'idle' && (
+          <div title="Data ADS-B langsung dari kontributor adsb.lol (ODbL)">
+            <DataAgeBadge
+              name={LAYER_REGISTRY.air.nameId}
+              ageMs={air.ageMs}
+              status={air.status}
+              refreshMs={LAYER_REGISTRY.air.refreshMs}
+            />
+          </div>
+        )}
+
+        {/* Zoom Chip when Air is enabled but zoom is too wide */}
+        {airEnabled && !airZoomAllowed && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-cyan-950/80 border border-cyan-500/40 text-cyan-200 text-xs shadow-lg backdrop-blur-md">
+            <span>🔍</span>
+            <span>Zoom untuk memuat lalu lintas udara</span>
+          </div>
+        )}
+
+        {/* Air active chip */}
+        {airEnabled && airZoomAllowed && (
+          <button
+            onClick={() => setIsAirControlOpen((prev) => !prev)}
+            className="
+              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+              transition-all duration-150 hover:border-cyan-500/50 cursor-pointer
+            "
+            title="Buka pengaturan lalu lintas udara ADS-B"
+            aria-label="Pengaturan lalu lintas udara ADS-B"
+          >
+            <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+            <span className="font-semibold text-slate-100">
+              Udara: {air.entities.length}
+              {air.entities[0]?.raw?.prunedCount
+                ? ` (${air.entities.length} dari ${Number(air.entities[0].raw.totalFound)} terdekat)`
+                : ' pesawat'}
+            </span>
+            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+          </button>
+        )}
+
         {/* Zoom Chip when Fire is enabled but zoom is too wide */}
         {fireEnabled && !fireZoomAllowed && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs shadow-lg backdrop-blur-md">
@@ -535,6 +636,16 @@ export default function OsintPage() {
         error={storm.error}
       />
 
+      {/* ── Air Control Popover ──────────────────────────────────────────── */}
+      <AirControl
+        isOpen={isAirControlOpen && activeLayers.has('air')}
+        onClose={() => setIsAirControlOpen(false)}
+        settings={airSettings}
+        onChange={setAirSettings}
+        entities={air.entities}
+        onFlyTo={handleFlyToAircraft}
+      />
+
       {/* ── Selected Entity Panel (minimal) ─────────────────────────────── */}
       {selectedEntity && (
         <div className="absolute z-10 bottom-16 left-1/2 -translate-x-1/2 max-w-sm w-full mx-4">
@@ -564,6 +675,60 @@ export default function OsintPage() {
                     {String(selectedEntity.raw?.confidence || 'nominal').toUpperCase()} ·{' '}
                     {selectedEntity.raw?.daynight === 'N' ? '🌙 Malam' : '☀️ Siang'}
                   </p>
+                )}
+                {selectedEntity.layer === 'air' && (
+                  <div className="space-y-1 mt-1 text-xs text-slate-400">
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-cyan-300 font-mono">
+                        {Boolean(selectedEntity.raw?.onGround)
+                          ? 'DI DARAT'
+                          : `${Math.round(selectedEntity.position.altM * 3.28084).toLocaleString()} ft (${Math.round(selectedEntity.position.altM)} m)`}
+                      </span>
+                      {Boolean(selectedEntity.raw?.acType) && (
+                        <span className="text-slate-300 font-mono">
+                          · {String(selectedEntity.raw?.acType)}
+                        </span>
+                      )}
+                      {Boolean(selectedEntity.raw?.isMilitary) && (
+                        <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/60 font-semibold text-[10px]">
+                          MILITER
+                        </span>
+                      )}
+                    </div>
+                    <p>
+                      Kecepatan:{' '}
+                      <span className="font-mono text-slate-200">
+                        {Math.round(Number(selectedEntity.raw?.speedKt ?? ((selectedEntity.speedMs ?? 0) * 1.94384)))} kt
+                      </span>
+                      {' '}({Math.round((selectedEntity.speedMs ?? 0) * 3.6)} km/h)
+                      {selectedEntity.headingDeg != null && (
+                        <span> · Arah: {Math.round(selectedEntity.headingDeg)}°</span>
+                      )}
+                    </p>
+                    {selectedEntity.raw?.verticalRateMs != null && (
+                      <p>
+                        Laju Vertikal:{' '}
+                        <span className="font-mono text-slate-200">
+                          {Math.round(Number(selectedEntity.raw.verticalRateMs) / 0.00508)} ft/min
+                        </span>
+                      </p>
+                    )}
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-0.5">
+                      {Boolean(selectedEntity.raw?.registration) && (
+                        <span>Reg: {String(selectedEntity.raw?.registration)}</span>
+                      )}
+                      {Boolean(selectedEntity.raw?.squawk) && (
+                        <span>· Squawk: {String(selectedEntity.raw?.squawk)}</span>
+                      )}
+                      {Boolean(selectedEntity.raw?.hex) && (
+                        <span>· Hex: {String(selectedEntity.raw?.hex).toUpperCase()}</span>
+                      )}
+                    </div>
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/80">
+                      <span>Sumber: {String(selectedEntity.raw?.posSource || 'adsb_icao')}</span>
+                      <span>Posisi: {selectedEntity.raw?.seenPosS != null ? `${selectedEntity.raw.seenPosS}s lalu` : 'segar'}</span>
+                    </div>
+                  </div>
                 )}
                 {selectedEntity.layer === 'storm' && (
                   <div className="space-y-1 mt-1 text-xs text-slate-400">
