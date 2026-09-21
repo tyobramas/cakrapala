@@ -40,6 +40,10 @@ export interface LayerConfig {
   requiresKey: boolean;
   /** Attribution string (license obligation — must be displayed). */
   attribution: string;
+  /** Regional coverage bounding boxes (if restricted, e.g. Baltic Sea for phase 1 sea). */
+  coverageBBoxes?: import('./types').BBox[];
+  /** Explanatory notice shown when viewport is outside coverage area. */
+  coverageNotice?: string;
 }
 
 // ── Registry ────────────────────────────────────────────────────────────────
@@ -118,11 +122,15 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
     nameEn: 'Sea Traffic',
     color: '#2dd4bf',
     kind: 'moving',
+    category: 'entity',
+    globalScope: false,
     ttlMs: 20_000,
-    refreshMs: 30_000,
-    enabled: false,
-    requiresKey: true,
-    attribution: '',
+    refreshMs: 20_000,
+    enabled: true,
+    requiresKey: false,
+    attribution: 'Vessel data: Fintraffic Digitraffic (CC BY 4.0)',
+    coverageBBoxes: [[9.0, 53.0, 33.0, 67.0]],
+    coverageNotice: 'Cakupan AIS saat ini terbatas pada Laut Baltik dan Norwegia. Cakupan global menyusul.',
   },
   eyes: {
     id: 'eyes',

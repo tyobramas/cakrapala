@@ -22,6 +22,7 @@ import { fetchQuakeLayer } from '@/lib/osint/layers/quake';
 import { fetchFireLayer } from '@/lib/osint/layers/fire';
 import { fetchStormLayer } from '@/lib/osint/layers/storm';
 import { fetchAirLayer } from '@/lib/osint/layers/air';
+import { fetchSeaLayer } from '@/lib/osint/layers/sea';
 import { bboxToCenterRadius, roundCoord } from '@/lib/osint/layers/air/geo';
 import type { BBox, LayerPayload } from '@/lib/osint/types';
 import type { LayerFetcher } from '@/lib/osint/adapter';
@@ -33,6 +34,7 @@ const LAYER_FETCHERS: Partial<Record<string, LayerFetcher>> = {
   fire: fetchFireLayer,
   storm: fetchStormLayer,
   air: fetchAirLayer,
+  sea: fetchSeaLayer,
 };
 
 // ── Rate limiter (in-memory, sliding window) ────────────────────────────────
@@ -170,6 +172,8 @@ export async function GET(
     const rLat = roundCoord(cr.centerLat, 0.25);
     const rLon = roundCoord(cr.centerLon, 0.25);
     roundedBBoxStr = `${rLat},${rLon}:r=${cr.radiusNm}`;
+  } else if (layerParam === 'sea' && bbox) {
+    roundedBBoxStr = bboxKey(roundBBox(bbox, 0.5));
   } else if (!config.globalScope) {
     roundedBBoxStr = bbox ? bboxKey(roundBBox(bbox)) : 'global';
   }

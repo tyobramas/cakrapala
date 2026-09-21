@@ -17,7 +17,7 @@
 import { useState, useRef, useCallback, useMemo } from 'react';
 import dynamic from 'next/dynamic';
 import type { BBox, LayerId, OsintEntity } from '@/lib/osint/types';
-import { LAYER_REGISTRY } from '@/lib/osint/registry';
+import { LAYER_REGISTRY, resolveDisplayMode } from '@/lib/osint/registry';
 import { useLayer } from '@/lib/osint/useLayer';
 import DataAgeBadge from '@/components/osint/DataAgeBadge';
 import type { OsintGlobeHandle } from '@/components/osint/OsintGlobe';
@@ -38,8 +38,11 @@ import StormControl, {
 } from '@/components/osint/StormControl';
 import AirControl from '@/components/osint/AirControl';
 import type { AirFilterSettings } from '@/components/osint/layers/AirLayer';
+import SeaControl from '@/components/osint/SeaControl';
+import type { SeaFilterSettings } from '@/components/osint/layers/SeaLayer';
 import { isBBoxAreaAllowed } from '@/lib/osint/layers/fire';
 import { bboxToCenterRadius } from '@/lib/osint/layers/air/geo';
+import { isWithinSeaCoverage } from '@/lib/osint/layers/sea';
 
 // Dynamic imports for Cesium components (no SSR).
 const OsintGlobe = dynamic(() => import('@/components/osint/OsintGlobe'), {
@@ -73,6 +76,11 @@ const AirLayer = dynamic(
   { ssr: false },
 );
 
+const SeaLayer = dynamic(
+  () => import('@/components/osint/layers/SeaLayer'),
+  { ssr: false },
+);
+
 // ── Layer icon mapping ──────────────────────────────────────────────────────
 
 const LAYER_ICONS: Record<LayerId, string> = {
@@ -100,6 +108,7 @@ const LAYER_ORDER: LayerId[] = [
 export default function OsintPage() {
   const globeRef = useRef<OsintGlobeHandle>(null);
   const [cameraAltM, setCameraAltM] = useState(2e7);
+  const displayMode = resolveDisplayMode(cameraAltM);
   const [bbox, setBBox] = useState<BBox | undefined>(undefined);
   const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
     new Set(['quake', 'imagery', 'fire', 'storm', 'air']),
@@ -148,6 +157,15 @@ export default function OsintPage() {
     maxAltFt: undefined,
   });
   const [isAirControlOpen, setIsAirControlOpen] = useState(false);
+
+  // Sea (AIS Vessel Tracking) settings.
+  const [seaSettings, setSeaSettings] = useState<SeaFilterSettings>({
+    category: 'all',
+    hideAnchoredMoored: false,
+    hideOlderThan1Hour: true,
+    showTrails: true,
+  });
+  const [isSeaControlOpen, setIsSeaControlOpen] = useState(false);
 
   // Quake layer hook.
   const quakeEnabled = activeLayers.has('quake');
@@ -210,6 +228,19 @@ export default function OsintPage() {
     airPollingEnabled,
   );
 
+  // Sea layer hook:
+  // Disabled in aggregate mode (> 3,000,000 m). Regional coverage handled gracefully.
+  const seaEnabled = activeLayers.has('sea');
+  const seaZoomAllowed = cameraAltM <= 3_000_000;
+  const seaPollingEnabled = seaEnabled && seaZoomAllowed;
+
+  const sea = useLayer(
+    'sea',
+    bbox,
+    cameraAltM,
+    seaPollingEnabled,
+  );
+
   // ── Callbacks ───────────────────────────────────────────────────────────
 
   const handleCameraAltChange = useCallback((alt: number) => {
@@ -233,11 +264,13 @@ export default function OsintPage() {
           if (layerId === 'fire') setIsFireControlOpen(false);
           if (layerId === 'storm') setIsStormControlOpen(false);
           if (layerId === 'air') setIsAirControlOpen(false);
+          if (layerId === 'sea') setIsSeaControlOpen(false);
         } else {
           next.add(layerId);
           if (layerId === 'fire') setIsFireControlOpen(true);
           if (layerId === 'storm') setIsStormControlOpen(true);
           if (layerId === 'air') setIsAirControlOpen(true);
+          if (layerId === 'sea') setIsSeaControlOpen(true);
         }
         return next;
       });
@@ -251,6 +284,11 @@ export default function OsintPage() {
   }, []);
 
   const handleFlyToAircraft = useCallback((entity: OsintEntity) => {
+    setSelectedEntity(entity);
+    globeRef.current?.flyTo(entity.position.lat, entity.position.lon, 25000);
+  }, []);
+
+  const handleFlyToVessel = useCallback((entity: OsintEntity) => {
     setSelectedEntity(entity);
     globeRef.current?.flyTo(entity.position.lat, entity.position.lon, 25000);
   }, []);
@@ -359,6 +397,18 @@ export default function OsintPage() {
           filterSettings={airSettings}
           selectedEntity={selectedEntity}
           onSelect={setSelectedEntity}
+        />
+      )}
+
+      {/* Sea entities rendered on globe */}
+      {viewer && seaEnabled && seaZoomAllowed && (
+        <SeaLayer
+          viewer={viewer}
+          entities={sea.entities}
+          displayMode={displayMode}
+          filters={seaSettings}
+          selectedEntityId={selectedEntity?.id}
+          onSelectEntity={setSelectedEntity}
         />
       )}
 
@@ -552,6 +602,58 @@ export default function OsintPage() {
           </button>
         )}
 
+        {/* Sea freshness badge */}
+        {seaEnabled && seaZoomAllowed && sea.status !== 'idle' && (
+          <div title="Data AIS dari Fintraffic Digitraffic (CC BY 4.0)">
+            <DataAgeBadge
+              name={LAYER_REGISTRY.sea.nameId}
+              ageMs={sea.ageMs}
+              status={sea.status}
+              refreshMs={LAYER_REGISTRY.sea.refreshMs}
+            />
+          </div>
+        )}
+
+        {/* Zoom Chip when Sea is enabled but in aggregate mode */}
+        {seaEnabled && !seaZoomAllowed && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-teal-950/80 border border-teal-500/40 text-teal-200 text-xs shadow-lg backdrop-blur-md">
+            <span>🔍</span>
+            <span>Zoom untuk memuat lalu lintas laut</span>
+          </div>
+        )}
+
+        {/* Coverage Notice Chip when Sea is out of coverage (e.g. Indonesia) */}
+        {seaEnabled && seaZoomAllowed && (sea.error === 'OUT_OF_COVERAGE' || (bbox && !isWithinSeaCoverage(bbox))) && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-teal-500/40 text-teal-300 text-xs shadow-lg backdrop-blur-md">
+            <span>ℹ️</span>
+            <span>Cakupan AIS saat ini terbatas pada Laut Baltik dan Norwegia. Cakupan global menyusul.</span>
+          </div>
+        )}
+
+        {/* Sea active chip */}
+        {seaEnabled && seaZoomAllowed && sea.error !== 'OUT_OF_COVERAGE' && (!bbox || isWithinSeaCoverage(bbox)) && (
+          <button
+            onClick={() => setIsSeaControlOpen((prev) => !prev)}
+            className="
+              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+              transition-all duration-150 hover:border-teal-500/50 cursor-pointer
+            "
+            title="Buka pengaturan lalu lintas laut AIS"
+            aria-label="Pengaturan lalu lintas laut AIS"
+          >
+            <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+            <span className="font-semibold text-slate-100">
+              Laut: {sea.entities.length}
+              {Boolean(sea.entities[0]?.raw?.cutCount)
+                ? ` (menampilkan ${sea.entities.length} dari ${Number(sea.entities[0]?.raw?.totalFound)} terdekat)`
+                : ' kapal'}
+            </span>
+            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+          </button>
+        )}
+
         {/* Zoom Chip when Fire is enabled but zoom is too wide */}
         {fireEnabled && !fireZoomAllowed && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs shadow-lg backdrop-blur-md">
@@ -646,6 +748,16 @@ export default function OsintPage() {
         onFlyTo={handleFlyToAircraft}
       />
 
+      {/* ── Sea Control Popover ──────────────────────────────────────────── */}
+      <SeaControl
+        isOpen={isSeaControlOpen && activeLayers.has('sea')}
+        onClose={() => setIsSeaControlOpen(false)}
+        settings={seaSettings}
+        onChange={setSeaSettings}
+        vessels={sea.entities}
+        onFlyTo={handleFlyToVessel}
+      />
+
       {/* ── Selected Entity Panel (minimal) ─────────────────────────────── */}
       {selectedEntity && (
         <div className="absolute z-10 bottom-16 left-1/2 -translate-x-1/2 max-w-sm w-full mx-4">
@@ -727,6 +839,91 @@ export default function OsintPage() {
                     <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/80">
                       <span>Sumber: {String(selectedEntity.raw?.posSource || 'adsb_icao')}</span>
                       <span>Posisi: {selectedEntity.raw?.seenPosS != null ? `${selectedEntity.raw.seenPosS}s lalu` : 'segar'}</span>
+                    </div>
+                  </div>
+                )}
+                {selectedEntity.layer === 'sea' && (
+                  <div className="space-y-1 mt-1 text-xs text-slate-400">
+                    {/* Emergency SART Alert Banner */}
+                    {Boolean(selectedEntity.raw?.isEmergency) && (
+                      <div className="px-2 py-1 rounded bg-red-950/90 border border-red-500/80 text-red-200 text-xs font-semibold flex items-center gap-1.5 animate-pulse">
+                        <span>🚨</span>
+                        <span>{String(selectedEntity.raw?.navStatLabel || 'SINYAL DARURAT AIS AKTIF')}</span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold text-teal-300 font-mono">
+                        {String(selectedEntity.raw?.shipTypeLabel || 'Kapal')}
+                      </span>
+                      {Boolean(selectedEntity.raw?.navStatLabel) && !selectedEntity.raw?.isEmergency && (
+                        <span
+                          className={`px-1.5 py-0.2 rounded text-[10px] font-medium border ${
+                            selectedEntity.raw?.isSpecialNav
+                              ? 'bg-amber-950/60 text-amber-300 border-amber-800/60'
+                              : 'bg-slate-800 text-slate-300 border-slate-700'
+                          }`}
+                        >
+                          {String(selectedEntity.raw?.navStatLabel)}
+                        </span>
+                      )}
+                    </div>
+                    <p>
+                      Kecepatan:{' '}
+                      <span className="font-mono text-slate-200">
+                        {selectedEntity.raw?.sogKnots != null ? `${selectedEntity.raw.sogKnots} kt` : '–'}
+                      </span>
+                      {' '}({selectedEntity.speedMs != null ? `${Math.round(selectedEntity.speedMs * 3.6)} km/h` : '–'})
+                      {selectedEntity.raw?.cogRaw != null && Number(selectedEntity.raw.cogRaw) < 360 && (
+                        <span> · COG: {Math.round(Number(selectedEntity.raw.cogRaw))}°</span>
+                      )}
+                      {selectedEntity.headingDeg != null && (
+                        <span> · Haluan: {Math.round(selectedEntity.headingDeg)}°</span>
+                      )}
+                      {selectedEntity.raw?.headingRaw === 511 && (
+                        <span className="text-[10px] text-slate-500"> (Haluan n/a)</span>
+                      )}
+                    </p>
+                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
+                      <span>MMSI: {String(selectedEntity.raw?.mmsi)}</span>
+                      {Boolean(selectedEntity.raw?.imo) && (
+                        <span>· IMO: {String(selectedEntity.raw?.imo)}</span>
+                      )}
+                      {Boolean(selectedEntity.raw?.callsign) && (
+                        <span>· Call: {String(selectedEntity.raw?.callsign)}</span>
+                      )}
+                    </div>
+                    {(selectedEntity.raw?.destination != null || selectedEntity.raw?.draughtM != null || selectedEntity.raw?.lengthM != null) && (
+                      <div className="flex items-center justify-between text-[11px] text-slate-300 pt-0.5">
+                        {Boolean(selectedEntity.raw?.destination) && (
+                          <span>Tujuan: {String(selectedEntity.raw?.destination)}</span>
+                        )}
+                        {Boolean(selectedEntity.raw?.draughtM) && (
+                          <span>Sarat: {Number(selectedEntity.raw?.draughtM).toFixed(1)} m</span>
+                        )}
+                        {Boolean(selectedEntity.raw?.lengthM) && (
+                          <span>Dimensi: {String(selectedEntity.raw?.lengthM)}x{String(selectedEntity.raw?.widthM || '?')} m</span>
+                        )}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/80">
+                      <span>
+                        Keandalan:{' '}
+                        {selectedEntity.raw?.positionReliable !== false ? (
+                          <span className="text-teal-400">Akurat (GNSS)</span>
+                        ) : (
+                          <span className="text-amber-400">Terdegradasi</span>
+                        )}
+                      </span>
+                      <span>
+                        Posisi:{' '}
+                        {selectedEntity.raw?.ageS != null ? (
+                          Number(selectedEntity.raw.ageS) < 60
+                            ? `${selectedEntity.raw.ageS}s lalu`
+                            : Number(selectedEntity.raw.ageS) < 3600
+                              ? `${Math.round(Number(selectedEntity.raw.ageS) / 60)}m lalu`
+                              : `${Math.round(Number(selectedEntity.raw.ageS) / 3600)}j lalu`
+                        ) : 'segar'}
+                      </span>
                     </div>
                   </div>
                 )}
