@@ -62,7 +62,7 @@ export default function ISSPageLoader({ onReady }: ISSPageLoaderProps) {
         {/* ── Header ─────────────────────────────────────────────────────────── */}
         <div className="flex flex-col items-center gap-1">
           <span className="text-[11px] font-mono tracking-[0.22em] text-cyan-500 uppercase font-semibold">
-            Cakrapala Mission Control
+            Cakrapala Orbital Operations
           </span>
           <h1 className="text-xl font-bold tracking-tight text-white">
             ISS Flight Operations Console

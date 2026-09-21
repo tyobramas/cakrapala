@@ -17,6 +17,7 @@ import {
   Compass,
   ArrowUpRight,
   Crosshair,
+  Eye,
 } from "lucide-react";
 
 export default function Footer() {
@@ -126,6 +127,18 @@ export default function Footer() {
                 </Link>
               </li>
 
+              <li>
+                <Link
+                  href="/osint"
+                  className="group flex items-center justify-between p-2 rounded-xl bg-[#060b18]/60 hover:bg-[#16233b] border border-slate-800 hover:border-lime-500/40 text-slate-300 hover:text-white transition-all"
+                >
+                  <div className="flex items-center gap-2.5">
+                    <Eye className="w-4 h-4 text-lime-400 group-hover:scale-110 transition-transform" />
+                    <span>Mata Bumi (OSINT)</span>
+                  </div>
+                  <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-lime-400 transition-colors" />
+                </Link>
+              </li>
 
               <li>
                 <Link

@@ -19,6 +19,7 @@ import {
   X,
   Compass,
   Globe2,
+  Eye,
   Telescope,
   Radar,
   SatelliteDish,
@@ -55,11 +56,20 @@ export default function Navbar() {
       desc: "3D Keplerian Planetary Orrery",
     },
     {
+      id: "osint",
+      label: "MATA BUMI",
+      shortLabel: "MATA BUMI",
+      href: "/osint",
+      code: "SYS-02",
+      icon: Eye,
+      desc: "OSINT · Pemantauan Bumi",
+    },
+    {
       id: "sky",
       label: "SKY MAP",
       shortLabel: "SKY MAP",
       href: "/sky",
-      code: "SYS-02",
+      code: "SYS-03",
       icon: Telescope,
       desc: "IAU Sky Map & Earth Observatory",
     },
@@ -68,7 +78,7 @@ export default function Navbar() {
       label: "ASTEROID RADAR",
       shortLabel: "ASTEROIDS",
       href: "/explore",
-      code: "SYS-03",
+      code: "SYS-04",
       icon: Radar,
       desc: "NASA NeoWs Planetary Defense Radar",
     },
@@ -77,7 +87,7 @@ export default function Navbar() {
       label: "SATELLITES",
       shortLabel: "SATS",
       href: "/iss",
-      code: "SYS-04",
+      code: "SYS-05",
       icon: SatelliteDish,
       desc: "Real-Time SGP4 Orbital Fleet Tracker",
     },
@@ -86,7 +96,7 @@ export default function Navbar() {
       label: "SPACE CODEX",
       shortLabel: "CODEX",
       href: "/codex",
-      code: "SYS-05",
+      code: "SYS-06",
       icon: Atom,
       desc: "Universal Astronomical Encyclopedia",
     },
@@ -147,7 +157,7 @@ export default function Navbar() {
         <nav className="hidden lg:flex items-center gap-0.5 xl:gap-1 p-1 rounded-2xl bg-[#060b18]/90 border border-slate-700/80 shadow-[0_8px_32px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.06)] backdrop-blur-2xl font-mono shrink-0">
           {NAV_ITEMS.map((item) => {
             const isCurrent =
-              item.id === "overview" ? pathname === "/" : pathname.startsWith(item.href);
+              item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
 
             return (
               <Link
@@ -254,7 +264,7 @@ export default function Navbar() {
           <div className="grid grid-cols-1 gap-1.5">
             {NAV_ITEMS.map((item) => {
               const isCurrent =
-                item.id === "overview" ? pathname === "/" : pathname.startsWith(item.href);
+                item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
               const ItemIcon = item.icon;
 
               return (

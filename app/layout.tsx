@@ -20,6 +20,7 @@ const orbitron = Orbitron({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://cakrapala.com"),
   title: "Cakrapala — Deep Space Observatory & Universe Explorer",
   description:
     "Explore our Solar System, IAU Constellations, Real-Time ISS Tracking, and Deep Space Observatories in high precision.",
