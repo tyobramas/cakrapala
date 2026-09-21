@@ -14,7 +14,7 @@
 //   - Responsive: rail → horizontal bar on mobile
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useRef, useCallback, useMemo } from 'react';
+import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
 import type { BBox, LayerId, OsintEntity } from '@/lib/osint/types';
 import { LAYER_REGISTRY, resolveDisplayMode } from '@/lib/osint/registry';
@@ -47,6 +47,7 @@ import WebcamViewer from '@/components/osint/WebcamViewer';
 import { isBBoxAreaAllowed } from '@/lib/osint/layers/fire';
 import { bboxToCenterRadius } from '@/lib/osint/layers/air/geo';
 import { isWithinSeaCoverage } from '@/lib/osint/layers/sea';
+import { DebugOverlay } from '@/components/osint/DebugOverlay';
 
 // Dynamic imports for Cesium components (no SSR).
 const OsintGlobe = dynamic(() => import('@/components/osint/OsintGlobe'), {
@@ -54,7 +55,7 @@ const OsintGlobe = dynamic(() => import('@/components/osint/OsintGlobe'), {
   loading: () => (
     <div className="w-full h-full flex items-center justify-center bg-slate-950">
       <div className="text-slate-400 animate-pulse font-mono text-sm">
-        Memuat globe…
+        Loading globe…
       </div>
     </div>
   ),
@@ -90,16 +91,27 @@ const EyesLayer = dynamic(
   { ssr: false },
 );
 
+import {
+  Activity,
+  Flame,
+  CloudLightning,
+  Plane,
+  Ship,
+  Eye,
+  Satellite,
+  ChevronDown,
+} from 'lucide-react';
+
 // ── Layer icon mapping ──────────────────────────────────────────────────────
 
-const LAYER_ICONS: Record<LayerId, string> = {
-  quake: '🌋',
-  fire: '🔥',
-  storm: '🌀',
-  air: '✈️',
-  sea: '🚢',
-  eyes: '👁️',
-  imagery: '🛰️',
+const LAYER_ICONS: Record<LayerId, React.ComponentType<{ className?: string }>> = {
+  quake: Activity,
+  fire: Flame,
+  storm: CloudLightning,
+  air: Plane,
+  sea: Ship,
+  eyes: Eye,
+  imagery: Satellite,
 };
 
 const LAYER_ORDER: LayerId[] = [
@@ -116,6 +128,8 @@ const LAYER_ORDER: LayerId[] = [
 
 export default function OsintPage() {
   const globeRef = useRef<OsintGlobeHandle>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [viewer, setViewer] = useState<any>(null);
   const [cameraAltM, setCameraAltM] = useState(2e7);
   const displayMode = resolveDisplayMode(cameraAltM);
   const [bbox, setBBox] = useState<BBox | undefined>(undefined);
@@ -125,6 +139,14 @@ export default function OsintPage() {
   const [selectedEntity, setSelectedEntity] = useState<
     import('@/lib/osint/types').OsintEntity | null
   >(null);
+  const [isOverflowOpen, setIsOverflowOpen] = useState(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__flyTo = (lat: number, lon: number, altM?: number) =>
+        globeRef.current?.flyTo(lat, lon, altM);
+    }
+  }, []);
 
   // GIBS Imagery settings.
   const defaultBase = useMemo(() => getDefaultBaseLayer(), []);
@@ -372,16 +394,390 @@ export default function OsintPage() {
   // ── Compute Layers Pending Closer Zoom ──────────────────────────────────
   const zoomPendingLayers = useMemo(() => {
     const list: { id: string; label: string; icon: string }[] = [];
-    if (fireEnabled && !fireZoomAllowed) list.push({ id: 'fire', label: 'Kebakaran (FIRMS)', icon: '🔥' });
-    if (airEnabled && !airZoomAllowed) list.push({ id: 'air', label: 'Lalu Lintas Udara (ADS-B)', icon: '✈️' });
-    if (seaEnabled && !seaZoomAllowed) list.push({ id: 'sea', label: 'Lalu Lintas Laut (AIS)', icon: '🚢' });
-    if (eyesEnabled && !eyesZoomAllowed) list.push({ id: 'eyes', label: 'Webcam Publik', icon: '👁️' });
+    if (fireEnabled && !fireZoomAllowed) list.push({ id: 'fire', label: 'Wildfires (FIRMS)', icon: '🔥' });
+    if (airEnabled && !airZoomAllowed) list.push({ id: 'air', label: 'Aircraft (ADS-B)', icon: '✈️' });
+    if (seaEnabled && !seaZoomAllowed) list.push({ id: 'sea', label: 'Vessels (AIS)', icon: '🚢' });
+    if (eyesEnabled && !eyesZoomAllowed) list.push({ id: 'eyes', label: 'Webcams', icon: '👁️' });
     return list;
   }, [fireEnabled, fireZoomAllowed, airEnabled, airZoomAllowed, seaEnabled, seaZoomAllowed, eyesEnabled, eyesZoomAllowed]);
 
-  // ── Viewer from globe ref ───────────────────────────────────────────────
+  // ── Debug layer status for ?debug=1 overlay ─────────────────────────────
+  const debugLayers = useMemo(
+    () => [
+      { id: 'quake' as LayerId, enabled: quakeEnabled, active: activeLayers.has('quake'), displayMode, fetchedCount: quake.entities.length },
+      { id: 'fire' as LayerId, enabled: fireEnabled, active: activeLayers.has('fire'), displayMode, fetchedCount: fire.entities.length },
+      { id: 'storm' as LayerId, enabled: stormEnabled, active: activeLayers.has('storm'), displayMode, fetchedCount: storm.entities.length },
+      { id: 'air' as LayerId, enabled: airEnabled, active: activeLayers.has('air'), displayMode, fetchedCount: air.entities.length },
+      { id: 'sea' as LayerId, enabled: seaEnabled, active: activeLayers.has('sea'), displayMode, fetchedCount: sea.entities.length },
+      { id: 'eyes' as LayerId, enabled: eyesEnabled, active: activeLayers.has('eyes'), displayMode, fetchedCount: eyes.entities.length },
+      { id: 'imagery' as LayerId, enabled: activeLayers.has('imagery'), active: activeLayers.has('imagery'), displayMode, fetchedCount: activeLayers.has('imagery') ? 1 : 0 },
+    ],
+    [
+      activeLayers,
+      quakeEnabled,
+      quake.entities.length,
+      fireEnabled,
+      fire.entities.length,
+      stormEnabled,
+      storm.entities.length,
+      airEnabled,
+      air.entities.length,
+      seaEnabled,
+      sea.entities.length,
+      eyesEnabled,
+      eyes.entities.length,
+      displayMode,
+    ],
+  );
 
-  const viewer = globeRef.current?.getViewer();
+  // ── Construct top-right status chips ────────────────────────────────────
+  const topChips: { id: string; node: React.ReactNode }[] = [];
+
+  // Zoom pending chip
+  if (zoomPendingLayers.length > 0) {
+    topChips.push({
+      id: 'zoom-pending',
+      node: (
+        <div key="zoom-pending" className="relative group">
+          <div
+            className="
+              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+              bg-slate-900/90 hover:bg-slate-800/90 border border-amber-500/40
+              text-amber-200 text-xs font-mono shadow-lg backdrop-blur-md
+              cursor-help transition-all duration-150
+            "
+            title="Zoom in closer on the globe to load data for this layer"
+          >
+            <span>🔍</span>
+            <span className="font-semibold">
+              {zoomPendingLayers.length === 1
+                ? `Zoom in to load ${zoomPendingLayers[0].label.split(' ')[0]}`
+                : `Zoom in to load (${zoomPendingLayers.length} layers)`}
+            </span>
+            {zoomPendingLayers.length > 1 && (
+              <span className="text-[10px] text-amber-400/80">▾</span>
+            )}
+          </div>
+
+          {zoomPendingLayers.length > 1 && (
+            <div
+              className="
+                absolute top-full right-0 mt-1.5 hidden group-hover:flex
+                flex-col gap-1.5 p-2.5 rounded-xl bg-slate-900/95 border border-slate-700/80
+                shadow-2xl backdrop-blur-md text-[11px] text-slate-300 min-w-[220px] z-30
+              "
+            >
+              <span className="text-[10px] uppercase font-mono text-slate-400 tracking-wider font-semibold border-b border-slate-800 pb-1">
+                Pending Closer Zoom:
+              </span>
+              {zoomPendingLayers.map((l) => (
+                <div key={l.id} className="flex items-center gap-2 font-mono">
+                  <span className="text-sm">{l.icon}</span>
+                  <span className="text-slate-200">{l.label}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ),
+    });
+  }
+
+  // Imagery chip
+  if (activeLayers.has('imagery')) {
+    topChips.push({
+      id: 'imagery',
+      node: (
+        <button
+          key="imagery"
+          onClick={() => setIsImageryControlOpen((prev) => !prev)}
+          className="
+            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+            transition-all duration-150 hover:border-slate-500 cursor-pointer
+          "
+          title="Open NASA GIBS satellite imagery settings"
+          aria-label="NASA GIBS satellite imagery settings"
+        >
+          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+          <span className="font-semibold text-slate-100">
+            Imagery: {imagerySettings.dateStr}
+          </span>
+          <span className="text-slate-500">·</span>
+          <span className="text-slate-300 font-sans">
+            {activeBaseDef.label.split(' ')[0]} {activeBaseDef.resolution}
+          </span>
+          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+        </button>
+      ),
+    });
+  }
+
+  // Quake freshness badge
+  if (quakeEnabled && quake.status !== 'idle') {
+    topChips.push({
+      id: 'quake-age',
+      node: (
+        <DataAgeBadge
+          key="quake-age"
+          name={LAYER_REGISTRY.quake.nameId}
+          ageMs={quake.ageMs}
+          status={quake.status}
+          refreshMs={LAYER_REGISTRY.quake.refreshMs}
+        />
+      ),
+    });
+  }
+
+  // Fire badges & controls
+  if (fireEnabled && fire.error === 'MISSING_KEY') {
+    topChips.push({
+      id: 'fire-error',
+      node: (
+        <button
+          key="fire-error"
+          onClick={() => setIsFireControlOpen(true)}
+          className="
+            px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-500/50
+            text-[11px] text-amber-200 font-mono flex items-center gap-1.5 shadow
+            hover:bg-amber-900/80 transition-colors
+          "
+          title="FIRMS MAP_KEY environment variable is not configured on server"
+        >
+          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+          <span>Wildfires: Configuration required</span>
+        </button>
+      ),
+    });
+  } else if (fireEnabled && fire.status !== 'idle' && !fire.error) {
+    topChips.push({
+      id: 'fire-age',
+      node: (
+        <div key="fire-age" title="NASA FIRMS NRT latency is 1-3 hours from satellite observation.">
+          <DataAgeBadge
+            name={LAYER_REGISTRY.fire.nameId}
+            ageMs={fire.ageMs}
+            status={fire.status}
+            refreshMs={LAYER_REGISTRY.fire.refreshMs}
+          />
+        </div>
+      ),
+    });
+  }
+  if (fireEnabled && fireZoomAllowed) {
+    topChips.push({
+      id: 'fire-control',
+      node: (
+        <button
+          key="fire-control"
+          onClick={() => setIsFireControlOpen((prev) => !prev)}
+          className="
+            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+            transition-all duration-150 hover:border-amber-500/50 cursor-pointer
+          "
+          title="Open NASA FIRMS wildfire settings"
+          aria-label="NASA FIRMS wildfire settings"
+        >
+          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+          <span className="font-semibold text-slate-100">
+            Fire: {fireSettings.dayRange}d ({fire.entities.length} hotspots)
+          </span>
+          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+        </button>
+      ),
+    });
+  }
+
+  // Storm freshness & active control
+  if (stormEnabled && storm.status !== 'idle') {
+    topChips.push({
+      id: 'storm-age',
+      node: (
+        <div key="storm-age" title="Tropical cyclone advisories published every 6 hours (03/09/15/21 UTC).">
+          <DataAgeBadge
+            name={LAYER_REGISTRY.storm.nameId}
+            ageMs={storm.ageMs}
+            status={storm.status}
+            refreshMs={LAYER_REGISTRY.storm.refreshMs}
+          />
+        </div>
+      ),
+    });
+  }
+  if (stormEnabled) {
+    topChips.push({
+      id: 'storm-control',
+      node: (
+        <button
+          key="storm-control"
+          onClick={() => setIsStormControlOpen((prev) => !prev)}
+          className="
+            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+            transition-all duration-150 hover:border-violet-500/50 cursor-pointer
+          "
+          title="Open tropical cyclone settings"
+          aria-label="Tropical cyclone settings"
+        >
+          <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+          <span className="font-semibold text-slate-100">
+            Storms: {storm.entities.length} active
+          </span>
+          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+        </button>
+      ),
+    });
+  }
+  if (stormEnabled && storm.status === 'ok' && storm.entities.length === 0) {
+    topChips.push({
+      id: 'storm-empty',
+      node: (
+        <div key="storm-empty" className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/40 text-slate-400 text-xs shadow-lg backdrop-blur-md">
+          <span>🌀</span>
+          <span>No active tropical cyclones currently</span>
+        </div>
+      ),
+    });
+  }
+
+  // Air freshness & control
+  if (airEnabled && airZoomAllowed && air.status !== 'idle') {
+    topChips.push({
+      id: 'air-age',
+      node: (
+        <div key="air-age" title="Live ADS-B feed from adsb.lol contributors (ODbL)">
+          <DataAgeBadge
+            name={LAYER_REGISTRY.air.nameId}
+            ageMs={air.ageMs}
+            status={air.status}
+            refreshMs={LAYER_REGISTRY.air.refreshMs}
+          />
+        </div>
+      ),
+    });
+  }
+  if (airEnabled && airZoomAllowed) {
+    topChips.push({
+      id: 'air-control',
+      node: (
+        <button
+          key="air-control"
+          onClick={() => setIsAirControlOpen((prev) => !prev)}
+          className="
+            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+            transition-all duration-150 hover:border-cyan-500/50 cursor-pointer
+          "
+          title="Open ADS-B air traffic settings"
+          aria-label="ADS-B air traffic settings"
+        >
+          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
+          <span className="font-semibold text-slate-100">
+            Air: {air.entities.length}
+            {air.entities[0]?.raw?.prunedCount
+              ? ` (${air.entities.length} of ${Number(air.entities[0].raw.totalFound)} closest)`
+              : ' aircraft'}
+          </span>
+          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+        </button>
+      ),
+    });
+  }
+
+  // Sea freshness, coverage, control
+  if (seaEnabled && seaZoomAllowed && sea.status !== 'idle') {
+    topChips.push({
+      id: 'sea-age',
+      node: (
+        <div key="sea-age" title="AIS data from Fintraffic Digitraffic (CC BY 4.0)">
+          <DataAgeBadge
+            name={LAYER_REGISTRY.sea.nameId}
+            ageMs={sea.ageMs}
+            status={sea.status}
+            refreshMs={LAYER_REGISTRY.sea.refreshMs}
+          />
+        </div>
+      ),
+    });
+  }
+  if (seaEnabled && seaZoomAllowed && (sea.error === 'OUT_OF_COVERAGE' || (bbox && !isWithinSeaCoverage(bbox)))) {
+    topChips.push({
+      id: 'sea-coverage',
+      node: (
+        <div key="sea-coverage" className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-teal-500/40 text-teal-300 text-xs shadow-lg backdrop-blur-md">
+          <span>ℹ️</span>
+          <span>AIS coverage is currently limited to the Baltic Sea and Norway. Global coverage to follow.</span>
+        </div>
+      ),
+    });
+  } else if (seaEnabled && seaZoomAllowed && sea.error !== 'OUT_OF_COVERAGE' && (!bbox || isWithinSeaCoverage(bbox))) {
+    topChips.push({
+      id: 'sea-control',
+      node: (
+        <button
+          key="sea-control"
+          onClick={() => setIsSeaControlOpen((prev) => !prev)}
+          className="
+            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+            transition-all duration-150 hover:border-teal-500/50 cursor-pointer
+          "
+          title="Open AIS marine traffic settings"
+          aria-label="AIS marine traffic settings"
+        >
+          <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
+          <span className="font-semibold text-slate-100">
+            Sea: {sea.entities.length}
+            {Boolean(sea.entities[0]?.raw?.cutCount)
+              ? ` (${sea.entities.length} of ${Number(sea.entities[0]?.raw?.totalFound)} closest)`
+              : ' vessels'}
+          </span>
+          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+        </button>
+      ),
+    });
+  }
+
+  // Eyes freshness & control
+  if (eyesEnabled && eyesZoomAllowed && eyes.status !== 'idle') {
+    topChips.push({
+      id: 'eyes-age',
+      node: (
+        <div key="eyes-age" title="Public webcam data (Windy & Official Agencies)">
+          <DataAgeBadge
+            name={LAYER_REGISTRY.eyes.nameId}
+            ageMs={eyes.ageMs}
+            status={eyes.status}
+            refreshMs={LAYER_REGISTRY.eyes.refreshMs}
+            entityCount={eyes.entities.length}
+            noPulse={true}
+          />
+        </div>
+      ),
+    });
+  }
+  if (eyesEnabled && eyesZoomAllowed) {
+    topChips.push({
+      id: 'eyes-control',
+      node: (
+        <EyesControl
+          key="eyes-control"
+          filters={eyesSettings}
+          onChange={setEyesSettings}
+        />
+      ),
+    });
+  }
+
+  const MAX_VISIBLE_CHIPS = 4;
+  const visibleChips = topChips.length > MAX_VISIBLE_CHIPS ? topChips.slice(0, MAX_VISIBLE_CHIPS) : topChips;
+  const overflowChips = topChips.length > MAX_VISIBLE_CHIPS ? topChips.slice(MAX_VISIBLE_CHIPS) : [];
 
   return (
     <div className="relative w-screen h-[100dvh] overflow-hidden bg-slate-950">
@@ -396,6 +792,9 @@ export default function OsintPage() {
           imageryDate={imagerySettings.dateStr}
           overlaySettings={imagerySettings.overlays}
           onTileError={setTileErrorNotice}
+          onViewerReady={setViewer}
+          onViewerDestroy={() => setViewer(null)}
+          movingLayersActive={(airEnabled && airZoomAllowed) || (seaEnabled && seaZoomAllowed)}
         />
       </div>
 
@@ -409,8 +808,8 @@ export default function OsintPage() {
         />
       )}
 
-      {/* Fire entities rendered on globe */}
-      {viewer && fireEnabled && fireZoomAllowed && (
+      {/* Fire entities rendered on globe (also renders prominent fires in aggregate mode) */}
+      {viewer && fireEnabled && (fireZoomAllowed || fire.entities.length > 0) && (
         <FireLayer
           viewer={viewer}
           entities={fire.entities}
@@ -471,11 +870,11 @@ export default function OsintPage() {
       <nav
         aria-label="OSINT layer controls"
         className="
-          absolute left-3 top-1/2 -translate-y-1/2
-          p-1.5 rounded-2xl bg-slate-900/85 border border-slate-700/60
-          shadow-[0_8px_32px_rgba(0,0,0,0.7)] backdrop-blur-md flex flex-col gap-2
-          max-md:flex-row max-md:left-1/2 max-md:-translate-x-1/2 max-md:top-3
-          max-md:translate-y-0
+          absolute left-4 md:left-6 top-1/2 -translate-y-1/2
+          p-2 rounded-2xl bg-slate-900/90 border border-slate-700/70
+          shadow-[0_8px_32px_rgba(0,0,0,0.75)] backdrop-blur-md flex flex-col gap-2.5
+          max-md:flex-row max-md:left-1/2 max-md:-translate-x-1/2 max-md:top-4
+          max-md:translate-y-0 max-md:max-w-[calc(100vw-32px)] max-md:overflow-x-auto
         "
         style={{ zIndex: OSINT_Z_INDEX.layerRail }}
       >
@@ -483,6 +882,7 @@ export default function OsintPage() {
           const config = LAYER_REGISTRY[layerId];
           const isActive = activeLayers.has(layerId);
           const isDisabled = !config.enabled;
+          const Icon = LAYER_ICONS[layerId];
 
           return (
             <button
@@ -491,21 +891,21 @@ export default function OsintPage() {
               disabled={isDisabled}
               title={
                 isDisabled
-                  ? `${config.nameId} — Segera`
-                  : `${config.nameId} (${config.nameEn})`
+                  ? `${config.nameEn} — Soon`
+                  : config.nameEn
               }
-              aria-label={`${config.nameId}: ${isDisabled ? 'Segera' : isActive ? 'aktif' : 'nonaktif'}`}
+              aria-label={`${config.nameEn}: ${isDisabled ? 'Soon' : isActive ? 'active' : 'inactive'}`}
               aria-pressed={isActive}
               className={`
                 relative w-11 h-11 rounded-xl flex items-center justify-center
-                text-lg transition-all duration-200
+                transition-all duration-200
                 border backdrop-blur-md
                 ${
                   isDisabled
-                    ? 'opacity-30 cursor-not-allowed border-slate-700/40 bg-slate-800/30'
+                    ? 'opacity-30 cursor-not-allowed border-slate-700/40 bg-slate-800/30 text-slate-500'
                     : isActive
-                      ? 'border-white/20 bg-slate-800/70 shadow-lg shadow-purple-500/10 scale-105'
-                      : 'border-slate-700/40 bg-slate-800/50 hover:bg-slate-700/60 hover:scale-105'
+                      ? 'border-white/20 bg-slate-800/70 shadow-lg shadow-purple-500/10 scale-105 text-white'
+                      : 'border-slate-700/40 bg-slate-800/50 hover:bg-slate-700/60 hover:scale-105 text-slate-300'
                 }
               `}
               style={
@@ -514,7 +914,7 @@ export default function OsintPage() {
                   : undefined
               }
             >
-              <span aria-hidden="true">{LAYER_ICONS[layerId]}</span>
+              <Icon className="w-5 h-5 transition-transform" />
               {/* Active indicator dot */}
               {isActive && !isDisabled && (
                 <span
@@ -522,10 +922,10 @@ export default function OsintPage() {
                   style={{ backgroundColor: config.color }}
                 />
               )}
-              {/* "Segera" tooltip for disabled */}
+              {/* "Soon" tooltip for disabled */}
               {isDisabled && (
                 <span className="absolute -bottom-5 text-[9px] text-slate-500 font-medium whitespace-nowrap">
-                  Segera
+                  Soon
                 </span>
               )}
             </button>
@@ -536,283 +936,57 @@ export default function OsintPage() {
       {/* ── Top-Right Chrome: Badges, Imagery & Layer Controls ───────────────── */}
       <div
         className="
-          absolute top-3 right-3 max-md:top-16 max-md:right-2
+          absolute top-3 right-4 md:right-6 max-md:top-16 max-md:right-4
           flex flex-wrap justify-end items-center gap-2
-          max-w-[calc(100vw-80px)] md:max-w-[720px] max-md:max-w-[calc(100vw-16px)]
-          pointer-events-none
+          max-w-[calc(100vw-120px)] md:max-w-[700px]
+          pr-2 pointer-events-none
         "
         style={{ zIndex: OSINT_Z_INDEX.topBar }}
       >
         <div className="flex flex-wrap justify-end items-center gap-2 pointer-events-auto">
-          {/* Aggregated Zoom Chip when 1 or more layers require closer altitude */}
-          {zoomPendingLayers.length > 0 && (
-            <div className="relative group">
-              <div
+          {visibleChips.map((c) => (
+            <div key={c.id}>{c.node}</div>
+          ))}
+
+          {overflowChips.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setIsOverflowOpen((prev) => !prev)}
                 className="
                   flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                  bg-slate-900/90 hover:bg-slate-800/90 border border-amber-500/40
-                  text-amber-200 text-xs font-mono shadow-lg backdrop-blur-md
-                  cursor-help transition-all duration-150
+                  bg-slate-900/90 hover:bg-slate-800/95 border border-slate-700/70
+                  text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+                  transition-all duration-150 cursor-pointer
                 "
-                title="Perbesar globe (zoom-in) untuk mengaktifkan pemuatan data layer ini"
+                aria-label={`${overflowChips.length} additional status chips`}
               >
-                <span>🔍</span>
-                <span className="font-semibold">
-                  {zoomPendingLayers.length === 1
-                    ? `Zoom untuk memuat ${zoomPendingLayers[0].label.split(' ')[0]}`
-                    : `Zoom untuk memuat (${zoomPendingLayers.length} layer)`}
-                </span>
-                {zoomPendingLayers.length > 1 && (
-                  <span className="text-[10px] text-amber-400/80">▾</span>
-                )}
-              </div>
+                <span className="font-semibold text-slate-100">+{overflowChips.length} more</span>
+                <ChevronDown
+                  className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isOverflowOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
 
-              {zoomPendingLayers.length > 1 && (
+              {isOverflowOpen && (
                 <div
                   className="
-                    absolute top-full right-0 mt-1.5 hidden group-hover:flex
-                    flex-col gap-1.5 p-2.5 rounded-xl bg-slate-900/95 border border-slate-700/80
-                    shadow-2xl backdrop-blur-md text-[11px] text-slate-300 min-w-[220px] z-30
+                    absolute top-full right-0 mt-2 p-2.5 rounded-xl
+                    bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md
+                    flex flex-col gap-2 min-w-[240px] max-w-[340px] z-50
                   "
                 >
-                  <span className="text-[10px] uppercase font-mono text-slate-400 tracking-wider font-semibold border-b border-slate-800 pb-1">
-                    Menunggu Zoom Lebih Dekat:
-                  </span>
-                  {zoomPendingLayers.map((l) => (
-                    <div key={l.id} className="flex items-center gap-2 font-mono">
-                      <span className="text-sm">{l.icon}</span>
-                      <span className="text-slate-200">{l.label}</span>
-                    </div>
-                  ))}
+                  <div className="text-[10px] uppercase font-mono text-slate-400 font-semibold px-1 pb-1 border-b border-slate-800">
+                    Additional Status ({overflowChips.length})
+                  </div>
+                  <div className="flex flex-col gap-2 items-end">
+                    {overflowChips.map((c) => (
+                      <div key={c.id} className="w-full flex justify-end">
+                        {c.node}
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          )}
-
-          {/* Quake freshness badge */}
-          {quakeEnabled && quake.status !== 'idle' && (
-            <DataAgeBadge
-              name={LAYER_REGISTRY.quake.nameId}
-              ageMs={quake.ageMs}
-              status={quake.status}
-              refreshMs={LAYER_REGISTRY.quake.refreshMs}
-            />
-          )}
-
-          {/* Fire freshness badge / Missing key warning */}
-          {fireEnabled && fire.error === 'MISSING_KEY' && (
-            <button
-              onClick={() => setIsFireControlOpen(true)}
-              className="
-                px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-500/50
-                text-[11px] text-amber-200 font-mono flex items-center gap-1.5 shadow
-                hover:bg-amber-900/80 transition-colors
-              "
-              title="Kunci MAP_KEY FIRMS belum dikonfigurasi pada environment server"
-            >
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-              <span>Kebakaran: Perlu konfigurasi</span>
-            </button>
-          )}
-
-          {fireEnabled && fire.status !== 'idle' && !fire.error && (
-            <div title="Data NRT NASA FIRMS berlatensi 1-3 jam sejak pengamatan satelit.">
-              <DataAgeBadge
-                name={LAYER_REGISTRY.fire.nameId}
-                ageMs={fire.ageMs}
-                status={fire.status}
-                refreshMs={LAYER_REGISTRY.fire.refreshMs}
-              />
-            </div>
-          )}
-
-          {/* Fire active chip */}
-          {fireEnabled && fireZoomAllowed && (
-            <button
-              onClick={() => setIsFireControlOpen((prev) => !prev)}
-              className="
-                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-                transition-all duration-150 hover:border-amber-500/50 cursor-pointer
-              "
-              title="Buka pengaturan deteksi kebakaran NASA FIRMS"
-              aria-label="Pengaturan deteksi kebakaran NASA FIRMS"
-            >
-              <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-              <span className="font-semibold text-slate-100">
-                Api: {fireSettings.dayRange}h ({fire.entities.length} titik)
-              </span>
-              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-            </button>
-          )}
-
-          {/* Storm freshness badge */}
-          {stormEnabled && storm.status !== 'idle' && (
-            <div title="Advisory siklon tropis diterbitkan setiap 6 jam (03/09/15/21 UTC).">
-              <DataAgeBadge
-                name={LAYER_REGISTRY.storm.nameId}
-                ageMs={storm.ageMs}
-                status={storm.status}
-                refreshMs={LAYER_REGISTRY.storm.refreshMs}
-              />
-            </div>
-          )}
-
-          {/* Storm active chip */}
-          {stormEnabled && (
-            <button
-              onClick={() => setIsStormControlOpen((prev) => !prev)}
-              className="
-                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-                transition-all duration-150 hover:border-violet-500/50 cursor-pointer
-              "
-              title="Buka pengaturan siklon tropis"
-              aria-label="Pengaturan siklon tropis"
-            >
-              <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-              <span className="font-semibold text-slate-100">
-                Badai: {storm.entities.length} aktif
-              </span>
-              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-            </button>
-          )}
-
-          {/* Empty state when storm has 0 active entities */}
-          {stormEnabled && storm.status === 'ok' && storm.entities.length === 0 && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/40 text-slate-400 text-xs shadow-lg backdrop-blur-md">
-              <span>🌀</span>
-              <span>Tidak ada siklon tropis aktif saat ini</span>
-            </div>
-          )}
-
-          {/* Air freshness badge */}
-          {airEnabled && airZoomAllowed && air.status !== 'idle' && (
-            <div title="Data ADS-B langsung dari kontributor adsb.lol (ODbL)">
-              <DataAgeBadge
-                name={LAYER_REGISTRY.air.nameId}
-                ageMs={air.ageMs}
-                status={air.status}
-                refreshMs={LAYER_REGISTRY.air.refreshMs}
-              />
-            </div>
-          )}
-
-          {/* Air active chip */}
-          {airEnabled && airZoomAllowed && (
-            <button
-              onClick={() => setIsAirControlOpen((prev) => !prev)}
-              className="
-                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-                transition-all duration-150 hover:border-cyan-500/50 cursor-pointer
-              "
-              title="Buka pengaturan lalu lintas udara ADS-B"
-              aria-label="Pengaturan lalu lintas udara ADS-B"
-            >
-              <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-              <span className="font-semibold text-slate-100">
-                Udara: {air.entities.length}
-                {air.entities[0]?.raw?.prunedCount
-                  ? ` (${air.entities.length} dari ${Number(air.entities[0].raw.totalFound)} terdekat)`
-                  : ' pesawat'}
-              </span>
-              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-            </button>
-          )}
-
-          {/* Sea freshness badge */}
-          {seaEnabled && seaZoomAllowed && sea.status !== 'idle' && (
-            <div title="Data AIS dari Fintraffic Digitraffic (CC BY 4.0)">
-              <DataAgeBadge
-                name={LAYER_REGISTRY.sea.nameId}
-                ageMs={sea.ageMs}
-                status={sea.status}
-                refreshMs={LAYER_REGISTRY.sea.refreshMs}
-              />
-            </div>
-          )}
-
-          {/* Coverage Notice Chip when Sea is out of coverage (e.g. Indonesia) */}
-          {seaEnabled && seaZoomAllowed && (sea.error === 'OUT_OF_COVERAGE' || (bbox && !isWithinSeaCoverage(bbox))) && (
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-teal-500/40 text-teal-300 text-xs shadow-lg backdrop-blur-md">
-              <span>ℹ️</span>
-              <span>Cakupan AIS saat ini terbatas pada Laut Baltik dan Norwegia. Global menyusul.</span>
-            </div>
-          )}
-
-          {/* Sea active chip */}
-          {seaEnabled && seaZoomAllowed && sea.error !== 'OUT_OF_COVERAGE' && (!bbox || isWithinSeaCoverage(bbox)) && (
-            <button
-              onClick={() => setIsSeaControlOpen((prev) => !prev)}
-              className="
-                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-                transition-all duration-150 hover:border-teal-500/50 cursor-pointer
-              "
-              title="Buka pengaturan lalu lintas laut AIS"
-              aria-label="Pengaturan lalu lintas laut AIS"
-            >
-              <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-              <span className="font-semibold text-slate-100">
-                Laut: {sea.entities.length}
-                {Boolean(sea.entities[0]?.raw?.cutCount)
-                  ? ` (${sea.entities.length} dari ${Number(sea.entities[0]?.raw?.totalFound)} terdekat)`
-                  : ' kapal'}
-              </span>
-              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-            </button>
-          )}
-
-          {/* Eyes freshness badge */}
-          {eyesEnabled && eyesZoomAllowed && eyes.status !== 'idle' && (
-            <div title="Data webcam publik (Windy & ATCS Resmi)">
-              <DataAgeBadge
-                name={LAYER_REGISTRY.eyes.nameId}
-                ageMs={eyes.ageMs}
-                status={eyes.status}
-                refreshMs={LAYER_REGISTRY.eyes.refreshMs}
-                entityCount={eyes.entities.length}
-                noPulse={true}
-              />
-            </div>
-          )}
-
-          {/* Eyes active chip / control popover */}
-          {eyesEnabled && eyesZoomAllowed && (
-            <EyesControl
-              filters={eyesSettings}
-              onChange={setEyesSettings}
-            />
-          )}
-
-          {/* Imagery Chip with nominal resolution & date */}
-          {activeLayers.has('imagery') && (
-            <button
-              onClick={() => setIsImageryControlOpen((prev) => !prev)}
-              className="
-                flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-                text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-                transition-all duration-150 hover:border-slate-500 cursor-pointer
-              "
-              title="Buka pengaturan citra satelit NASA GIBS"
-              aria-label="Pengaturan citra satelit NASA GIBS"
-            >
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="font-semibold text-slate-100">
-                Citra: {imagerySettings.dateStr}
-              </span>
-              <span className="text-slate-500">·</span>
-              <span className="text-slate-300 font-sans">
-                {activeBaseDef.label.split(' ')[0]} {activeBaseDef.resolution}
-              </span>
-              <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-            </button>
           )}
         </div>
       </div>
@@ -889,19 +1063,19 @@ export default function OsintPage() {
                     {selectedEntity.raw?.mag != null
                       ? String(selectedEntity.raw.mag)
                       : '–'}{' '}
-                    · Kedalaman:{' '}
+                    · Depth:{' '}
                     {Math.abs(selectedEntity.position.altM / 1000).toFixed(1)} km
                   </p>
                 )}
                 {selectedEntity.layer === 'fire' && (
                   <p className="text-xs text-slate-400 mt-1">
-                    Intensitas:{' '}
+                    Intensity:{' '}
                     {selectedEntity.raw?.frp != null
                       ? `${selectedEntity.raw.frp} MW`
                       : '–'}{' '}
                     · Confidence:{' '}
                     {String(selectedEntity.raw?.confidence || 'nominal').toUpperCase()} ·{' '}
-                    {selectedEntity.raw?.daynight === 'N' ? '🌙 Malam' : '☀️ Siang'}
+                    {selectedEntity.raw?.daynight === 'N' ? '🌙 Night' : '☀️ Day'}
                   </p>
                 )}
                 {selectedEntity.layer === 'air' && (
@@ -909,7 +1083,7 @@ export default function OsintPage() {
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-cyan-300 font-mono">
                         {Boolean(selectedEntity.raw?.onGround)
-                          ? 'DI DARAT'
+                          ? 'ON GROUND'
                           : `${Math.round(selectedEntity.position.altM * 3.28084).toLocaleString()} ft (${Math.round(selectedEntity.position.altM)} m)`}
                       </span>
                       {Boolean(selectedEntity.raw?.acType) && (
@@ -919,23 +1093,23 @@ export default function OsintPage() {
                       )}
                       {Boolean(selectedEntity.raw?.isMilitary) && (
                         <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/60 font-semibold text-[10px]">
-                          MILITER
+                          MILITARY
                         </span>
                       )}
                     </div>
                     <p>
-                      Kecepatan:{' '}
+                      Speed:{' '}
                       <span className="font-mono text-slate-200">
                         {Math.round(Number(selectedEntity.raw?.speedKt ?? ((selectedEntity.speedMs ?? 0) * 1.94384)))} kt
                       </span>
                       {' '}({Math.round((selectedEntity.speedMs ?? 0) * 3.6)} km/h)
                       {selectedEntity.headingDeg != null && (
-                        <span> · Arah: {Math.round(selectedEntity.headingDeg)}°</span>
+                        <span> · Heading: {Math.round(selectedEntity.headingDeg)}°</span>
                       )}
                     </p>
                     {selectedEntity.raw?.verticalRateMs != null && (
                       <p>
-                        Laju Vertikal:{' '}
+                        Vertical Rate:{' '}
                         <span className="font-mono text-slate-200">
                           {Math.round(Number(selectedEntity.raw.verticalRateMs) / 0.00508)} ft/min
                         </span>
@@ -953,8 +1127,8 @@ export default function OsintPage() {
                       )}
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/80">
-                      <span>Sumber: {String(selectedEntity.raw?.posSource || 'adsb_icao')}</span>
-                      <span>Posisi: {selectedEntity.raw?.seenPosS != null ? `${selectedEntity.raw.seenPosS}s lalu` : 'segar'}</span>
+                      <span>Source: {String(selectedEntity.raw?.posSource || 'adsb_icao')}</span>
+                      <span>Position: {selectedEntity.raw?.seenPosS != null ? `${selectedEntity.raw.seenPosS}s ago` : 'fresh'}</span>
                     </div>
                   </div>
                 )}
@@ -964,12 +1138,12 @@ export default function OsintPage() {
                     {Boolean(selectedEntity.raw?.isEmergency) && (
                       <div className="px-2 py-1 rounded bg-red-950/90 border border-red-500/80 text-red-200 text-xs font-semibold flex items-center gap-1.5 animate-pulse">
                         <span>🚨</span>
-                        <span>{String(selectedEntity.raw?.navStatLabel || 'SINYAL DARURAT AIS AKTIF')}</span>
+                        <span>{String(selectedEntity.raw?.navStatLabel || 'ACTIVE AIS SART EMERGENCY SIGNAL')}</span>
                       </div>
                     )}
                     <div className="flex items-center gap-2">
                       <span className="font-semibold text-teal-300 font-mono">
-                        {String(selectedEntity.raw?.shipTypeLabel || 'Kapal')}
+                        {String(selectedEntity.raw?.shipTypeLabel || 'Vessel')}
                       </span>
                       {Boolean(selectedEntity.raw?.navStatLabel) && !selectedEntity.raw?.isEmergency && (
                         <span
@@ -984,7 +1158,7 @@ export default function OsintPage() {
                       )}
                     </div>
                     <p>
-                      Kecepatan:{' '}
+                      Speed:{' '}
                       <span className="font-mono text-slate-200">
                         {selectedEntity.raw?.sogKnots != null ? `${selectedEntity.raw.sogKnots} kt` : '–'}
                       </span>
@@ -993,10 +1167,10 @@ export default function OsintPage() {
                         <span> · COG: {Math.round(Number(selectedEntity.raw.cogRaw))}°</span>
                       )}
                       {selectedEntity.headingDeg != null && (
-                        <span> · Haluan: {Math.round(selectedEntity.headingDeg)}°</span>
+                        <span> · Heading: {Math.round(selectedEntity.headingDeg)}°</span>
                       )}
                       {selectedEntity.raw?.headingRaw === 511 && (
-                        <span className="text-[10px] text-slate-500"> (Haluan n/a)</span>
+                        <span className="text-[10px] text-slate-500"> (Heading n/a)</span>
                       )}
                     </p>
                     <div className="flex items-center gap-2 text-[11px] text-slate-400">
@@ -1011,34 +1185,34 @@ export default function OsintPage() {
                     {(selectedEntity.raw?.destination != null || selectedEntity.raw?.draughtM != null || selectedEntity.raw?.lengthM != null) && (
                       <div className="flex items-center justify-between text-[11px] text-slate-300 pt-0.5">
                         {Boolean(selectedEntity.raw?.destination) && (
-                          <span>Tujuan: {String(selectedEntity.raw?.destination)}</span>
+                          <span>Destination: {String(selectedEntity.raw?.destination)}</span>
                         )}
                         {Boolean(selectedEntity.raw?.draughtM) && (
-                          <span>Sarat: {Number(selectedEntity.raw?.draughtM).toFixed(1)} m</span>
+                          <span>Draught: {Number(selectedEntity.raw?.draughtM).toFixed(1)} m</span>
                         )}
                         {Boolean(selectedEntity.raw?.lengthM) && (
-                          <span>Dimensi: {String(selectedEntity.raw?.lengthM)}x{String(selectedEntity.raw?.widthM || '?')} m</span>
+                          <span>Dimensions: {String(selectedEntity.raw?.lengthM)}x{String(selectedEntity.raw?.widthM || '?')} m</span>
                         )}
                       </div>
                     )}
                     <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/80">
                       <span>
-                        Keandalan:{' '}
+                        Reliability:{' '}
                         {selectedEntity.raw?.positionReliable !== false ? (
-                          <span className="text-teal-400">Akurat (GNSS)</span>
+                          <span className="text-teal-400">Accurate (GNSS)</span>
                         ) : (
-                          <span className="text-amber-400">Terdegradasi</span>
+                          <span className="text-amber-400">Degraded</span>
                         )}
                       </span>
                       <span>
-                        Posisi:{' '}
+                        Position:{' '}
                         {selectedEntity.raw?.ageS != null ? (
                           Number(selectedEntity.raw.ageS) < 60
-                            ? `${selectedEntity.raw.ageS}s lalu`
+                            ? `${selectedEntity.raw.ageS}s ago`
                             : Number(selectedEntity.raw.ageS) < 3600
-                              ? `${Math.round(Number(selectedEntity.raw.ageS) / 60)}m lalu`
-                              : `${Math.round(Number(selectedEntity.raw.ageS) / 3600)}j lalu`
-                        ) : 'segar'}
+                              ? `${Math.round(Number(selectedEntity.raw.ageS) / 60)}m ago`
+                              : `${Math.round(Number(selectedEntity.raw.ageS) / 3600)}h ago`
+                        ) : 'fresh'}
                       </span>
                     </div>
                   </div>
@@ -1062,21 +1236,21 @@ export default function OsintPage() {
                               : 'bg-violet-950 text-violet-300 border border-violet-800/60'
                         }`}
                       >
-                        Siaga {String(selectedEntity.raw?.alertLevel || 'Green')}
+                        Alert {String(selectedEntity.raw?.alertLevel || 'Green')}
                       </span>
                     </div>
                     {selectedEntity.raw?.movementDir != null && (
                       <p>
-                        Arah: {String(selectedEntity.raw.movementDir)}°
+                        Heading: {String(selectedEntity.raw.movementDir)}°
                         {selectedEntity.raw?.movementSpeedKt != null
-                          ? ` · Kecepatan: ${Math.round(Number(selectedEntity.raw.movementSpeedKt))} kt`
+                          ? ` · Speed: ${Math.round(Number(selectedEntity.raw.movementSpeedKt))} kt`
                           : ''}
                       </p>
                     )}
                     {Array.isArray(selectedEntity.raw?.affectedCountries) &&
                       selectedEntity.raw.affectedCountries.length > 0 && (
                         <p className="text-slate-300">
-                          Wilayah: {selectedEntity.raw.affectedCountries.join(', ')}
+                          Affected Areas: {selectedEntity.raw.affectedCountries.join(', ')}
                         </p>
                       )}
                     {selectedEntity.raw?.advisoryNum != null && (
@@ -1092,7 +1266,7 @@ export default function OsintPage() {
                           rel="noopener noreferrer"
                           className="text-[11px] text-sky-400 hover:text-sky-300 underline inline-flex items-center gap-0.5"
                         >
-                          Advisory NHC ↗
+                          NHC Advisory ↗
                         </a>
                       )}
                       {selectedEntity.raw?.reportUrl != null && (
@@ -1102,7 +1276,7 @@ export default function OsintPage() {
                           rel="noopener noreferrer"
                           className="text-[11px] text-violet-400 hover:text-violet-300 underline inline-flex items-center gap-0.5"
                         >
-                          Laporan GDACS ↗
+                          GDACS Report ↗
                         </a>
                       )}
                     </div>
@@ -1111,13 +1285,13 @@ export default function OsintPage() {
                 <p className="text-xs text-slate-500 mt-0.5">
                   {selectedEntity.position.lat.toFixed(3)}°,{' '}
                   {selectedEntity.position.lon.toFixed(3)}° ·{' '}
-                  {new Date(selectedEntity.observedAt).toLocaleString('id-ID')}
+                  {new Date(selectedEntity.observedAt).toLocaleString('en-US')}
                 </p>
               </div>
               <button
                 onClick={() => setSelectedEntity(null)}
                 className="text-slate-500 hover:text-slate-300 text-lg leading-none"
-                aria-label="Tutup panel"
+                aria-label="Close panel"
               >
                 ✕
               </button>
@@ -1145,11 +1319,18 @@ export default function OsintPage() {
               href="/osint/sumber"
               className="text-lime-400 hover:text-lime-300 underline font-mono text-[9px] shrink-0"
             >
-              Lisensi &amp; Sumber ↗
+              Sources &amp; Licenses ↗
             </a>
           </div>
         </div>
       )}
+
+      {/* ── Development Debug HUD (?debug=1) ─────────────────────────────── */}
+      <DebugOverlay
+        viewer={viewer}
+        cameraAltM={cameraAltM}
+        layers={debugLayers}
+      />
     </div>
   );
 }
