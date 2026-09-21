@@ -33,7 +33,7 @@ export default function StormControl({
   return (
     <div
       role="dialog"
-      aria-label="Pengaturan Siklon Tropis"
+      aria-label="Tropical Cyclone Settings"
       className="
         absolute z-20 top-16 left-20 max-md:left-4 max-md:top-24 max-md:right-4
         w-80 max-w-[calc(100vw-2rem)]
@@ -47,13 +47,13 @@ export default function StormControl({
         <div className="flex items-center gap-2">
           <span className="text-base" aria-hidden="true">🌀</span>
           <h2 className="text-sm font-semibold text-slate-100">
-            Siklon Tropis (NHC + GDACS)
+            Tropical Cyclones (NHC + GDACS)
           </h2>
         </div>
         <button
           onClick={onClose}
           className="text-slate-400 hover:text-slate-200 rounded-lg p-1 hover:bg-slate-800 transition-colors"
-          aria-label="Tutup panel"
+          aria-label="Close panel"
         >
           ✕
         </button>
@@ -70,7 +70,7 @@ export default function StormControl({
       <div className="mt-4 space-y-4 text-xs">
         <div>
           <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-slate-300 font-medium">Sertakan badai lampau</span>
+            <span className="text-slate-300 font-medium">Include past storms</span>
             <input
               type="checkbox"
               checked={settings.allPast}
@@ -81,27 +81,27 @@ export default function StormControl({
             />
           </label>
           <p className="text-[11px] text-slate-400 mt-1">
-            Menampilkan badai yang telah reda dalam 7 hari terakhir untuk konteks OSINT pascabencana.
+            Shows storms that dissipated within the last 7 days for post-disaster OSINT context.
           </p>
         </div>
 
         {/* Legend */}
         <div className="pt-3 border-t border-slate-800/80">
           <p className="text-slate-400 font-medium mb-2 uppercase text-[10px] tracking-wider">
-            Tingkat Siaga GDACS
+            GDACS Alert Levels
           </p>
           <div className="space-y-1.5 text-[11px]">
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
-              <span className="text-slate-300">Merah: Bahaya tinggi / dampak parah</span>
+              <span className="text-slate-300">Red: High humanitarian impact / severe danger</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-orange-400 shrink-0" />
-              <span className="text-slate-300">Oranye: Dampak signifikan terhadap populasi</span>
+              <span className="text-slate-300">Orange: Significant population impact</span>
             </div>
             <div className="flex items-center gap-2">
               <span className="w-2.5 h-2.5 rounded-full bg-violet-400 shrink-0" />
-              <span className="text-slate-300">Hijau / Standar: Siklon / Depresi aktif</span>
+              <span className="text-slate-300">Green / Standard: Active cyclone / depression</span>
             </div>
           </div>
         </div>
@@ -110,10 +110,10 @@ export default function StormControl({
         <div className="pt-3 border-t border-slate-800/80 bg-slate-950/40 -mx-4 -mb-4 p-4 rounded-b-2xl text-[11px] text-slate-400 space-y-1.5">
           <div className="flex items-center gap-1.5 font-medium text-slate-300">
             <span>ℹ️</span>
-            <span>Cakupan Sumber Data</span>
+            <span>Data Source Coverage</span>
           </div>
           <p className="leading-relaxed">
-            Data telemetri presisi tinggi berasal dari <strong>NOAA NHC</strong> (khusus Atlantik & Pasifik Timur). Cakupan global (Pasifik Barat, Samudra Hindia) disediakan oleh <strong>GDACS</strong> (JRC Komisi Eropa).
+            High-precision track telemetry originates from <strong>NOAA NHC</strong> (Atlantic & East/Central Pacific). Global coverage (Western Pacific, Indian Ocean) is provided by <strong>GDACS</strong> (JRC European Commission).
           </p>
         </div>
       </div>

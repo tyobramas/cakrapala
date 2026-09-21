@@ -53,8 +53,8 @@ export interface LayerConfig {
 export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
   quake: {
     id: 'quake',
-    nameId: 'Gempa',
-    nameEn: 'Earthquake',
+    nameId: 'Earthquakes',
+    nameEn: 'Earthquakes',
     color: '#e879f9',
     kind: 'event',
     category: 'entity',
@@ -66,7 +66,7 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
   },
   imagery: {
     id: 'imagery',
-    nameId: 'Citra Satelit',
+    nameId: 'Satellite Imagery',
     nameEn: 'Satellite Imagery',
     color: '#38bdf8',
     kind: 'static',
@@ -79,8 +79,8 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
   },
   fire: {
     id: 'fire',
-    nameId: 'Kebakaran',
-    nameEn: 'Wildfire',
+    nameId: 'Wildfires',
+    nameEn: 'Wildfires',
     color: '#f59e0b',
     kind: 'event',
     category: 'entity',
@@ -92,8 +92,8 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
   },
   storm: {
     id: 'storm',
-    nameId: 'Badai',
-    nameEn: 'Storm',
+    nameId: 'Storms',
+    nameEn: 'Storms',
     color: '#a78bfa',
     kind: 'moving',
     category: 'entity',
@@ -106,8 +106,8 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
   },
   air: {
     id: 'air',
-    nameId: 'Lalu Lintas Udara',
-    nameEn: 'Air Traffic',
+    nameId: 'Aircraft',
+    nameEn: 'Aircraft',
     color: '#22d3ee',
     kind: 'moving',
     category: 'entity',
@@ -120,8 +120,8 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
   },
   sea: {
     id: 'sea',
-    nameId: 'Lalu Lintas Laut',
-    nameEn: 'Sea Traffic',
+    nameId: 'Vessels',
+    nameEn: 'Vessels',
     color: '#2dd4bf',
     kind: 'moving',
     category: 'entity',
@@ -132,12 +132,12 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
     requiresKey: false,
     attribution: 'Vessel data: Fintraffic Digitraffic (CC BY 4.0)',
     coverageBBoxes: [[9.0, 53.0, 33.0, 67.0]],
-    coverageNotice: 'Cakupan AIS saat ini terbatas pada Laut Baltik dan Norwegia. Cakupan global menyusul.',
+    coverageNotice: 'AIS coverage is currently limited to the Baltic Sea and Norway. Global coverage to follow.',
   },
   eyes: {
     id: 'eyes',
-    nameId: 'Kamera Publik',
-    nameEn: 'Public Webcams',
+    nameId: 'Webcams',
+    nameEn: 'Webcams',
     color: '#a3e635',
     kind: 'static',
     category: 'entity',
@@ -147,7 +147,7 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
     refreshMs: 0,
     enabled: true,
     requiresKey: true,
-    attribution: 'Webcams provided by windy.com - add new webcam | Kamera Resmi Pemerintah',
+    attribution: 'Webcams provided by windy.com - add new webcam | Official Webcams',
   },
 } as const;
 

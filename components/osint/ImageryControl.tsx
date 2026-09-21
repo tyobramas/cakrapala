@@ -125,7 +125,7 @@ export default function ImageryControl({
   return (
     <div
       role="dialog"
-      aria-label="Pengaturan Citra Satelit GIBS"
+      aria-label="NASA GIBS Satellite Imagery Settings"
       className="
         absolute z-20 top-16 left-20 max-md:left-4 max-md:top-24 max-md:right-4
         w-84 max-w-[calc(100vw-2rem)]
@@ -139,13 +139,13 @@ export default function ImageryControl({
         <div className="flex items-center gap-2">
           <span className="text-base" aria-hidden="true">🛰️</span>
           <h2 className="text-sm font-semibold text-slate-100">
-            Citra Satelit (NASA GIBS)
+            Satellite Imagery (NASA GIBS)
           </h2>
         </div>
         <button
           onClick={onClose}
           className="text-slate-400 hover:text-slate-200 rounded-lg p-1 hover:bg-slate-800 transition-colors"
-          aria-label="Tutup panel citra"
+          aria-label="Close imagery panel"
         >
           ✕
         </button>
@@ -156,7 +156,7 @@ export default function ImageryControl({
         <div className="mt-3 p-2.5 rounded-xl bg-amber-950/60 border border-amber-500/40 text-xs text-amber-200">
           <div className="flex items-start justify-between gap-2">
             <div className="flex-1">
-              <p className="font-medium">⚠️ Sebagian tile belum tersedia</p>
+              <p className="font-medium">⚠️ Some tiles not yet available</p>
               <p className="text-[11px] text-amber-300/80 mt-0.5">
                 {tileErrorNotice.message}
               </p>
@@ -165,7 +165,7 @@ export default function ImageryControl({
               <button
                 onClick={onDismissError}
                 className="text-amber-400 hover:text-amber-200 text-sm font-bold"
-                aria-label="Tutup notifikasi error"
+                aria-label="Dismiss error notice"
               >
                 ✕
               </button>
@@ -180,7 +180,7 @@ export default function ImageryControl({
                 transition-colors
               "
             >
-              Gunakan tanggal sebelumnya ({tileErrorNotice.fallbackDate})
+              Use previous date ({tileErrorNotice.fallbackDate})
             </button>
           )}
         </div>
@@ -190,7 +190,7 @@ export default function ImageryControl({
         {/* Base Layer Radio Selector */}
         <div>
           <label className="block font-medium text-slate-400 mb-1.5">
-            Lapisan Dasar (Resolusi Nominal)
+            Base Layer (Nominal Resolution)
           </label>
           <div className="space-y-1.5">
             {baseLayers.map((layer) => {
@@ -231,13 +231,13 @@ export default function ImageryControl({
         <div>
           <div className="flex items-center justify-between mb-1.5">
             <label htmlFor="gibs-date-picker" className="font-medium text-slate-400">
-              Tanggal Pengambilan (UTC)
+              Acquisition Date (UTC)
             </label>
             <button
               onClick={() => handleDateChange(maxDate)}
               className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium underline"
             >
-              Kemarin ({maxDate})
+              Yesterday ({maxDate})
             </button>
           </div>
 
@@ -245,7 +245,7 @@ export default function ImageryControl({
             <button
               onClick={() => handleStepDay(-1)}
               disabled={settings.dateStr <= minDate}
-              aria-label="Satu hari sebelumnya"
+              aria-label="Previous day"
               className="
                 p-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700
                 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200
@@ -268,7 +268,7 @@ export default function ImageryControl({
             <button
               onClick={() => handleStepDay(1)}
               disabled={settings.dateStr >= maxDate}
-              aria-label="Satu hari sesudahnya"
+              aria-label="Next day"
               className="
                 p-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700
                 disabled:opacity-30 disabled:cursor-not-allowed text-slate-200
@@ -278,14 +278,14 @@ export default function ImageryControl({
             </button>
           </div>
           <p className="text-[10px] text-slate-500 mt-1">
-            Rentang riwayat: 30 hari ke belakang (latensi produk: {currentBaseLayer.latencyDays} hari).
+            Historical range: past 30 days (product latency: {currentBaseLayer.latencyDays} day{currentBaseLayer.latencyDays > 1 ? 's' : ''}).
           </p>
         </div>
 
         {/* Overlays */}
         <div className="pt-2 border-t border-slate-800">
           <label className="block font-medium text-slate-400 mb-2">
-            Lapisan Batas & Label (15m)
+            Borders & Labels Overlays (15m)
           </label>
           <div className="space-y-3">
             {overlayLayers.map((layer) => {
@@ -327,7 +327,7 @@ export default function ImageryControl({
                           parseFloat(e.target.value),
                         )
                       }
-                      aria-label={`Transparansi ${layer.label}`}
+                      aria-label={`${layer.label} opacity`}
                       className="w-full accent-indigo-500 h-1 bg-slate-700 rounded-lg cursor-pointer"
                     />
                   )}

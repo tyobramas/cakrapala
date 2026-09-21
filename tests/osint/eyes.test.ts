@@ -213,6 +213,12 @@ describe('OSINT Eyes Layer (Public Webcams) — Strict License & Architecture Te
 
   // ── 11. Pemeriksaan origin pada /api/osint/eyes menolak origin asing (L3) ─
   it('11. Pemeriksaan origin pada /api/osint/eyes menolak origin asing dengan 403 Forbidden (L3)', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(JSON.stringify({ webcams: [] }), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    );
     const routeMod = await import('@/app/api/osint/[layer]/route');
     const GET = routeMod.GET;
 

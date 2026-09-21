@@ -53,7 +53,7 @@ export default function AirControl({
   return (
     <div
       role="dialog"
-      aria-label="Pengaturan Lalu Lintas Udara"
+      aria-label="Air Traffic Settings"
       className="
         absolute z-20 top-16 left-20 max-md:left-4 max-md:top-24 max-md:right-4
         w-84 max-w-[calc(100vw-2rem)]
@@ -67,13 +67,13 @@ export default function AirControl({
         <div className="flex items-center gap-2">
           <span className="text-base" aria-hidden="true">✈️</span>
           <h2 className="text-sm font-semibold text-slate-100">
-            Lalu Lintas Udara (ADS-B)
+            Air Traffic (ADS-B)
           </h2>
         </div>
         <button
           onClick={onClose}
           className="text-slate-400 hover:text-slate-200 rounded-lg p-1 hover:bg-slate-800 transition-colors"
-          aria-label="Tutup panel"
+          aria-label="Close panel"
         >
           ✕
         </button>
@@ -82,12 +82,12 @@ export default function AirControl({
       {/* Search Bar */}
       <div className="mt-3">
         <label className="text-[11px] text-slate-400 block mb-1">
-          Cari Callsign / Registrasi / Hex:
+          Search Callsign / Registration / Hex:
         </label>
         <div className="relative">
           <input
             type="text"
-            placeholder="mis. CTV918, PK-GQD, 8a04a7…"
+            placeholder="e.g. CTV918, PK-GQD, 8a04a7…"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="
@@ -142,7 +142,7 @@ export default function AirControl({
       <div className="mt-4 space-y-3.5 text-xs">
         {/* Hide on ground toggle */}
         <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-slate-300">Sembunyikan pesawat di darat</span>
+          <span className="text-slate-300">Hide aircraft on ground</span>
           <input
             type="checkbox"
             checked={settings.hideOnGround ?? true}
@@ -157,7 +157,7 @@ export default function AirControl({
         <label className="flex items-center justify-between cursor-pointer">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="text-slate-300">Hanya pesawat militer</span>
+            <span className="text-slate-300">Military aircraft only</span>
           </div>
           <input
             type="checkbox"
@@ -171,7 +171,7 @@ export default function AirControl({
 
         {/* Show trails toggle */}
         <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-slate-300">Tampilkan jejak penerbangan</span>
+          <span className="text-slate-300">Show flight trails</span>
           <input
             type="checkbox"
             checked={settings.showTrails ?? true}
@@ -185,10 +185,10 @@ export default function AirControl({
         {/* Altitude Range Filter */}
         <div className="pt-2 border-t border-slate-800">
           <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
-            <span>Filter Ketinggian Maksimum:</span>
+            <span>Max Altitude Filter:</span>
             <span className="font-mono text-cyan-300">
               {(settings.maxAltFt ?? 45000) >= 45000
-                ? 'Semua Ketinggian'
+                ? 'All Altitudes'
                 : `${(settings.maxAltFt ?? 45000).toLocaleString()} ft`}
             </span>
           </div>
@@ -210,7 +210,7 @@ export default function AirControl({
 
         {/* Privacy Note */}
         <div className="pt-3 border-t border-slate-800 text-[10px] text-slate-500 leading-relaxed">
-          🔒 <strong>Privasi & Keamanan Data:</strong> Pelacakan berbasis sesi memori sementara. Tidak ada penyimpanan permanen riwayat lintasan maupun notifikasi persisten per pesawat.
+          🔒 <strong>Privacy & Data Safeguards:</strong> Tracking is session-based in temporary memory only. No persistent history tracking or aircraft-level alerting.
         </div>
       </div>
     </div>

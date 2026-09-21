@@ -36,7 +36,7 @@ export default function EyesControl({ filters, onChange }: EyesControlProps) {
         `}
       >
         <span className="w-2 h-2 rounded-full bg-lime-400" />
-        <span>Filter Kamera</span>
+        <span>Webcam Filters</span>
         <span className="text-[10px] text-neutral-400">▾</span>
       </button>
 
@@ -49,18 +49,18 @@ export default function EyesControl({ filters, onChange }: EyesControlProps) {
           />
           <div className="absolute right-0 mt-2 w-64 z-50 rounded-xl bg-neutral-900/95 border border-neutral-700/80 p-4 shadow-2xl backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 text-xs text-neutral-200">
             <div className="font-semibold text-neutral-100 border-b border-neutral-800 pb-2 mb-3 flex items-center justify-between">
-              <span>Pengaturan Kamera</span>
+              <span>Webcam Settings</span>
               <span className="text-[10px] text-lime-400 font-mono">Eyes v1</span>
             </div>
 
             {/* Provider Filter */}
             <div className="mb-3">
               <label className="block text-[11px] font-medium text-neutral-400 mb-1.5">
-                Penyedia Kamera:
+                Webcam Provider:
               </label>
               <div className="grid grid-cols-3 gap-1 bg-neutral-950 p-1 rounded-lg border border-neutral-800">
                 {(['all', 'official', 'windy'] as const).map((p) => {
-                  const labelMap = { all: 'Semua', official: 'Resmi', windy: 'Windy' };
+                  const labelMap = { all: 'All', official: 'Official', windy: 'Windy' };
                   const active = provider === p;
                   return (
                     <button
@@ -83,10 +83,10 @@ export default function EyesControl({ filters, onChange }: EyesControlProps) {
             <div className="mb-3 flex items-center justify-between">
               <div>
                 <div className="text-[11px] font-medium text-neutral-300">
-                  Sembunyikan kamera tidak aktif
+                  Hide inactive webcams
                 </div>
                 <div className="text-[10px] text-neutral-500">
-                  Tidak diperbarui &gt;24 jam
+                  Not updated in &gt;24 hours
                 </div>
               </div>
               <input
@@ -99,7 +99,7 @@ export default function EyesControl({ filters, onChange }: EyesControlProps) {
 
             {/* Disclaimer */}
             <div className="rounded-lg bg-neutral-950/80 p-2 border border-neutral-800/80 text-[10px] text-neutral-400 leading-relaxed">
-              ℹ️ Webcam publik bukan siaran video langsung. Sebagian besar berupa pembaruan citra berkala.
+              ℹ️ Public webcams are periodically updated snapshots, not continuous live video streams.
             </div>
           </div>
         </>

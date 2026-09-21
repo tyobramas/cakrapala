@@ -57,8 +57,8 @@ export default function Navbar() {
     },
     {
       id: "osint",
-      label: "GEOINT",
-      shortLabel: "GEOINT",
+      label: "GEOSINT",
+      shortLabel: "GEOSINT",
       href: "/osint",
       code: "SYS-02",
       icon: Eye,

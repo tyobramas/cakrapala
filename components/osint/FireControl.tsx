@@ -38,7 +38,7 @@ export default function FireControl({
   return (
     <div
       role="dialog"
-      aria-label="Pengaturan Deteksi Kebakaran FIRMS"
+      aria-label="FIRMS Active Fire Detection Settings"
       className="
         absolute z-20 top-16 left-20 max-md:left-4 max-md:top-24 max-md:right-4
         w-80 max-w-[calc(100vw-2rem)]
@@ -52,13 +52,13 @@ export default function FireControl({
         <div className="flex items-center gap-2">
           <span className="text-base" aria-hidden="true">🔥</span>
           <h2 className="text-sm font-semibold text-slate-100">
-            Deteksi Kebakaran (NASA FIRMS)
+            Active Wildfires (NASA FIRMS)
           </h2>
         </div>
         <button
           onClick={onClose}
           className="text-slate-400 hover:text-slate-200 rounded-lg p-1 hover:bg-slate-800 transition-colors"
-          aria-label="Tutup panel kebakaran"
+          aria-label="Close fire panel"
         >
           ✕
         </button>
@@ -67,18 +67,18 @@ export default function FireControl({
       {/* Error notice if MISSING_KEY or AREA_TOO_LARGE */}
       {error === 'MISSING_KEY' && (
         <div className="mt-3 p-2.5 rounded-xl bg-amber-950/60 border border-amber-500/40 text-xs text-amber-200">
-          <p className="font-semibold">⚠️ Kunci Akses Diperlukan</p>
+          <p className="font-semibold">⚠️ Configuration Required</p>
           <p className="text-[11px] text-amber-300/80 mt-1">
-            Layer ini memerlukan konfigurasi MAP_KEY NASA FIRMS pada berkas environment server. Dapatkan kunci gratis di situs resmi NASA FIRMS.
+            This layer requires the MAP_KEY environment variable to be configured on the server. Obtain a free key from the official NASA FIRMS portal.
           </p>
         </div>
       )}
 
       {error === 'AREA_TOO_LARGE' && (
         <div className="mt-3 p-2.5 rounded-xl bg-indigo-950/60 border border-indigo-500/40 text-xs text-indigo-200">
-          <p className="font-semibold">🔍 Area Terlalu Luas</p>
+          <p className="font-semibold">🔍 Area Too Large</p>
           <p className="text-[11px] text-indigo-300/80 mt-1">
-            Zoom lebih dekat ke wilayah yang ingin dipantau (maksimal 60° × 60°) untuk menghemat kuota dan memuat titik api aktif.
+            Zoom in closer to your area of interest (max 60° × 60°) to preserve quota and load active hotspots.
           </p>
         </div>
       )}
@@ -87,7 +87,7 @@ export default function FireControl({
         {/* Day Range Selection */}
         <div>
           <label className="block font-medium text-slate-400 mb-1.5">
-            Rentang Hari Observasi
+            Observation Time Range
           </label>
           <div className="grid grid-cols-3 gap-1.5">
             {[1, 2, 3].map((days) => {
@@ -105,13 +105,13 @@ export default function FireControl({
                     }
                   `}
                 >
-                  {days} Hari {days === 1 && '(Default)'}
+                  {days} Day{days > 1 ? 's' : ''} {days === 1 && '(Default)'}
                 </button>
               );
             })}
           </div>
           <p className="text-[10px] text-slate-500 mt-1">
-            Catatan: Rentang multi-hari mengonsumsi lebih banyak transaksi kuota upstream NASA.
+            Note: Multi-day queries consume more upstream NASA quota transactions.
           </p>
         </div>
 
@@ -119,7 +119,7 @@ export default function FireControl({
         <div className="pt-2 border-t border-slate-800 space-y-2.5">
           <label className="flex items-center justify-between cursor-pointer">
             <span className="font-medium text-slate-300">
-              Tampilkan Confidence Rendah
+              Include Low Confidence
             </span>
             <input
               type="checkbox"
@@ -137,10 +137,10 @@ export default function FireControl({
           <label className="flex items-center justify-between cursor-pointer">
             <div>
               <span className="font-medium text-slate-300">
-                Hanya Deteksi Malam
+                Night-time Only
               </span>
               <p className="text-[10px] text-slate-500">
-                Mengurangi false positive akibat pantulan sinar matahari
+                Reduces false positives from daytime solar glare
               </p>
             </div>
             <input
@@ -157,7 +157,7 @@ export default function FireControl({
         {/* Satellite Source Selection */}
         <div className="pt-2 border-t border-slate-800">
           <label htmlFor="fire-source-select" className="block font-medium text-slate-400 mb-1.5">
-            Sumber Satelit Sensor
+            Satellite Sensor Source
           </label>
           <select
             id="fire-source-select"

@@ -67,7 +67,7 @@ interface NavStation {
 
 const LEFT_STATIONS: NavStation[] = [
     { id: "solar", label: "SOLAR SYSTEM", href: "/solar-system", icon: Globe2, xPct: 17, xVB: 272, azimuth: "045°" },
-    { id: "osint", label: "GEOINT", href: "/osint", icon: Eye, xPct: 28, xVB: 448, azimuth: "075°" },
+    { id: "osint", label: "GEOSINT", href: "/osint", icon: Eye, xPct: 28, xVB: 448, azimuth: "075°" },
     { id: "sky", label: "SKY MAP", href: "/sky", icon: Telescope, xPct: 39, xVB: 624, azimuth: "105°" },
 ];
 

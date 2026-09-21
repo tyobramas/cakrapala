@@ -25,13 +25,13 @@ export interface SeaControlProps {
 }
 
 const CATEGORIES = [
-  { id: 'all', label: 'Semua' },
-  { id: 'cargo', label: 'Kargo' },
+  { id: 'all', label: 'All' },
+  { id: 'cargo', label: 'Cargo' },
   { id: 'tanker', label: 'Tanker' },
-  { id: 'passenger', label: 'Penumpang' },
-  { id: 'fishing', label: 'Nelayan' },
-  { id: 'military', label: 'Militer' },
-  { id: 'other', label: 'Lainnya' },
+  { id: 'passenger', label: 'Passenger' },
+  { id: 'fishing', label: 'Fishing' },
+  { id: 'military', label: 'Military' },
+  { id: 'other', label: 'Other' },
 ];
 
 export default function SeaControl({
@@ -64,7 +64,7 @@ export default function SeaControl({
   return (
     <div
       role="dialog"
-      aria-label="Pengaturan Layer Lalu Lintas Laut"
+      aria-label="Sea Traffic Layer Settings"
       className="
         absolute top-16 left-16 z-30 w-80 rounded-xl
         bg-slate-900/95 border border-teal-500/40 p-4 shadow-2xl backdrop-blur-md
@@ -75,12 +75,12 @@ export default function SeaControl({
       <div className="flex items-center justify-between border-b border-slate-700/60 pb-2">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-teal-400 animate-pulse" />
-          <h2 className="font-semibold text-sm text-teal-300">Filter Lalu Lintas Laut (AIS)</h2>
+          <h2 className="font-semibold text-sm text-teal-300">Sea Traffic (AIS) Filters</h2>
         </div>
         <button
           onClick={onClose}
           className="text-slate-400 hover:text-slate-200 transition-colors p-1"
-          aria-label="Tutup"
+          aria-label="Close"
         >
           ✕
         </button>
@@ -88,12 +88,12 @@ export default function SeaControl({
 
       {/* Search with Fly-To */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-medium text-slate-400">Cari Kapal (Nama / MMSI / IMO)</label>
+        <label className="text-[11px] font-medium text-slate-400">Search Vessels (Name / MMSI / IMO)</label>
         <input
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="cth: FINNSTAR / 230981000..."
+          placeholder="e.g. FINNSTAR / 230981000..."
           className="
             w-full px-2.5 py-1.5 rounded-lg bg-slate-800/90 border border-slate-700
             text-slate-200 placeholder-slate-500 text-xs focus:outline-none focus:border-teal-400
@@ -132,7 +132,7 @@ export default function SeaControl({
 
       {/* Category selector */}
       <div className="flex flex-col gap-1.5">
-        <label className="text-[11px] font-medium text-slate-400">Kategori Kapal</label>
+        <label className="text-[11px] font-medium text-slate-400">Vessel Category</label>
         <div className="grid grid-cols-4 gap-1">
           {CATEGORIES.map((cat) => {
             const isSelected = (settings.category || 'all') === cat.id;
@@ -159,7 +159,7 @@ export default function SeaControl({
       {/* Toggles */}
       <div className="flex flex-col gap-2 pt-1 border-t border-slate-800/80">
         <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-slate-300">Sembunyikan berlabuh / tertambat</span>
+          <span className="text-slate-300">Hide anchored / moored vessels</span>
           <input
             type="checkbox"
             checked={Boolean(settings.hideAnchoredMoored)}
@@ -171,7 +171,7 @@ export default function SeaControl({
         </label>
 
         <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-slate-300">Sembunyikan posisi &gt; 1 jam</span>
+          <span className="text-slate-300">Hide positions older than 1 hour</span>
           <input
             type="checkbox"
             checked={settings.hideOlderThan1Hour !== false}
@@ -183,7 +183,7 @@ export default function SeaControl({
         </label>
 
         <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-slate-300">Tampilkan jejak gerak (detail)</span>
+          <span className="text-slate-300">Show movement trails (detail zoom)</span>
           <input
             type="checkbox"
             checked={settings.showTrails !== false}
@@ -198,11 +198,11 @@ export default function SeaControl({
       {/* Legend & Note */}
       <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px] text-slate-500">
         <div className="flex items-center gap-1.5">
-          <span className="w-2 h-2 rounded-full bg-teal-400" /> Aktif
-          <span className="w-2 h-2 rounded-full bg-amber-400 ml-1" /> Terdegradasi
-          <span className="w-2 h-2 rounded-full bg-red-400 ml-1" /> Darurat
+          <span className="w-2 h-2 rounded-full bg-teal-400" /> Active
+          <span className="w-2 h-2 rounded-full bg-amber-400 ml-1" /> Degraded
+          <span className="w-2 h-2 rounded-full bg-red-400 ml-1" /> Emergency
         </div>
-        <span>Baltik (Fase 1)</span>
+        <span>Baltic Sea (Phase 1)</span>
       </div>
     </div>
   );

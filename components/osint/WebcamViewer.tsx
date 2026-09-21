@@ -131,7 +131,7 @@ export default function WebcamViewer({ entity, onClose }: WebcamViewerProps) {
           <button
             type="button"
             onClick={onClose}
-            aria-label="Tutup peninjau webcam"
+            aria-label="Close webcam viewer"
             className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-100 hover:bg-neutral-800 transition-colors"
           >
             ✕
@@ -153,14 +153,14 @@ export default function WebcamViewer({ entity, onClose }: WebcamViewerProps) {
             {isRefreshing && (
               <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-lime-400 gap-2 z-10">
                 <span className="w-6 h-6 border-2 border-lime-400 border-t-transparent rounded-full animate-spin" />
-                <span className="text-xs font-mono">Memperbarui token gambar...</span>
+                <span className="text-xs font-mono">Refreshing image token...</span>
               </div>
             )}
 
             {isEmbedOnly ? (
               <div className="flex flex-col items-center justify-center p-8 text-center gap-3">
                 <div className="text-neutral-400 text-sm">
-                  Siaran kamera resmi disiarkan langsung melalui portal Dishub / Operator pemerintah.
+                  Official camera feed is streamed directly via the transportation agency / municipal portal.
                 </div>
                 {sourcePage && (
                   <a
@@ -169,15 +169,15 @@ export default function WebcamViewer({ entity, onClose }: WebcamViewerProps) {
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-2 px-4 py-2 bg-lime-500 text-black font-semibold text-xs rounded-lg hover:bg-lime-400 transition-colors shadow"
                   >
-                    Buka Siaran Resmi Dishub ↗
+                    Open Official Stream ↗
                   </a>
                 )}
               </div>
             ) : hasError ? (
               <div className="flex flex-col items-center justify-center p-8 text-center text-neutral-400 gap-2">
                 <span className="text-2xl">📷</span>
-                <span className="text-sm font-medium text-neutral-300">Gambar tidak tersedia saat ini</span>
-                <span className="text-xs text-neutral-500">Token gambar telah kedaluwarsa atau kamera sedang offline.</span>
+                <span className="text-sm font-medium text-neutral-300">Image currently unavailable</span>
+                <span className="text-xs text-neutral-500">Image token has expired or camera is offline.</span>
               </div>
             ) : currentUrl ? (
               /* L5: object-fit: contain, width/height never upscaled, L4: no context menu / drag */
@@ -193,18 +193,18 @@ export default function WebcamViewer({ entity, onClose }: WebcamViewerProps) {
                 onError={handleImageError}
               />
             ) : (
-              <div className="text-xs text-neutral-500 font-mono">Tidak ada preview gambar</div>
+              <div className="text-xs text-neutral-500 font-mono">No image preview available</div>
             )}
           </div>
 
           {/* Time & Freshness Disclaimer */}
           <div className="w-full mt-4 flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-400 border-t border-neutral-800/80 pt-3">
             <div>
-              <span className="text-neutral-500">Pembaruan terakhir: </span>
+              <span className="text-neutral-500">Last updated: </span>
               <span className="font-mono text-neutral-200">
-                {lastUpdated ? new Date(lastUpdated).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : 'Tidak tercatat'}
+                {lastUpdated ? new Date(lastUpdated).toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' }) : 'Not recorded'}
               </span>
-              <span className="text-neutral-500 text-[11px] ml-1.5">(Webcam bukan siaran video real-time)</span>
+              <span className="text-neutral-500 text-[11px] ml-1.5">(Webcam snapshots are not continuous real-time video)</span>
             </div>
 
             {sourcePage && (
@@ -214,7 +214,7 @@ export default function WebcamViewer({ entity, onClose }: WebcamViewerProps) {
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 text-lime-400 hover:text-lime-300 hover:underline transition-colors"
               >
-                Halaman Sumber Resmi ↗
+                Official Source Page ↗
               </a>
             )}
           </div>
@@ -260,10 +260,10 @@ export default function WebcamViewer({ entity, onClose }: WebcamViewerProps) {
             </div>
           ) : isOfficial ? (
             <div className="text-neutral-300 text-xs font-normal">
-              Siaran publik kamera lalu lintas Dinas Perhubungan / Operator Resmi ({entity.source}).
+              Public traffic camera feed from official transportation agency ({entity.source}).
             </div>
           ) : (
-            <div className="text-neutral-400 text-xs">Sumber: {entity.source}</div>
+            <div className="text-neutral-400 text-xs">Source: {entity.source}</div>
           )}
 
           <div className="flex items-center gap-2">
@@ -272,7 +272,7 @@ export default function WebcamViewer({ entity, onClose }: WebcamViewerProps) {
               onClick={onClose}
               className="px-4 py-1.5 text-xs font-medium text-neutral-300 bg-neutral-800 hover:bg-neutral-700 rounded-lg transition-colors"
             >
-              Tutup
+              Close
             </button>
           </div>
         </div>

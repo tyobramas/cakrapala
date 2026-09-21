@@ -151,10 +151,10 @@ const MODULES: ModuleCard[] = [
   },
   {
     id: "osint",
-    sysCode: "SYS-06 // GEOINT",
-    title: "GEOINT (Earth Intelligence)",
+    sysCode: "SYS-06 // GEOSINT",
+    title: "GEOSINT (Earth Intelligence)",
     subtitle: "GLOBAL SITUATIONAL AWARENESS",
-    description: "Sistem pemantauan situasi global 3D real-time mengintegrasikan 7 layer intelijen terbuka: gempa, kebakaran, badai, udara, laut, webcam, dan citra satelit.",
+    description: "Real-time 3D global situational awareness system integrating 7 open intelligence layers: earthquakes, wildfires, storms, air traffic, maritime vessels, webcams, and satellite imagery.",
     href: "/osint",
     badge: "CESIUMJS 3D",
     badgeColor: "bg-lime-500/15 text-lime-300 border-lime-500/40",

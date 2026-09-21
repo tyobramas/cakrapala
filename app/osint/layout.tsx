@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'GEOINT — Cakrapala Earth Intelligence',
+  title: 'GEOSINT — Cakrapala Earth Intelligence',
   description:
-    'Sistem Pengamatan & Kesadaran Situasi Global GEOINT (Earth Intelligence · OSINT) Cakrapala. Memantau gempa bumi, kebakaran hutan, badai tropis, lalu lintas udara ADS-B, lalu lintas laut AIS, kamera publik, dan citra satelit NASA GIBS secara real-time 3D.',
+    'Cakrapala Global Situational Awareness & Earth Intelligence (OSINT). Monitor real-time earthquakes, active wildfires, tropical cyclones, ADS-B air traffic, AIS vessels, public webcams, and NASA GIBS satellite imagery in interactive 3D.',
   openGraph: {
-    title: 'GEOINT — Cakrapala Earth Intelligence',
+    title: 'GEOSINT — Cakrapala Earth Intelligence',
     description:
-      'Sistem Pengamatan & Kesadaran Situasi Global GEOINT (Earth Intelligence · OSINT) Cakrapala. Pantauan bumi real-time 3D interaktif berbasis CesiumJS.',
+      'Cakrapala Global Situational Awareness & Earth Intelligence (OSINT). Interactive 3D CesiumJS globe.',
     url: 'https://cakrapala.com/osint',
     siteName: 'Cakrapala Aerospace',
     images: [
@@ -15,17 +15,17 @@ export const metadata: Metadata = {
         url: '/banner.png',
         width: 1200,
         height: 630,
-        alt: 'Cakrapala GEOINT Earth Intelligence',
+        alt: 'Cakrapala GEOSINT Earth Intelligence',
       },
     ],
-    locale: 'id_ID',
+    locale: 'en_US',
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'GEOINT — Cakrapala Earth Intelligence',
+    title: 'GEOSINT — Cakrapala Earth Intelligence',
     description:
-      'Sistem Pengamatan & Kesadaran Situasi Global GEOINT (Earth Intelligence · OSINT) Cakrapala. Pantauan bumi real-time 3D interaktif.',
+      'Cakrapala Global Situational Awareness & Earth Intelligence (OSINT). Interactive 3D globe.',
     images: ['/banner.png'],
   },
 };

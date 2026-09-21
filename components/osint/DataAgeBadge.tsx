@@ -1,7 +1,7 @@
 'use client';
 // components/osint/DataAgeBadge.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Displays data freshness: "{name} · {age} lalu"
+// Displays data freshness: "{name} · {age} ago"
 //
 // Status colours:
 //   Green (pulsing)  — ageMs < 2× refreshMs
@@ -16,7 +16,7 @@ import { useMemo } from 'react';
 import type { LayerStatus } from '@/lib/osint/useLayer';
 
 export interface DataAgeBadgeProps {
-  /** Human-readable name (e.g. "Gempa"). */
+  /** Human-readable name (e.g. "Earthquakes"). */
   name: string;
   /** Age in milliseconds (live counter from useLayer). */
   ageMs: number;
@@ -33,11 +33,11 @@ export interface DataAgeBadgeProps {
 function formatAge(ms: number): string {
   if (ms < 0) return '–';
   const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds} dtk`;
+  if (seconds < 60) return `${seconds}s`;
   const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} mnt`;
+  if (minutes < 60) return `${minutes}m`;
   const hours = Math.floor(minutes / 60);
-  return `${hours} jam`;
+  return `${hours}h`;
 }
 
 type BadgeColour = 'green' | 'yellow' | 'red';
@@ -67,9 +67,9 @@ const STATUS_ICONS: Record<BadgeColour, string> = {
 };
 
 const STATUS_LABELS: Record<BadgeColour, string> = {
-  green: 'Data segar',
-  yellow: 'Data agak lama',
-  red: 'Gagal memuat data',
+  green: 'Fresh data',
+  yellow: 'Stale data',
+  red: 'Failed to load data',
 };
 
 export default function DataAgeBadge({
@@ -87,8 +87,8 @@ export default function DataAgeBadge({
 
   const ageText = formatAge(ageMs);
   const isPulsing = !noPulse && refreshMs > 0 && colour === 'green';
-  const countSuffix = entityCount !== undefined ? ` (${entityCount} kamera)` : '';
-  const ariaLabel = `${name}: ${STATUS_LABELS[colour]}. Terakhir diperbarui ${ageText} lalu${countSuffix}.`;
+  const countSuffix = entityCount !== undefined ? ` (${entityCount} cameras)` : '';
+  const ariaLabel = `${name}: ${STATUS_LABELS[colour]}. Last updated ${ageText} ago${countSuffix}.`;
 
   return (
     <div
@@ -105,7 +105,7 @@ export default function DataAgeBadge({
         {STATUS_ICONS[colour]}
       </span>
       <span>
-        {name} · {ageText} lalu{countSuffix}
+        {name} · {ageText} ago{countSuffix}
       </span>
     </div>
   );
