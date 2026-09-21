@@ -67,7 +67,7 @@ interface NavStation {
 
 const LEFT_STATIONS: NavStation[] = [
     { id: "solar", label: "SOLAR SYSTEM", href: "/solar-system", icon: Globe2, xPct: 17, xVB: 272, azimuth: "045°" },
-    { id: "osint", label: "MATA BUMI", href: "/osint", icon: Eye, xPct: 28, xVB: 448, azimuth: "075°" },
+    { id: "osint", label: "GEOINT", href: "/osint", icon: Eye, xPct: 28, xVB: 448, azimuth: "075°" },
     { id: "sky", label: "SKY MAP", href: "/sky", icon: Telescope, xPct: 39, xVB: 624, azimuth: "105°" },
 ];
 
@@ -360,7 +360,7 @@ export default function NavbarArc() {
             {/* Proportional Container for Navigation Stations */}
             <div className="pointer-events-auto relative mx-auto h-full w-full max-w-[1600px]">
 
-                {/* ── Left Stations: Solar System, Mata Bumi, Sky Map ──── */}
+                {/* ── Left Stations: Solar System, GEOINT, Sky Map ──── */}
                 {LEFT_STATIONS.map((station) => (
                     <StationPod
                         key={station.id}

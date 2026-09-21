@@ -151,8 +151,8 @@ const MODULES: ModuleCard[] = [
   },
   {
     id: "osint",
-    sysCode: "SYS-06 // MATA BUMI",
-    title: "Mata Bumi (OSINT)",
+    sysCode: "SYS-06 // GEOINT",
+    title: "GEOINT (Earth Intelligence)",
     subtitle: "GLOBAL SITUATIONAL AWARENESS",
     description: "Sistem pemantauan situasi global 3D real-time mengintegrasikan 7 layer intelijen terbuka: gempa, kebakaran, badai, udara, laut, webcam, dan citra satelit.",
     href: "/osint",

@@ -57,12 +57,12 @@ export default function Navbar() {
     },
     {
       id: "osint",
-      label: "MATA BUMI",
-      shortLabel: "MATA BUMI",
+      label: "GEOINT",
+      shortLabel: "GEOINT",
       href: "/osint",
       code: "SYS-02",
       icon: Eye,
-      desc: "OSINT · Pemantauan Bumi",
+      desc: "Earth Intelligence · OSINT",
     },
     {
       id: "sky",

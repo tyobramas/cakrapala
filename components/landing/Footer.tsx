@@ -134,7 +134,7 @@ export default function Footer() {
                 >
                   <div className="flex items-center gap-2.5">
                     <Eye className="w-4 h-4 text-lime-400 group-hover:scale-110 transition-transform" />
-                    <span>Mata Bumi (OSINT)</span>
+                    <span>GEOINT (Earth Intelligence)</span>
                   </div>
                   <ArrowUpRight className="w-3.5 h-3.5 text-slate-500 group-hover:text-lime-400 transition-colors" />
                 </Link>

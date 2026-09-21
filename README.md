@@ -3,7 +3,7 @@
 <p align="center">
   <a href="https://cakrapala.vercel.app"><strong>🚀 Launch Live Observatory</strong></a>
   ·
-  <a href="https://cakrapala.vercel.app/osint"><strong>🌍 Mata Bumi (OSINT)</strong></a>
+  <a href="https://cakrapala.vercel.app/osint"><strong>🌍 GEOINT (Earth Intelligence)</strong></a>
   ·
   <a href="https://github.com/tyobramas/cakrapala"><strong>⭐ Star the Project</strong></a>
 </p>
@@ -26,7 +26,7 @@
 
 - ☄️ Inspect real-world near-Earth asteroid approaches
 - 🛰️ Track orbital assets over an interactive 3D Earth
-- 🌍 Monitor real-time global situation & OSINT telemetry (Mata Bumi)
+- 🌍 Monitor real-time global situation & Earth Intelligence telemetry (GEOINT)
 - 🌠 Explore 9,110+ stars and 85 dynamically mapped constellation artworks
 - 🪐 Navigate a heliocentric Solar System orrery
 - 🤖 Interact with an AI astronomy and astrophysics co-pilot
@@ -170,11 +170,11 @@ the solver core, then passed to the model as structured context.
 | **SYS-03** | **Asteroid Defense Radar** | NASA JPL NeoWs & Three.js | Real-time NEO proximity radar, DEFCON threat monitoring, and physical size scaling. |
 | **SYS-04** | **Satellite Fleet Radar** | SGP4 Propagator & CesiumJS | Live multi-satellite tracking with ground tracks and sensor footprint cones. |
 | **SYS-05** | **Universal Space Codex** | Next.js & IAU Lexicon | Interactive astrophysics encyclopedia with certified IAU definitions and formulas. |
-| **SYS-06** | **Mata Bumi (OSINT)** | CesiumJS 3D Globe | 7-layer global situational awareness: earthquakes, wildfires, tropical cyclones, air traffic (ADS-B), sea traffic (AIS), public webcams, and NASA GIBS imagery. |
+| **SYS-06** | **GEOINT (Earth Intelligence)** | CesiumJS 3D Globe | 7-layer global situational awareness: earthquakes, wildfires, tropical cyclones, air traffic (ADS-B), sea traffic (AIS), public webcams, and NASA GIBS imagery. |
 
 ---
 
-### 🌍 Mata Bumi — OSINT Earth Intelligence (`/osint`)
+### 🌍 GEOINT — Earth Intelligence & Situational Awareness (`/osint`)
 - **7 Integrated Situational Layers**: Real-time monitoring of USGS earthquakes, NASA FIRMS thermal hotspots, NOAA NHC/GDACS tropical storms, adsb.lol crowdsourced flight tracking, Fintraffic marine AIS vessel tracking, public/traffic webcams, and daily NASA EOSDIS GIBS basemaps.
 - **Interactive 3D Geospatial Engine**: Rendered on CesiumJS with camera altitude zoom-gating (`aggregate`, `icons`, `detail`), dead reckoning movement, and strict license & ethical compliance (no individual tracking, view-only, zero background polling for webcams).
 - **Comprehensive Attribution & Ethics Page** at `/osint/sumber` documenting data providers, licenses, and takedown procedures.
@@ -267,7 +267,7 @@ NARA_ROUTER_MODEL=agnes-2.5-flash
 > [!IMPORTANT]
 > Never commit `.env.local` or expose server-side API keys in client-side code. Variables prefixed with `NEXT_PUBLIC_` are included in the browser bundle.
 
-Open [http://localhost:3000](http://localhost:3000) with your browser. Navigate to [http://localhost:3000/osint](http://localhost:3000/osint) to access **Mata Bumi (OSINT Earth Intelligence)**.
+Open [http://localhost:3000](http://localhost:3000) with your browser. Navigate to [http://localhost:3000/osint](http://localhost:3000/osint) to access **GEOINT (Earth Intelligence)**.
 
 
 ### Available Commands
