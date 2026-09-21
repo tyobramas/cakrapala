@@ -29,6 +29,8 @@ export interface LayerConfig {
   globalScope?: boolean;
   /** Server-side cache TTL in milliseconds. */
   ttlMs: number;
+  /** Server-side cache TTL for image tokens/URLs in milliseconds (e.g. 480,000 for eyes). */
+  imageTtlMs?: number;
   /**
    * Client polling interval in milliseconds.
    * 0 means no automatic refresh (e.g. static data).
@@ -134,15 +136,18 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
   },
   eyes: {
     id: 'eyes',
-    nameId: 'Mata Pengawas',
-    nameEn: 'Surveillance Eyes',
+    nameId: 'Kamera Publik',
+    nameEn: 'Public Webcams',
     color: '#a3e635',
     kind: 'static',
+    category: 'entity',
+    globalScope: false,
     ttlMs: 21_600_000,
+    imageTtlMs: 480_000,
     refreshMs: 0,
-    enabled: false,
-    requiresKey: false,
-    attribution: '',
+    enabled: true,
+    requiresKey: true,
+    attribution: 'Webcams provided by windy.com - add new webcam | Kamera Resmi Pemerintah',
   },
 } as const;
 

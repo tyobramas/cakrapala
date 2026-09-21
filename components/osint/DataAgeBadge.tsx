@@ -24,6 +24,10 @@ export interface DataAgeBadgeProps {
   status: LayerStatus;
   /** refreshMs from registry — used for colour thresholds. */
   refreshMs: number;
+  /** Optional count of entities currently displayed. */
+  entityCount?: number;
+  /** If true, suppress live pulse animation. */
+  noPulse?: boolean;
 }
 
 function formatAge(ms: number): string {
@@ -73,6 +77,8 @@ export default function DataAgeBadge({
   ageMs,
   status,
   refreshMs,
+  entityCount,
+  noPulse,
 }: DataAgeBadgeProps) {
   const colour = useMemo(
     () => resolveColour(ageMs, refreshMs, status),
@@ -80,8 +86,9 @@ export default function DataAgeBadge({
   );
 
   const ageText = formatAge(ageMs);
-  const isPulsing = colour === 'green';
-  const ariaLabel = `${name}: ${STATUS_LABELS[colour]}. Terakhir diperbarui ${ageText} lalu.`;
+  const isPulsing = !noPulse && refreshMs > 0 && colour === 'green';
+  const countSuffix = entityCount !== undefined ? ` (${entityCount} kamera)` : '';
+  const ariaLabel = `${name}: ${STATUS_LABELS[colour]}. Terakhir diperbarui ${ageText} lalu${countSuffix}.`;
 
   return (
     <div
@@ -98,7 +105,7 @@ export default function DataAgeBadge({
         {STATUS_ICONS[colour]}
       </span>
       <span>
-        {name} · {ageText} lalu
+        {name} · {ageText} lalu{countSuffix}
       </span>
     </div>
   );

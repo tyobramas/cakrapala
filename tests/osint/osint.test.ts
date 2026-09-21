@@ -16,7 +16,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { normaliseQuakeFeature } from '../../lib/osint/layers/quake';
-import { resolveDisplayMode } from '../../lib/osint/registry';
+import { resolveDisplayMode, LAYER_REGISTRY } from '../../lib/osint/registry';
 import { roundBBox, bboxKey } from '../../lib/osint/geo';
 import { createCache } from '../../lib/osint/cache';
 import { wrapAdapter } from '../../lib/osint/adapter';
@@ -291,13 +291,20 @@ describe('Route handler validation', () => {
   });
 
   it('returns 409 for disabled layer', async () => {
-    const req = makeRequest('/api/osint/eyes');
-    const res = await GET(req, {
-      params: Promise.resolve({ layer: 'eyes' }),
-    });
-    expect(res.status).toBe(409);
-    const body = await res.json();
-    expect(body.error).toContain('not yet enabled');
+    const reg = await import('../../lib/osint/registry');
+    const original = reg.LAYER_REGISTRY.quake.enabled;
+    (reg.LAYER_REGISTRY.quake as { enabled: boolean }).enabled = false;
+    try {
+      const req = makeRequest('/api/osint/quake');
+      const res = await GET(req, {
+        params: Promise.resolve({ layer: 'quake' }),
+      });
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.error).toContain('not yet enabled');
+    } finally {
+      (reg.LAYER_REGISTRY.quake as { enabled: boolean }).enabled = original;
+    }
   });
 
   it('returns 400 for invalid bbox', async () => {

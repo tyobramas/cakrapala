@@ -144,9 +144,10 @@ export function useLayer(
   useEffect(() => {
     if (!enabled || isBasemap) return;
 
+    const debounceDelay = layerId === 'eyes' ? 800 : DEBOUNCE_MS;
     const handle = setTimeout(() => {
       doFetch();
-    }, DEBOUNCE_MS);
+    }, debounceDelay);
 
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps

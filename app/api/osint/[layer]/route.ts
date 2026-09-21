@@ -23,6 +23,7 @@ import { fetchFireLayer } from '@/lib/osint/layers/fire';
 import { fetchStormLayer } from '@/lib/osint/layers/storm';
 import { fetchAirLayer } from '@/lib/osint/layers/air';
 import { fetchSeaLayer } from '@/lib/osint/layers/sea';
+import { fetchEyesLayer, getFreshWebcamImage } from '@/lib/osint/layers/eyes';
 import { bboxToCenterRadius, roundCoord } from '@/lib/osint/layers/air/geo';
 import type { BBox, LayerPayload } from '@/lib/osint/types';
 import type { LayerFetcher } from '@/lib/osint/adapter';
@@ -35,6 +36,7 @@ const LAYER_FETCHERS: Partial<Record<string, LayerFetcher>> = {
   storm: fetchStormLayer,
   air: fetchAirLayer,
   sea: fetchSeaLayer,
+  eyes: fetchEyesLayer,
 };
 
 // ── Rate limiter (in-memory, sliding window) ────────────────────────────────
@@ -128,8 +130,78 @@ export async function GET(
     );
   }
 
+  // 2.5 Origin check for eyes layer (L3 license compliance: forbid 3rd party redistribution)
+  if (layerParam === 'eyes') {
+    const origin = request.headers.get('origin');
+    const referer = request.headers.get('referer');
+    const host = request.headers.get('host') || 'localhost';
+
+    if (origin) {
+      try {
+        const originHost = new URL(origin).host;
+        const isAllowed =
+          originHost === host ||
+          originHost.includes('localhost') ||
+          originHost.includes('127.0.0.1');
+        if (!isAllowed) {
+          return Response.json(
+            { error: 'Forbidden: Third-party access to eyes layer is prohibited by license.' },
+            { status: 403 },
+          );
+        }
+      } catch {
+        return Response.json({ error: 'Forbidden: Invalid origin' }, { status: 403 });
+      }
+    } else if (referer) {
+      try {
+        const refererHost = new URL(referer).host;
+        const isAllowed =
+          refererHost === host ||
+          refererHost.includes('localhost') ||
+          refererHost.includes('127.0.0.1');
+        if (!isAllowed) {
+          return Response.json(
+            { error: 'Forbidden: Third-party access to eyes layer is prohibited by license.' },
+            { status: 403 },
+          );
+        }
+      } catch {
+        return Response.json({ error: 'Forbidden: Invalid referer' }, { status: 403 });
+      }
+    }
+  }
+
   // 3. Validate query params.
   const { searchParams } = request.nextUrl;
+
+  // Handle on-demand fresh image URL fetching for a single webcam (8-minute TTL)
+  const webcamIdParam = searchParams.get('webcamId');
+  if (layerParam === 'eyes' && webcamIdParam) {
+    const webcamId = parseInt(webcamIdParam, 10);
+    if (isNaN(webcamId)) {
+      return Response.json({ error: 'Invalid webcamId' }, { status: 400 });
+    }
+    const fresh = await getFreshWebcamImage(webcamId);
+    if (!fresh) {
+      return Response.json({ error: 'Webcam image unavailable or missing key' }, { status: 404 });
+    }
+    const imageTtlSeconds = Math.round((config.imageTtlMs ?? 480_000) / 1000);
+    return Response.json(
+      {
+        webcamId,
+        images: fresh.images,
+        player: fresh.player,
+        fetchedAt: new Date().toISOString(),
+      },
+      {
+        headers: {
+          'Cache-Control': `s-maxage=${imageTtlSeconds}, max-age=${imageTtlSeconds}`,
+          'X-Osint-Fetched-At': new Date().toISOString(),
+        },
+      },
+    );
+  }
+
   const bboxResult = parseBBox(searchParams.get('bbox'));
   if (bboxResult === 'invalid') {
     return Response.json(
@@ -172,7 +244,7 @@ export async function GET(
     const rLat = roundCoord(cr.centerLat, 0.25);
     const rLon = roundCoord(cr.centerLon, 0.25);
     roundedBBoxStr = `${rLat},${rLon}:r=${cr.radiusNm}`;
-  } else if (layerParam === 'sea' && bbox) {
+  } else if ((layerParam === 'sea' || layerParam === 'eyes') && bbox) {
     roundedBBoxStr = bboxKey(roundBBox(bbox, 0.5));
   } else if (!config.globalScope) {
     roundedBBoxStr = bbox ? bboxKey(roundBBox(bbox)) : 'global';

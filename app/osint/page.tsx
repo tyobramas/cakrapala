@@ -40,6 +40,9 @@ import AirControl from '@/components/osint/AirControl';
 import type { AirFilterSettings } from '@/components/osint/layers/AirLayer';
 import SeaControl from '@/components/osint/SeaControl';
 import type { SeaFilterSettings } from '@/components/osint/layers/SeaLayer';
+import EyesControl from '@/components/osint/EyesControl';
+import type { EyesFilterSettings } from '@/components/osint/layers/EyesLayer';
+import WebcamViewer from '@/components/osint/WebcamViewer';
 import { isBBoxAreaAllowed } from '@/lib/osint/layers/fire';
 import { bboxToCenterRadius } from '@/lib/osint/layers/air/geo';
 import { isWithinSeaCoverage } from '@/lib/osint/layers/sea';
@@ -81,6 +84,11 @@ const SeaLayer = dynamic(
   { ssr: false },
 );
 
+const EyesLayer = dynamic(
+  () => import('@/components/osint/layers/EyesLayer'),
+  { ssr: false },
+);
+
 // ── Layer icon mapping ──────────────────────────────────────────────────────
 
 const LAYER_ICONS: Record<LayerId, string> = {
@@ -111,7 +119,7 @@ export default function OsintPage() {
   const displayMode = resolveDisplayMode(cameraAltM);
   const [bbox, setBBox] = useState<BBox | undefined>(undefined);
   const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
-    new Set(['quake', 'imagery', 'fire', 'storm', 'air']),
+    new Set(['quake', 'imagery', 'fire', 'storm', 'air', 'eyes']),
   );
   const [selectedEntity, setSelectedEntity] = useState<
     import('@/lib/osint/types').OsintEntity | null
@@ -166,6 +174,13 @@ export default function OsintPage() {
     showTrails: true,
   });
   const [isSeaControlOpen, setIsSeaControlOpen] = useState(false);
+
+  // Eyes (Public Webcams) settings.
+  const [eyesSettings, setEyesSettings] = useState<EyesFilterSettings>({
+    provider: 'all',
+    hideInactive: true,
+  });
+  const [isEyesControlOpen, setIsEyesControlOpen] = useState(false);
 
   // Quake layer hook.
   const quakeEnabled = activeLayers.has('quake');
@@ -241,6 +256,19 @@ export default function OsintPage() {
     seaPollingEnabled,
   );
 
+  // Eyes layer hook:
+  // Strictly user-triggered, disabled in aggregate mode (> 3,000,000 m).
+  const eyesEnabled = activeLayers.has('eyes');
+  const eyesZoomAllowed = cameraAltM <= 3_000_000;
+  const eyesPollingEnabled = eyesEnabled && eyesZoomAllowed;
+
+  const eyes = useLayer(
+    'eyes',
+    bbox,
+    cameraAltM,
+    eyesPollingEnabled,
+  );
+
   // ── Callbacks ───────────────────────────────────────────────────────────
 
   const handleCameraAltChange = useCallback((alt: number) => {
@@ -265,12 +293,14 @@ export default function OsintPage() {
           if (layerId === 'storm') setIsStormControlOpen(false);
           if (layerId === 'air') setIsAirControlOpen(false);
           if (layerId === 'sea') setIsSeaControlOpen(false);
+          if (layerId === 'eyes') setIsEyesControlOpen(false);
         } else {
           next.add(layerId);
           if (layerId === 'fire') setIsFireControlOpen(true);
           if (layerId === 'storm') setIsStormControlOpen(true);
           if (layerId === 'air') setIsAirControlOpen(true);
           if (layerId === 'sea') setIsSeaControlOpen(true);
+          if (layerId === 'eyes') setIsEyesControlOpen(true);
         }
         return next;
       });
@@ -407,6 +437,18 @@ export default function OsintPage() {
           entities={sea.entities}
           displayMode={displayMode}
           filters={seaSettings}
+          selectedEntityId={selectedEntity?.id}
+          onSelectEntity={setSelectedEntity}
+        />
+      )}
+
+      {/* Eyes entities rendered on globe */}
+      {viewer && eyesEnabled && eyesZoomAllowed && (
+        <EyesLayer
+          viewer={viewer}
+          entities={eyes.entities}
+          displayMode={displayMode}
+          filters={eyesSettings}
           selectedEntityId={selectedEntity?.id}
           onSelectEntity={setSelectedEntity}
         />
@@ -654,6 +696,36 @@ export default function OsintPage() {
           </button>
         )}
 
+        {/* Zoom Chip when Eyes is enabled but zoom is too wide */}
+        {eyesEnabled && !eyesZoomAllowed && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-lime-950/80 border border-lime-500/40 text-lime-200 text-xs shadow-lg backdrop-blur-md">
+            <span>🔍</span>
+            <span>Zoom untuk memuat webcam</span>
+          </div>
+        )}
+
+        {/* Eyes freshness badge */}
+        {eyesEnabled && eyesZoomAllowed && eyes.status !== 'idle' && (
+          <div title="Data webcam publik (Windy & ATCS Resmi)">
+            <DataAgeBadge
+              name={LAYER_REGISTRY.eyes.nameId}
+              ageMs={eyes.ageMs}
+              status={eyes.status}
+              refreshMs={LAYER_REGISTRY.eyes.refreshMs}
+              entityCount={eyes.entities.length}
+              noPulse={true}
+            />
+          </div>
+        )}
+
+        {/* Eyes active chip / control popover */}
+        {eyesEnabled && eyesZoomAllowed && (
+          <EyesControl
+            filters={eyesSettings}
+            onChange={setEyesSettings}
+          />
+        )}
+
         {/* Zoom Chip when Fire is enabled but zoom is too wide */}
         {fireEnabled && !fireZoomAllowed && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs shadow-lg backdrop-blur-md">
@@ -758,8 +830,16 @@ export default function OsintPage() {
         onFlyTo={handleFlyToVessel}
       />
 
-      {/* ── Selected Entity Panel (minimal) ─────────────────────────────── */}
-      {selectedEntity && (
+      {/* ── Webcam Viewer Modal (Eyes layer) ─────────────────────────────── */}
+      {selectedEntity && selectedEntity.id.startsWith('eyes:') && (
+        <WebcamViewer
+          entity={selectedEntity}
+          onClose={() => setSelectedEntity(null)}
+        />
+      )}
+
+      {/* ── Selected Entity Panel (minimal, for other layers) ───────────── */}
+      {selectedEntity && !selectedEntity.id.startsWith('eyes:') && (
         <div className="absolute z-10 bottom-16 left-1/2 -translate-x-1/2 max-w-sm w-full mx-4">
           <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-xl p-4 shadow-xl">
             <div className="flex items-start justify-between gap-3">
@@ -1013,13 +1093,21 @@ export default function OsintPage() {
       {/* ── Attribution Chip (bottom-right, permanent) ──────────────────── */}
       {activeAttributions.length > 0 && (
         <div className="absolute z-10 bottom-2 right-2 max-w-md">
-          <div className="bg-black/60 backdrop-blur-sm rounded px-2.5 py-1 text-[10px] text-slate-400 leading-tight">
-            {activeAttributions.map((attr, i) => (
-              <span key={i}>
-                {i > 0 && ' · '}
-                {attr}
-              </span>
-            ))}
+          <div className="bg-black/60 backdrop-blur-sm rounded px-2.5 py-1 text-[10px] text-slate-400 leading-tight flex items-center justify-between gap-2">
+            <div>
+              {activeAttributions.map((attr, i) => (
+                <span key={i}>
+                  {i > 0 && ' · '}
+                  {attr}
+                </span>
+              ))}
+            </div>
+            <a
+              href="/osint/sumber"
+              className="text-lime-400 hover:text-lime-300 underline font-mono text-[9px] shrink-0"
+            >
+              Lisensi &amp; Sumber ↗
+            </a>
           </div>
         </div>
       )}
