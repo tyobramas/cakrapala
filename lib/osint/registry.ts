@@ -22,6 +22,11 @@ export interface LayerConfig {
   kind: EntityKind;
   /** Category: 'entity' (polled via API) or 'basemap' (client-side WMTS) */
   category?: 'entity' | 'basemap';
+  /**
+   * Whether this layer fetches globally and does not require viewport bbox gating.
+   * Also active in aggregate zoom mode (> 3,000 km).
+   */
+  globalScope?: boolean;
   /** Server-side cache TTL in milliseconds. */
   ttlMs: number;
   /**
@@ -84,12 +89,14 @@ export const LAYER_REGISTRY: Record<LayerId, LayerConfig> = {
     nameId: 'Badai',
     nameEn: 'Storm',
     color: '#a78bfa',
-    kind: 'event',
+    kind: 'moving',
+    category: 'entity',
+    globalScope: true,
     ttlMs: 600_000,
     refreshMs: 900_000,
-    enabled: false,
+    enabled: true,
     requiresKey: false,
-    attribution: '',
+    attribution: 'Tropical cyclone data: NOAA NHC (public domain) & GDACS (JRC, European Commission)',
   },
   air: {
     id: 'air',

@@ -150,7 +150,15 @@ export function useLayer(
 
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bbox?.[0], bbox?.[1], bbox?.[2], bbox?.[3], enabled, isBasemap, extraParamsKey]);
+  }, [
+    config.globalScope ? undefined : bbox?.[0],
+    config.globalScope ? undefined : bbox?.[1],
+    config.globalScope ? undefined : bbox?.[2],
+    config.globalScope ? undefined : bbox?.[3],
+    enabled,
+    isBasemap,
+    extraParamsKey,
+  ]);
 
   // ── Polling with visibility gating ──────────────────────────────────────
 

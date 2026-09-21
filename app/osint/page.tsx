@@ -33,6 +33,9 @@ import ImageryControl, {
 import FireControl, {
   type FireSettings,
 } from '@/components/osint/FireControl';
+import StormControl, {
+  type StormSettings,
+} from '@/components/osint/StormControl';
 import { isBBoxAreaAllowed } from '@/lib/osint/layers/fire';
 
 // Dynamic imports for Cesium components (no SSR).
@@ -54,6 +57,11 @@ const QuakeLayer = dynamic(
 
 const FireLayer = dynamic(
   () => import('@/components/osint/layers/FireLayer'),
+  { ssr: false },
+);
+
+const StormLayer = dynamic(
+  () => import('@/components/osint/layers/StormLayer'),
   { ssr: false },
 );
 
@@ -86,7 +94,7 @@ export default function OsintPage() {
   const [cameraAltM, setCameraAltM] = useState(2e7);
   const [bbox, setBBox] = useState<BBox | undefined>(undefined);
   const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
-    new Set(['quake', 'imagery', 'fire']),
+    new Set(['quake', 'imagery', 'fire', 'storm']),
   );
   const [selectedEntity, setSelectedEntity] = useState<
     import('@/lib/osint/types').OsintEntity | null
@@ -118,6 +126,12 @@ export default function OsintPage() {
   });
   const [isFireControlOpen, setIsFireControlOpen] = useState(false);
 
+  // Storm Tropical Cyclone settings.
+  const [stormSettings, setStormSettings] = useState<StormSettings>({
+    allPast: false,
+  });
+  const [isStormControlOpen, setIsStormControlOpen] = useState(false);
+
   // Quake layer hook.
   const quakeEnabled = activeLayers.has('quake');
   const quake = useLayer('quake', bbox, cameraAltM, quakeEnabled);
@@ -146,6 +160,23 @@ export default function OsintPage() {
     fireExtraParams,
   );
 
+  // Storm layer hook:
+  // Global scope: active in all zoom levels, does not require bbox gating
+  const stormEnabled = activeLayers.has('storm');
+  const stormExtraParams = useMemo(
+    () => ({
+      allPast: stormSettings.allPast ? '1' : undefined,
+    }),
+    [stormSettings],
+  );
+  const storm = useLayer(
+    'storm',
+    undefined,
+    cameraAltM,
+    stormEnabled,
+    stormExtraParams,
+  );
+
   // ── Callbacks ───────────────────────────────────────────────────────────
 
   const handleCameraAltChange = useCallback((alt: number) => {
@@ -167,9 +198,11 @@ export default function OsintPage() {
           next.delete(layerId);
           if (layerId === 'imagery') setIsImageryControlOpen(false);
           if (layerId === 'fire') setIsFireControlOpen(false);
+          if (layerId === 'storm') setIsStormControlOpen(false);
         } else {
           next.add(layerId);
           if (layerId === 'fire') setIsFireControlOpen(true);
+          if (layerId === 'storm') setIsStormControlOpen(true);
         }
         return next;
       });
@@ -200,6 +233,11 @@ export default function OsintPage() {
     // Fire
     if (activeLayers.has('fire')) {
       list.push(LAYER_REGISTRY.fire.attribution);
+    }
+
+    // Storm
+    if (activeLayers.has('storm')) {
+      list.push(LAYER_REGISTRY.storm.attribution);
     }
 
     // Imagery
@@ -252,6 +290,17 @@ export default function OsintPage() {
           entities={fire.entities}
           cameraAltM={cameraAltM}
           dayRange={fireSettings.dayRange}
+          onSelect={setSelectedEntity}
+        />
+      )}
+
+      {/* Storm entities rendered on globe */}
+      {viewer && stormEnabled && (
+        <StormLayer
+          viewer={viewer}
+          entities={storm.entities}
+          cameraAltM={cameraAltM}
+          selectedEntity={selectedEntity}
           onSelect={setSelectedEntity}
         />
       )}
@@ -361,6 +410,47 @@ export default function OsintPage() {
           </div>
         )}
 
+        {/* Storm freshness badge */}
+        {stormEnabled && storm.status !== 'idle' && (
+          <div title="Advisory siklon tropis diterbitkan setiap 6 jam (03/09/15/21 UTC).">
+            <DataAgeBadge
+              name={LAYER_REGISTRY.storm.nameId}
+              ageMs={storm.ageMs}
+              status={storm.status}
+              refreshMs={LAYER_REGISTRY.storm.refreshMs}
+            />
+          </div>
+        )}
+
+        {/* Storm active chip */}
+        {stormEnabled && (
+          <button
+            onClick={() => setIsStormControlOpen((prev) => !prev)}
+            className="
+              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
+              bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
+              text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
+              transition-all duration-150 hover:border-violet-500/50 cursor-pointer
+            "
+            title="Buka pengaturan siklon tropis"
+            aria-label="Pengaturan siklon tropis"
+          >
+            <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
+            <span className="font-semibold text-slate-100">
+              Badai: {storm.entities.length} aktif
+            </span>
+            <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
+          </button>
+        )}
+
+        {/* Empty state when storm has 0 active entities */}
+        {stormEnabled && storm.status === 'ok' && storm.entities.length === 0 && (
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/40 text-slate-400 text-xs shadow-lg backdrop-blur-md">
+            <span>🌀</span>
+            <span>Tidak ada siklon tropis aktif saat ini</span>
+          </div>
+        )}
+
         {/* Zoom Chip when Fire is enabled but zoom is too wide */}
         {fireEnabled && !fireZoomAllowed && (
           <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-950/80 border border-amber-500/40 text-amber-200 text-xs shadow-lg backdrop-blur-md">
@@ -436,6 +526,15 @@ export default function OsintPage() {
         error={fire.error}
       />
 
+      {/* ── Storm Control Popover ────────────────────────────────────────── */}
+      <StormControl
+        isOpen={isStormControlOpen && activeLayers.has('storm')}
+        onClose={() => setIsStormControlOpen(false)}
+        settings={stormSettings}
+        onChange={setStormSettings}
+        error={storm.error}
+      />
+
       {/* ── Selected Entity Panel (minimal) ─────────────────────────────── */}
       {selectedEntity && (
         <div className="absolute z-10 bottom-16 left-1/2 -translate-x-1/2 max-w-sm w-full mx-4">
@@ -465,6 +564,71 @@ export default function OsintPage() {
                     {String(selectedEntity.raw?.confidence || 'nominal').toUpperCase()} ·{' '}
                     {selectedEntity.raw?.daynight === 'N' ? '🌙 Malam' : '☀️ Siang'}
                   </p>
+                )}
+                {selectedEntity.layer === 'storm' && (
+                  <div className="space-y-1 mt-1 text-xs text-slate-400">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-slate-200">
+                        {Math.round(Number(selectedEntity.raw?.windKmh ?? (selectedEntity.severity * 80 * 3.6)))} km/h
+                        {' '}({Math.round(Number(selectedEntity.raw?.windKt ?? (selectedEntity.severity * 80 / 0.514444)))} kt)
+                      </span>
+                      {selectedEntity.raw?.pressureMb != null && (
+                        <span>· {String(selectedEntity.raw.pressureMb)} mb</span>
+                      )}
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                          selectedEntity.raw?.alertLevel === 'Red'
+                            ? 'bg-red-950 text-red-300 border border-red-800/60'
+                            : selectedEntity.raw?.alertLevel === 'Orange'
+                              ? 'bg-orange-950 text-orange-300 border border-orange-800/60'
+                              : 'bg-violet-950 text-violet-300 border border-violet-800/60'
+                        }`}
+                      >
+                        Siaga {String(selectedEntity.raw?.alertLevel || 'Green')}
+                      </span>
+                    </div>
+                    {selectedEntity.raw?.movementDir != null && (
+                      <p>
+                        Arah: {String(selectedEntity.raw.movementDir)}°
+                        {selectedEntity.raw?.movementSpeedKt != null
+                          ? ` · Kecepatan: ${Math.round(Number(selectedEntity.raw.movementSpeedKt))} kt`
+                          : ''}
+                      </p>
+                    )}
+                    {Array.isArray(selectedEntity.raw?.affectedCountries) &&
+                      selectedEntity.raw.affectedCountries.length > 0 && (
+                        <p className="text-slate-300">
+                          Wilayah: {selectedEntity.raw.affectedCountries.join(', ')}
+                        </p>
+                      )}
+                    {selectedEntity.raw?.advisoryNum != null && (
+                      <p className="text-slate-400 text-[11px]">
+                        Advisory #{String(selectedEntity.raw.advisoryNum)}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {selectedEntity.raw?.advisoryUrl != null && (
+                        <a
+                          href={String(selectedEntity.raw.advisoryUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-sky-400 hover:text-sky-300 underline inline-flex items-center gap-0.5"
+                        >
+                          Advisory NHC ↗
+                        </a>
+                      )}
+                      {selectedEntity.raw?.reportUrl != null && (
+                        <a
+                          href={String(selectedEntity.raw.reportUrl)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-violet-400 hover:text-violet-300 underline inline-flex items-center gap-0.5"
+                        >
+                          Laporan GDACS ↗
+                        </a>
+                      )}
+                    </div>
+                  </div>
                 )}
                 <p className="text-xs text-slate-500 mt-0.5">
                   {selectedEntity.position.lat.toFixed(3)}°,{' '}

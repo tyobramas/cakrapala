@@ -20,6 +20,7 @@ import { cache } from '@/lib/osint/cache';
 import { roundBBox, bboxKey } from '@/lib/osint/geo';
 import { fetchQuakeLayer } from '@/lib/osint/layers/quake';
 import { fetchFireLayer } from '@/lib/osint/layers/fire';
+import { fetchStormLayer } from '@/lib/osint/layers/storm';
 import type { BBox, LayerPayload } from '@/lib/osint/types';
 import type { LayerFetcher } from '@/lib/osint/adapter';
 
@@ -28,6 +29,7 @@ import type { LayerFetcher } from '@/lib/osint/adapter';
 const LAYER_FETCHERS: Partial<Record<string, LayerFetcher>> = {
   quake: fetchQuakeLayer,
   fire: fetchFireLayer,
+  storm: fetchStormLayer,
 };
 
 // ── Rate limiter (in-memory, sliding window) ────────────────────────────────
@@ -141,13 +143,16 @@ export async function GET(
 
   // 4. Build cache key.
   const bbox = bboxResult ?? undefined;
-  const roundedBBoxStr = bbox ? bboxKey(roundBBox(bbox)) : 'global';
+  const roundedBBoxStr = config.globalScope
+    ? 'global'
+    : (bbox ? bboxKey(roundBBox(bbox)) : 'global');
 
-  // Extract optional layer options (e.g. for fire)
+  // Extract optional layer options (e.g. for fire & storm)
   const rangeParam = searchParams.get('range');
   const sourceParam = searchParams.get('source');
   const lowParam = searchParams.get('low');
   const nightParam = searchParams.get('night');
+  const allPastParam = searchParams.get('allPast');
 
   let optSuffix = '';
   const fetchOptions: Record<string, unknown> = {};
@@ -166,6 +171,10 @@ export async function GET(
   if (nightParam === 'true' || nightParam === '1') {
     optSuffix += ':n=1';
     fetchOptions.nightOnly = true;
+  }
+  if (allPastParam === 'true' || allPastParam === '1') {
+    optSuffix += ':allPast=1';
+    fetchOptions.allPast = true;
   }
 
   const cacheKey = `osint:${layerParam}:${roundedBBoxStr}${optSuffix}`;

@@ -47,6 +47,10 @@ export interface OsintEntity {
   observedAt: string;
   /** Attribution source name (e.g. "USGS", "ADS-B Exchange"). */
   source: string;
+  /** Optional movement heading in degrees (0..360, 0 = North, 90 = East). */
+  headingDeg?: number;
+  /** Optional movement translation speed in meters per second (SI units). */
+  speedMs?: number;
   /** Optional URL for a thumbnail or icon image. */
   thumbnail?: string;
   /**
