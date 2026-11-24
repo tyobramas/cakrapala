@@ -92,28 +92,31 @@ export default function HeroOrbital() {
       />
 
       {/* ── Editorial Centerpiece Typography & Balanced Actions ─────── */}
-      <div className="pointer-events-none absolute inset-x-0 top-[15vh] z-20 flex flex-col items-center px-6 text-center sm:top-[16.5vh] lg:top-[17.5vh]">
-        {/* Refined Eyebrow */}
-        <p className="font-mono text-[10px] font-normal tracking-[0.36em] text-sky-200/70 uppercase drop-shadow-[0_2px_10px_rgba(0,0,0,0.9)]">
-          Deep Space Observatory
-        </p>
+      <div className="pointer-events-none absolute inset-x-0 top-[14.5vh] z-20 flex flex-col items-center px-5 text-center sm:top-[16vh] lg:top-[17vh]">
+        {/* Compact translucent glassmorphism strictly behind the copy for crisp legibility without hiding the Milky Way */}
+        <div className="inline-flex max-w-2xl flex-col items-center rounded-2xl border border-white/[0.10] bg-[#020510]/42 px-6 py-4 backdrop-blur-[8px] shadow-[0_16px_48px_rgba(0,0,0,0.45),inset_0_1px_0_rgba(255,255,255,0.12)] sm:rounded-3xl sm:px-9 sm:py-5">
+          {/* Refined Eyebrow */}
+          <p className="font-mono text-[10px] font-medium tracking-[0.34em] text-sky-200/95 uppercase [text-shadow:0_1px_10px_rgba(0,0,0,0.9)]">
+            Deep Space Observatory
+          </p>
 
-        {/* Primary Display Headline */}
-        <h1 className="mt-4 max-w-3xl font-[family-name:var(--font-orbitron)] text-2xl font-light tracking-[0.2em] text-transparent bg-gradient-to-b from-white via-white/95 to-slate-300/75 bg-clip-text drop-shadow-[0_6px_32px_rgba(0,0,0,0.85)] sm:text-4xl lg:text-[42px] lg:leading-[1.2]">
-          THE UNIVERSE IN REAL TIME
-        </h1>
+          {/* Primary Display Headline */}
+          <h1 className="mt-2.5 font-[family-name:var(--font-orbitron)] text-xl font-normal tracking-[0.18em] text-white [text-shadow:0_2px_20px_rgba(0,0,0,0.85)] sm:text-3xl lg:whitespace-nowrap lg:text-[34px] lg:leading-[1.2]">
+            THE UNIVERSE IN REAL TIME
+          </h1>
 
-        {/* Clean Minimal Subtitle — no heavy borders or HUD clutter */}
-        <p className="mt-4 max-w-xl text-xs font-light leading-relaxed tracking-[0.04em] text-slate-200/75 drop-shadow-[0_2px_14px_rgba(0,0,0,0.95)] sm:text-sm">
-          Orbital mechanics, planetary defense, and live astrometry — computed
-          from first principles.
-        </p>
+          {/* Clean Minimal Subtitle */}
+          <p className="mt-2.5 max-w-xl text-xs font-normal leading-relaxed tracking-[0.03em] text-slate-100/90 [text-shadow:0_1px_12px_rgba(0,0,0,0.9)] sm:text-[13.5px]">
+            Orbital mechanics, planetary defense, and live astrometry — computed
+            from first principles.
+          </p>
+        </div>
 
         {/* Balanced Dual Action Pills */}
-        <div className="pointer-events-auto mt-8 flex flex-wrap items-center justify-center gap-3 sm:gap-4">
+        <div className="pointer-events-auto mt-6 flex flex-wrap items-center justify-center gap-3 sm:mt-7 sm:gap-4">
           <Link
             href="/solar-system"
-            className="group inline-flex items-center gap-2.5 rounded-full bg-white px-6 py-2.5 text-[11px] font-semibold tracking-[0.14em] text-slate-950 uppercase shadow-[0_8px_30px_rgba(255,255,255,0.16)] transition-all duration-300 hover:bg-sky-50 hover:shadow-[0_10px_36px_rgba(186,230,253,0.3)] active:scale-[0.98]"
+            className="group inline-flex items-center gap-2.5 rounded-full bg-white px-6 py-2.5 text-[11px] font-semibold tracking-[0.14em] text-slate-950 uppercase shadow-[0_8px_30px_rgba(255,255,255,0.18)] transition-all duration-300 hover:bg-sky-50 hover:shadow-[0_10px_36px_rgba(186,230,253,0.3)] active:scale-[0.98]"
           >
             <span>Explore Observatory</span>
             <ArrowRight className="h-3.5 w-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
@@ -122,7 +125,7 @@ export default function HeroOrbital() {
           <button
             type="button"
             onClick={() => setIsAiOpen(true)}
-            className="group inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 bg-[#050a18]/55 px-6 py-2.5 text-[11px] font-medium tracking-[0.14em] text-white/90 uppercase backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/[0.12] hover:text-white active:scale-[0.98]"
+            className="group inline-flex cursor-pointer items-center gap-2 rounded-full border border-white/20 bg-[#050a18]/60 px-6 py-2.5 text-[11px] font-medium tracking-[0.14em] text-white/95 uppercase backdrop-blur-xl transition-all duration-300 hover:border-white/40 hover:bg-white/[0.14] hover:text-white active:scale-[0.98]"
           >
             <Sparkles className="h-3.5 w-3.5 text-sky-300 transition-transform duration-300 group-hover:scale-110" />
             <span>Ask AI Co-Pilot</span>
@@ -132,7 +135,7 @@ export default function HeroOrbital() {
 
       {/* ── Whisper-Quiet Horizon Caption (Balanced & Non-Intrusive) ── */}
       <div className="pointer-events-none absolute inset-x-0 bottom-5 z-20 flex justify-center px-6 sm:bottom-7">
-        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 font-mono text-[10px] tracking-[0.2em] text-white/55 uppercase drop-shadow-[0_1px_8px_rgba(0,0,0,0.95)]">
+        <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 rounded-full border border-white/[0.08] bg-[#020510]/38 px-5 py-1.5 font-mono text-[10px] tracking-[0.2em] text-white/75 uppercase backdrop-blur-md [text-shadow:0_1px_8px_rgba(0,0,0,0.95)]">
           <span className="inline-flex items-center gap-2 text-white/75">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/90 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
             LEO Horizon
