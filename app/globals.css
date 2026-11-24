@@ -204,6 +204,43 @@ canvas {
   animation: jarvis-sheen 1.8s cubic-bezier(0.4, 0, 0.2, 1) infinite;
 }
 
+/* Unified Cakrapala Luxury Observatory Loader Animations */
+@keyframes cakrapala-reticle-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cakrapala-orbit-sweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes cakrapala-beam {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(220%); }
+}
+
+@keyframes cakrapala-breathe {
+  0%, 100% { opacity: 0.92; transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.03); }
+}
+
+.animate-cakrapala-reticle {
+  animation: cakrapala-reticle-slow 28s linear infinite;
+}
+
+.animate-cakrapala-orbit {
+  animation: cakrapala-orbit-sweep 1.8s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+
+.animate-cakrapala-beam {
+  animation: cakrapala-beam 1.55s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+.animate-cakrapala-breathe {
+  animation: cakrapala-breathe 3.2s ease-in-out infinite;
+}
+
 /* Hide Next.js dev indicator floating badge in bottom-left corner */
 nextjs-portal,
 #next-dev-indicator,

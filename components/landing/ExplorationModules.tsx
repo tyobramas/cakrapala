@@ -13,7 +13,6 @@ import {
   Crosshair,
   BookOpen,
   Layers,
-  Eye,
 } from "lucide-react";
 
 interface ModuleCard {
@@ -86,7 +85,7 @@ const MODULES: ModuleCard[] = [
     title: "Asteroid Defense",
     subtitle: "NASA JPL NEO RADAR",
     description: "Real-time Near-Earth Object proximity radar tracking active asteroids, PHA threat hazard ratings, and landmark scales.",
-    href: "/explore",
+    href: "/asteroids",
     badge: "NASA NeoWs",
     badgeColor: "bg-cyan-500/15 text-cyan-300 border-cyan-500/40",
     engine: "NASA JPL NeoWs",
@@ -109,7 +108,7 @@ const MODULES: ModuleCard[] = [
     title: "Satellite Fleet",
     subtitle: "NORAD SGP4 FLEET RADAR",
     description: "Multi-satellite flight operations console tracking ISS, Hubble, Tiangong CSS, and Starlink with live SGP4 physics.",
-    href: "/iss",
+    href: "/satellites",
     badge: "SGP4 NORAD",
     badgeColor: "bg-amber-500/15 text-amber-300 border-amber-500/40",
     engine: "CesiumJS & SGP4",
@@ -147,29 +146,6 @@ const MODULES: ModuleCard[] = [
     features: [
       "100% English Verified Definitions",
       "Direct 1-Click SYS-AI Query Bridge",
-    ],
-  },
-  {
-    id: "osint",
-    sysCode: "SYS-06 // GEOSINT",
-    title: "GEOSINT (Earth Intelligence)",
-    subtitle: "GLOBAL SITUATIONAL AWARENESS",
-    description: "Real-time 3D global situational awareness system integrating 7 open intelligence layers: earthquakes, wildfires, storms, air traffic, maritime vessels, webcams, and satellite imagery.",
-    href: "/osint",
-    badge: "CESIUMJS 3D",
-    badgeColor: "bg-lime-500/15 text-lime-300 border-lime-500/40",
-    engine: "CesiumJS & Multi-Feed OSINT",
-    icon: Eye,
-    gradient: "from-[#141c33]/90 to-[#0b1222]/95",
-    borderColor: "border-slate-800 hover:border-lime-400",
-    telemetry: [
-      { label: "LAYERS", value: "7 ACTIVE LAYERS" },
-      { label: "RADAR", value: "ADS-B & AIS LIVE" },
-      { label: "IMAGERY", value: "NASA GIBS DAILY" },
-    ],
-    features: [
-      "7 Integrated Open-Source Intelligence Layers",
-      "Full Global 3D Planetary Awareness",
     ],
   },
 ];

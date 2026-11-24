@@ -2,8 +2,7 @@
 
 import React, { useState } from "react";
 import { AsteroidNeoObject } from "@/lib/asteroid/types";
-import { OPS, OPS_TYPE } from "@/lib/ui/opsTheme";
-import { useOpsMode } from "@/lib/ui/opsMode";
+import { Maximize2, X } from "lucide-react";
 
 export interface Landmark {
   id: string;
@@ -13,19 +12,17 @@ export interface Landmark {
 }
 
 export const LANDMARKS: readonly Landmark[] = [
-  { id: "bus", m: 12, label: "City bus", shortLabel: "12m Bus" },
+  { id: "bus", m: 12, label: "City Bus", shortLabel: "12m Bus" },
   { id: "747", m: 76, label: "Boeing 747", shortLabel: "76m 747" },
-  { id: "liberty", m: 93, label: "Statue of Liberty", shortLabel: "93m Liberty" },
   { id: "monas", m: 132, label: "Monas", shortLabel: "132m Monas" },
   { id: "eiffel", m: 330, label: "Eiffel Tower", shortLabel: "330m Eiffel" },
-  { id: "empire", m: 443, label: "Empire State Bldg", shortLabel: "443m Empire" },
+  { id: "empire", m: 443, label: "Empire State", shortLabel: "443m Empire" },
   { id: "burj", m: 828, label: "Burj Khalifa", shortLabel: "828m Burj" },
 ] as const;
 
 const MIN_M = 5;
 const MAX_M = 2000;
 
-// Logarithmic scale mapping: 5 m -> 0%, 2000 m -> 100%
 function toPercent(m: number): number {
   const clamped = Math.max(MIN_M, Math.min(MAX_M, m));
   return (
@@ -39,211 +36,167 @@ interface ScaleRulerProps {
   selectedAsteroid: AsteroidNeoObject | null;
   selectedLandmark: Landmark | null;
   onSelectLandmark: (lm: Landmark | null) => void;
+  onOpenInspector?: () => void;
 }
 
 export default function ScaleRuler({
   selectedAsteroid,
   selectedLandmark,
   onSelectLandmark,
+  onOpenInspector,
 }: ScaleRulerProps) {
-  const { isOps } = useOpsMode();
   const [hoveredLandmark, setHoveredLandmark] = useState<Landmark | null>(null);
 
-  // Derive min/max/avg diameters from selected asteroid
   const minM = Math.round(
     selectedAsteroid?.estimated_diameter?.meters?.estimated_diameter_min ||
-      (selectedAsteroid?.avg_diameter_meters ? selectedAsteroid.avg_diameter_meters * 0.75 : 24)
+      (selectedAsteroid?.avg_diameter_meters ? selectedAsteroid.avg_diameter_meters * 0.75 : 24),
   );
   const maxM = Math.round(
     selectedAsteroid?.estimated_diameter?.meters?.estimated_diameter_max ||
-      (selectedAsteroid?.avg_diameter_meters ? selectedAsteroid.avg_diameter_meters * 1.35 : 54)
+      (selectedAsteroid?.avg_diameter_meters ? selectedAsteroid.avg_diameter_meters * 1.35 : 54),
   );
   const avgM = Math.round(selectedAsteroid?.avg_diameter_meters || (minM + maxM) / 2);
 
   const leftPct = toPercent(minM);
   const rightPct = toPercent(maxM);
-  const widthPct = Math.max(1.5, rightPct - leftPct);
+  const widthPct = Math.max(2, rightPct - leftPct);
 
-  const isHazard = selectedAsteroid?.is_potentially_hazardous_asteroid;
-  const bandColor = isHazard ? OPS.hazard : OPS.caution;
-
-  // Decade ticks & minor grid
-  const DECADES = [
-    { m: 10, label: "10 m" },
-    { m: 100, label: "100 m" },
-    { m: 1000, label: "1 km" },
-  ];
-
-  const MINOR_TICKS = [5, 20, 50, 200, 500, 2000];
-
+  const isHazard = Boolean(selectedAsteroid?.is_potentially_hazardous_asteroid);
   const activeCompare = hoveredLandmark || selectedLandmark;
   const ratio = activeCompare && avgM ? (avgM / activeCompare.m).toFixed(1) : null;
 
+  const DECADES = [
+    { m: 10, label: "10m" },
+    { m: 100, label: "100m" },
+    { m: 1000, label: "1km" },
+  ];
+
   return (
-    <div
-      className="w-full h-[74px] shrink-0 border-t flex flex-col justify-between px-3.5 py-1.5 select-none font-mono relative z-20"
-      style={{
-        background: OPS.panel,
-        borderColor: OPS.line,
-        color: OPS.text,
-      }}
-    >
-      {/* ── Top Micro Header: Provenance & Live Ratio Telemetry ─────────────── */}
-      <div className="flex items-center justify-between text-[9px] tracking-wider leading-none">
-        <div className="flex items-center gap-2">
-          <span className="font-semibold uppercase" style={{ color: OPS.textDim }}>
-            {isOps ? "DIAMETER UNCERTAINTY RULER" : "Physical Size Comparison"}
+    <div className="rounded-2xl border border-white/[0.10] bg-[#030714]/75 px-3.5 py-2.5 backdrop-blur-2xl shadow-[0_16px_48px_rgba(0,0,0,0.55)]">
+      {/* Compact Header Row: Target Identity + Live Ratio + Quick 3D Inspect */}
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2 font-mono text-[10px]">
+        <div className="flex min-w-0 items-center gap-2">
+          <span
+            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+              isHazard
+                ? "bg-rose-400 shadow-[0_0_8px_rgba(251,113,133,0.85)]"
+                : "bg-sky-300 shadow-[0_0_8px_rgba(125,211,252,0.75)]"
+            }`}
+          />
+          <span className="truncate font-semibold text-white">
+            {selectedAsteroid ? selectedAsteroid.name : "Select NEO Target"}
           </span>
-          <span style={{ color: OPS.textFaint }}>[5 m – 2 km LOG SCALE]</span>
+          {selectedAsteroid && (
+            <span className="hidden text-slate-400 tabular-nums sm:inline">
+              {minM}–{maxM} m
+            </span>
+          )}
         </div>
 
         <div className="flex items-center gap-2">
-          {activeCompare ? (
-            <div className="flex items-center gap-1.5">
-              <span style={{ color: OPS.text }}>
-                {selectedAsteroid?.name || "TARGET"} ({avgM}m) ≈{" "}
-                <span className="font-bold" style={{ color: OPS.accent }}>
-                  {ratio}× {activeCompare.label}
-                </span>{" "}
-                ({activeCompare.m}m)
+          {activeCompare && selectedAsteroid ? (
+            <span className="flex items-center gap-1.5 text-[10px] text-slate-300">
+              <span>
+                ≈ <strong className="text-sky-300">{ratio}×</strong> {activeCompare.label}
               </span>
-              {selectedLandmark?.id === activeCompare.id && (
-                <span
-                  className="px-1 py-0.2 border text-[8px] font-bold"
-                  style={{ borderColor: OPS.accent, color: OPS.accent }}
+              {selectedLandmark && (
+                <button
+                  type="button"
+                  onClick={() => onSelectLandmark(null)}
+                  className="inline-flex h-4 w-4 cursor-pointer items-center justify-center rounded-full bg-white/[0.08] text-slate-400 hover:bg-white/[0.16] hover:text-white"
+                  title="Clear 3D landmark silhouette"
                 >
-                  3D BENCHMARK ACTIVE
-                </span>
-              )}
-            </div>
-          ) : (
-            <span style={{ color: OPS.textFaint }}>
-              {selectedAsteroid ? (
-                <>
-                  BAND: <span style={{ color: OPS.text }}>{minM}–{maxM} m</span> (est. span ±
-                  {Math.round(((maxM - minM) / (2 * avgM)) * 100)}%) · CLICK LANDMARK FOR 3D SILHOUETTE
-                </>
-              ) : (
-                "SELECT ASTEROID TO INSPECT BAND"
+                  <X className="h-2.5 w-2.5" />
+                </button>
               )}
             </span>
+          ) : (
+            <span className="hidden text-[9px] tracking-[0.12em] text-slate-500 uppercase md:inline">
+              Click landmark for 3D scale
+            </span>
+          )}
+
+          {selectedAsteroid && onOpenInspector && (
+            <button
+              type="button"
+              onClick={onOpenInspector}
+              className="inline-flex cursor-pointer items-center gap-1 rounded-full border border-sky-400/30 bg-sky-400/12 px-2.5 py-0.5 text-[9.5px] font-medium tracking-[0.12em] text-sky-200 uppercase transition-all hover:border-sky-300/60 hover:bg-sky-400/20 hover:text-white"
+            >
+              <Maximize2 className="h-2.5 w-2.5" />
+              <span>3D &amp; Impact Lab</span>
+            </button>
           )}
         </div>
       </div>
 
-      {/* ── Main Ruler Strip ─────────────────────────────────────────────────── */}
-      <div className="relative w-full h-[44px] flex items-center">
-        {/* Horizontal Axis Baseline (1px) */}
-        <div
-          className="absolute left-0 right-0 top-[26px] h-[1px]"
-          style={{ background: OPS.line }}
-        />
+      {/* Logarithmic Ruler Track (5m – 2km) */}
+      <div className="relative h-9 w-full font-mono">
+        {/* Hairline baseline */}
+        <div className="absolute right-0 left-0 top-[21px] h-px bg-white/[0.12]" />
 
-        {/* Minor Ticks */}
-        {MINOR_TICKS.map((m) => (
+        {/* Decade Ticks */}
+        {DECADES.map((dec) => (
           <div
-            key={m}
-            className="absolute top-[23px] w-[1px] h-[6px]"
-            style={{
-              left: `${toPercent(m)}%`,
-              background: "#1E2A35",
-            }}
-          />
+            key={dec.m}
+            className="pointer-events-none absolute top-[18px] flex -translate-x-1/2 flex-col items-center"
+            style={{ left: `${toPercent(dec.m)}%` }}
+          >
+            <div className="h-2 w-px bg-white/[0.22]" />
+            <span className="mt-0.5 text-[8.5px] text-slate-500">{dec.label}</span>
+          </div>
         ))}
 
-        {/* Decade Ticks with Text Labels Below Axis */}
-        {DECADES.map((dec) => {
-          const x = toPercent(dec.m);
-          return (
-            <div
-              key={dec.m}
-              className="absolute flex flex-col items-center -translate-x-1/2"
-              style={{ left: `${x}%`, top: "20px" }}
-            >
-              <div className="w-[1px] h-[10px]" style={{ background: OPS.textFaint }} />
-              <span className="text-[9px] mt-0.5" style={{ color: OPS.textFaint }}>
-                {dec.label}
-              </span>
-            </div>
-          );
-        })}
-
-        {/* ── Asteroid Uncertainty Band (160ms Smooth CSS Animation) ─────────── */}
+        {/* Asteroid Diameter Uncertainty Band */}
         {selectedAsteroid && (
           <div
-            className="absolute top-[8px] h-[18px] flex items-center justify-center pointer-events-none"
+            className="pointer-events-none absolute top-[14px] h-[14px] rounded-full transition-all duration-200"
             style={{
               left: `${leftPct}%`,
               width: `${widthPct}%`,
-              background: isHazard ? "rgba(194, 74, 62, 0.35)" : "rgba(200, 149, 46, 0.35)",
-              borderLeft: `2px solid ${bandColor}`,
-              borderRight: `2px solid ${bandColor}`,
-              borderTop: `1px solid ${bandColor}40`,
-              borderBottom: `1px solid ${bandColor}40`,
-              transition:
-                "left 160ms cubic-bezier(0.2, 0, 0.4, 1), width 160ms cubic-bezier(0.2, 0, 0.4, 1)",
+              background: isHazard
+                ? "linear-gradient(90deg, rgba(244,63,94,0.35), rgba(251,113,133,0.55))"
+                : "linear-gradient(90deg, rgba(56,189,248,0.28), rgba(125,211,252,0.52))",
+              border: isHazard
+                ? "1px solid rgba(251,113,133,0.8)"
+                : "1px solid rgba(125,211,252,0.75)",
             }}
-          >
-            {/* Top End Caps */}
-            <div
-              className="absolute -top-1 left-0 w-[4px] h-[2px] -translate-x-[1px]"
-              style={{ background: bandColor }}
-            />
-            <div
-              className="absolute -top-1 right-0 w-[4px] h-[2px] translate-x-[1px]"
-              style={{ background: bandColor }}
-            />
-
-            {/* Centered Band Estimation Label */}
-            <span
-              className="text-[9px] font-bold tracking-tight px-1 whitespace-nowrap drop-shadow-sm select-none"
-              style={{ color: OPS.text }}
-            >
-              {minM}–{maxM} m (est.)
-            </span>
-          </div>
+          />
         )}
 
-        {/* ── Landmark Ticks & Interactive Pins (Above Axis) ─────────────────── */}
+        {/* Interactive Landmark Pins */}
         {LANDMARKS.map((lm) => {
-          const x = toPercent(lm.m);
           const isSelected = selectedLandmark?.id === lm.id;
           const isHovered = hoveredLandmark?.id === lm.id;
-
           return (
             <button
               key={lm.id}
+              type="button"
               onClick={() => onSelectLandmark(isSelected ? null : lm)}
               onMouseEnter={() => setHoveredLandmark(lm)}
               onMouseLeave={() => setHoveredLandmark(null)}
-              className="absolute top-0 -translate-x-1/2 flex flex-col items-center cursor-pointer group focus:outline-none z-10"
-              style={{ left: `${x}%` }}
-              title={`${lm.label} (${lm.m}m) — Click to project 3D comparison`}
+              style={{ left: `${toPercent(lm.m)}%` }}
+              title={`${lm.label} (${lm.m}m) — Project 3D comparison next to asteroid`}
+              className="group absolute top-0 z-10 flex -translate-x-1/2 cursor-pointer flex-col items-center focus:outline-none"
             >
-              {/* Landmark Label */}
               <span
-                className={`text-[8px] font-mono whitespace-nowrap transition-colors duration-[120ms] ${
+                className={`whitespace-nowrap text-[8.5px] transition-colors ${
                   isSelected
-                    ? "font-bold text-[#5A8FB8]"
+                    ? "font-semibold text-sky-300"
                     : isHovered
-                    ? "text-[#C9D4DF]"
-                    : "text-[#7C8B99]"
+                      ? "text-white"
+                      : "text-slate-400"
                 }`}
               >
                 {lm.shortLabel}
               </span>
-
-              {/* 6px Vertical Landmark Tick connecting to Axis */}
-              <div
-                className="w-[1.5px] h-[7px] mt-0.5 transition-colors duration-[120ms]"
-                style={{
-                  background: isSelected
-                    ? OPS.accent
+              <span
+                className={`mt-0.5 h-2 w-[1.5px] rounded-full transition-all ${
+                  isSelected
+                    ? "bg-sky-300 shadow-[0_0_8px_rgba(125,211,252,0.9)]"
                     : isHovered
-                    ? OPS.text
-                    : OPS.textFaint,
-                  boxShadow: isSelected ? `0 0 6px ${OPS.accent}` : undefined,
-                }}
+                      ? "bg-white/80"
+                      : "bg-white/25"
+                }`}
               />
             </button>
           );

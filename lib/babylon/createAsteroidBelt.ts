@@ -1,7 +1,7 @@
 /**
- * Main Asteroid Belt generator between Mars (21.0 AU visual) and Jupiter (41.0 AU visual).
- *
- * Spans between 26.5 and 35.5 visual scene units with 3,500 varied rocky particles.
+ * Main Asteroid Belt positioned at its real heliocentric span (2.1 – 3.3 AU)
+ * via the shared `auToSceneRadius` mapping and driven by Kepler's 3rd Law
+ * (mean orbital period ~4.55 Earth years at a ≈ 2.75 AU).
  */
 
 import {
@@ -12,59 +12,57 @@ import {
   Mesh,
   CloudPoint,
 } from "@babylonjs/core";
+import { auToSceneRadius } from "../astronomy/solarSystemPhysics";
 
 export interface AsteroidBeltHandle {
   mesh: Mesh;
-  updateRotation: (deltaSeconds: number, speedMultiplier: number) => void;
+  /** Advances the belt by `deltaDays` simulated Earth days using Kepler's 3rd Law. */
+  updateBySimDays: (deltaDays: number) => void;
 }
 
-/**
- * Creates the high-density Main Asteroid Belt with realistic Keplerian orbital distribution.
- */
+// Mean Main Belt semi-major axis ≈ 2.75 AU => Kepler period T = 2.75^1.5 = 4.560 years ≈ 1665.7 days
+const MEAN_BELT_PERIOD_DAYS = Math.pow(2.75, 1.5) * 365.256;
+const BELT_RAD_PER_DAY = (Math.PI * 2) / MEAN_BELT_PERIOD_DAYS;
+
 export function createAsteroidBelt(scene: Scene): AsteroidBeltHandle {
-  const asteroidCount = 1800;
-  const pcs = new PointsCloudSystem("asteroidBeltPCS", 1.8, scene);
+  const asteroidCount = 2200;
+  const pcs = new PointsCloudSystem("asteroidBeltPCS", 1.55, scene);
 
-  const innerR = 26.5;
-  const outerR = 35.0;
+  const innerAU = 2.12;
+  const outerAU = 3.28;
 
-  // Custom particle initializer
   pcs.addPoints(asteroidCount, (particle: CloudPoint) => {
-    // Semi-Gaussian radial distribution clustering around the center of the belt (30.5 AU visual)
+    // Triangular radial distribution peaking near 2.7 AU (between Mars & Jupiter)
     const u1 = Math.random();
     const u2 = Math.random();
-    const randRadius = innerR + ((u1 + u2) / 2) * (outerR - innerR);
+    const rAU = innerAU + ((u1 + u2) / 2) * (outerAU - innerAU);
+    const sceneR = auToSceneRadius(rAU);
 
-    // Orbital angle
     const theta = Math.random() * Math.PI * 2;
-
-    // Small vertical inclination dispersion (tilted orbital planes)
-    const ySpread = (Math.random() - 0.5) * 2.4;
+    // Realistic Main Belt orbital inclination dispersion (~±8° Gaussian-like)
+    const incDeg = ((Math.random() + Math.random()) / 2 - 0.5) * 14;
+    const y = Math.sin((incDeg * Math.PI) / 180) * sceneR * 0.35;
 
     particle.position = new Vector3(
-      Math.cos(theta) * randRadius,
-      ySpread,
-      Math.sin(theta) * randRadius
+      Math.cos(theta) * sceneR,
+      y,
+      Math.sin(theta) * sceneR
     );
 
-    // Asteroid mineral composition color grading:
-    // - 70% C-Type Carbonaceous (Dark graphite grey / coal)
-    // - 20% S-Type Silicate (Ochre rock / warm brown)
-    // - 10% M-Type Nickel-Iron (Reflective metallic grey / pale gold)
+    // Authentic C-type (carbonaceous), S-type (silicate), M-type (metallic) albedo palette
     const mineralType = Math.random();
-    if (mineralType < 0.7) {
-      const b = 0.35 + Math.random() * 0.3;
-      particle.color = new Color4(b * 0.85, b * 0.82, b * 0.8, 0.88);
-    } else if (mineralType < 0.9) {
-      const b = 0.55 + Math.random() * 0.35;
-      particle.color = new Color4(b * 1.05, b * 0.9, b * 0.7, 0.92);
+    if (mineralType < 0.72) {
+      const b = 0.28 + Math.random() * 0.25;
+      particle.color = new Color4(b * 0.86, b * 0.83, b * 0.8, 0.85);
+    } else if (mineralType < 0.92) {
+      const b = 0.48 + Math.random() * 0.3;
+      particle.color = new Color4(b * 1.04, b * 0.88, b * 0.68, 0.9);
     } else {
-      const b = 0.75 + Math.random() * 0.25;
-      particle.color = new Color4(b * 0.95, b * 0.98, b * 1.0, 0.98);
+      const b = 0.68 + Math.random() * 0.24;
+      particle.color = new Color4(b * 0.95, b * 0.97, b * 1.0, 0.95);
     }
   });
 
-  // Build the point cloud mesh
   try {
     pcs.buildMeshAsync().then((mesh) => {
       const beltMesh = mesh as Mesh;
@@ -78,10 +76,9 @@ export function createAsteroidBelt(scene: Scene): AsteroidBeltHandle {
 
   return {
     mesh: pcs.mesh as Mesh,
-    updateRotation(deltaSeconds: number, speedMultiplier: number) {
+    updateBySimDays(deltaDays: number) {
       if (pcs.mesh) {
-        // Average Keplerian orbital speed for main belt asteroids
-        pcs.mesh.rotation.y += 0.05 * deltaSeconds * speedMultiplier * 0.3;
+        pcs.mesh.rotation.y += BELT_RAD_PER_DAY * deltaDays;
       }
     },
   };

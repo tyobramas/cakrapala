@@ -24,6 +24,7 @@ import {
 } from "lucide-react";
 import type { RealISSPayload } from "@/app/api/iss/route";
 import { SATELLITE_CATALOG } from "@/lib/satellites/satelliteCatalog";
+import ObservatoryLoader from "@/components/ui/ObservatoryLoader";
 
 // CesiumJS 3D globe — dynamic import with SSR disabled
 const CesiumISSGlobe = dynamic(
@@ -31,10 +32,12 @@ const CesiumISSGlobe = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex flex-col items-center justify-center bg-[#020713] font-mono text-cyan-400 text-xs gap-3">
-        <div className="w-10 h-10 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin" />
-        <span>INITIALIZING CESIUM 3D GLOBE...</span>
-      </div>
+      <ObservatoryLoader
+        variant="container"
+        title="CAKRAPALA"
+        subtitle="Initializing 3D orbital globe"
+        className="h-full w-full"
+      />
     ),
   }
 );
@@ -525,7 +528,7 @@ export default function RealtimeSatelliteTracker() {
           </div>
 
           <Link
-            href="/iss"
+            href="/satellites"
             className="flex items-center gap-1.5 text-cyan-400 hover:text-cyan-300 font-semibold transition-colors group"
           >
             <span>OPEN DEDICATED MISSION CONSOLE</span>

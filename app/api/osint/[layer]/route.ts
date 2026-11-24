@@ -120,17 +120,8 @@ export async function GET(
     );
   }
 
-  if (!config.enabled) {
-    return Response.json(
-      {
-        error: `Layer "${layerParam}" is not yet enabled. Coming soon.`,
-        layer: layerParam,
-      },
-      { status: 409 },
-    );
-  }
-
   // 2.5 Origin check for eyes layer (L3 license compliance: forbid 3rd party redistribution)
+  // Checked before enabled flag so unauthorized foreign origins are always rejected with 403.
   if (layerParam === 'eyes') {
     const origin = request.headers.get('origin');
     const referer = request.headers.get('referer');
@@ -169,6 +160,16 @@ export async function GET(
         return Response.json({ error: 'Forbidden: Invalid referer' }, { status: 403 });
       }
     }
+  }
+
+  if (!config.enabled) {
+    return Response.json(
+      {
+        error: `Layer "${layerParam}" is not yet enabled. Coming soon.`,
+        layer: layerParam,
+      },
+      { status: 409 },
+    );
   }
 
   // 3. Validate query params.

@@ -30,12 +30,6 @@ const NAV_ITEMS: NavItem[] = [
     desc: "3D Keplerian planetary orrery",
   },
   {
-    id: "osint",
-    label: "GeoINT",
-    href: "/osint",
-    desc: "Global Earth intelligence layers",
-  },
-  {
     id: "sky",
     label: "Sky Map",
     href: "/sky",
@@ -44,13 +38,13 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: "asteroids",
     label: "Asteroids",
-    href: "/explore",
+    href: "/asteroids",
     desc: "Near-Earth object defense radar",
   },
   {
     id: "satellites",
     label: "Satellites",
-    href: "/iss",
+    href: "/satellites",
     desc: "Real-time SGP4 orbital tracker",
   },
   {

@@ -1,13 +1,10 @@
 'use client';
-// components/osint/StormControl.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Control panel popover for the Tropical Cyclone layer (NHC + GDACS).
-//
-// Settings:
-//   - Toggle to include recent storms concluded within past 7 days (allPast)
-//   - Transparency / Legend explanation for GDACS Alert Levels
-//   - Mandatory coverage disclosure: NHC (Atlantic & East/Central Pacific) + GDACS (Global)
-// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * StormControl — Refined Glassmorphic Tropical Cyclone Settings (NOAA NHC + GDACS).
+ */
+
+import { CloudLightning, X, AlertTriangle, Info } from 'lucide-react';
 
 export interface StormSettings {
   allPast: boolean;
@@ -35,86 +32,87 @@ export default function StormControl({
       role="dialog"
       aria-label="Tropical Cyclone Settings"
       className="
-        absolute z-20 top-16 left-20 max-md:left-4 max-md:top-24 max-md:right-4
-        w-80 max-w-[calc(100vw-2rem)]
-        bg-slate-900/95 backdrop-blur-md border border-slate-700/60
-        rounded-2xl p-4 shadow-2xl text-slate-200
-        animate-in fade-in duration-150
+        fixed z-30 top-20 left-60 max-md:inset-x-4 max-md:top-28
+        w-[320px] max-w-[calc(100vw-2rem)]
+        rounded-2xl border border-white/[0.10] bg-[#030714]/78 p-4 text-slate-200
+        backdrop-blur-2xl shadow-[0_24px_64px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.1)]
       "
     >
-      {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <span className="text-base" aria-hidden="true">🌀</span>
-          <h2 className="text-sm font-semibold text-slate-100">
-            Tropical Cyclones (NHC + GDACS)
-          </h2>
+      <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-violet-400/25 bg-violet-400/10 text-violet-300">
+            <CloudLightning className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <h2 className="font-[family-name:var(--font-orbitron)] text-xs font-medium tracking-[0.14em] text-white uppercase">
+              Tropical Cyclones
+            </h2>
+            <p className="text-[10px] text-slate-400">NOAA NHC · GDACS Global</p>
+          </div>
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-200 rounded-lg p-1 hover:bg-slate-800 transition-colors"
-          aria-label="Close panel"
+          aria-label="Close storm settings"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition-colors hover:bg-white/12 hover:text-white"
         >
-          ✕
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
       {error && (
-        <div className="mt-3 p-2.5 rounded-xl bg-amber-950/40 border border-amber-800/50 text-amber-300 text-xs flex items-start gap-2">
-          <span className="text-sm shrink-0">⚠️</span>
+        <div className="mt-3 flex items-start gap-2 rounded-xl border border-amber-400/25 bg-amber-500/10 p-2.5 text-xs text-amber-100">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
           <span>{error}</span>
         </div>
       )}
 
-      {/* Toggles */}
       <div className="mt-4 space-y-4 text-xs">
         <div>
-          <label className="flex items-center justify-between cursor-pointer">
-            <span className="text-slate-300 font-medium">Include past storms</span>
+          <label className="flex cursor-pointer items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-200">
+              Include dissipated storms (7d)
+            </span>
             <input
               type="checkbox"
               checked={settings.allPast}
               onChange={(e) =>
                 onChange({ ...settings, allPast: e.target.checked })
               }
-              className="accent-violet-500 rounded w-4 h-4 cursor-pointer"
+              className="h-3.5 w-3.5 cursor-pointer rounded border-white/20 bg-white/5 accent-violet-400"
             />
           </label>
-          <p className="text-[11px] text-slate-400 mt-1">
-            Shows storms that dissipated within the last 7 days for post-disaster OSINT context.
+          <p className="mt-1 text-[10.5px] text-slate-400">
+            Displays recently concluded cyclones for post-event tracking context.
           </p>
         </div>
 
-        {/* Legend */}
-        <div className="pt-3 border-t border-slate-800/80">
-          <p className="text-slate-400 font-medium mb-2 uppercase text-[10px] tracking-wider">
+        <div className="border-t border-white/[0.08] pt-3">
+          <span className="mb-2 block font-mono text-[9.5px] tracking-[0.2em] text-slate-400 uppercase">
             GDACS Alert Levels
-          </p>
-          <div className="space-y-1.5 text-[11px]">
+          </span>
+          <div className="space-y-1.5 text-[11px] text-slate-300">
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />
-              <span className="text-slate-300">Red: High humanitarian impact / severe danger</span>
+              <span className="h-2 w-2 shrink-0 rounded-full bg-rose-500" />
+              <span>Red — Severe humanitarian impact</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-orange-400 shrink-0" />
-              <span className="text-slate-300">Orange: Significant population impact</span>
+              <span className="h-2 w-2 shrink-0 rounded-full bg-amber-400" />
+              <span>Orange — Significant coastal impact</span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-violet-400 shrink-0" />
-              <span className="text-slate-300">Green / Standard: Active cyclone / depression</span>
+              <span className="h-2 w-2 shrink-0 rounded-full bg-violet-400" />
+              <span>Green — Active cyclone / depression</span>
             </div>
           </div>
         </div>
 
-        {/* Coverage Note (Mandatory Step 7) */}
-        <div className="pt-3 border-t border-slate-800/80 bg-slate-950/40 -mx-4 -mb-4 p-4 rounded-b-2xl text-[11px] text-slate-400 space-y-1.5">
-          <div className="flex items-center gap-1.5 font-medium text-slate-300">
-            <span>ℹ️</span>
-            <span>Data Source Coverage</span>
+        <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-3 text-[10.5px] leading-relaxed text-slate-400">
+          <div className="mb-1 flex items-center gap-1.5 font-medium text-slate-200">
+            <Info className="h-3 w-3 text-violet-300" />
+            <span>Global Coverage</span>
           </div>
-          <p className="leading-relaxed">
-            High-precision track telemetry originates from <strong>NOAA NHC</strong> (Atlantic & East/Central Pacific). Global coverage (Western Pacific, Indian Ocean) is provided by <strong>GDACS</strong> (JRC European Commission).
-          </p>
+          High-precision track cones from <strong className="text-slate-200">NOAA NHC</strong> (Atlantic &amp; East/Central Pacific) merged with global alerts from <strong className="text-slate-200">GDACS</strong> (Western Pacific &amp; Indian Ocean).
         </div>
       </div>
     </div>

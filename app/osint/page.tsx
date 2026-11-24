@@ -1,25 +1,37 @@
 'use client';
-// app/osint/page.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// OSINT module main page.
-//
-// Layout:
-//   - Fullscreen Cesium globe (NaturalEarthII base + NASA GIBS satellite imagery)
-//   - Left rail: 7 layer icons from registry (disabled → dimmed + "Segera" tooltip)
-//   - DataAgeBadge for active layers (top-left overlay)
-//   - Imagery Date & Nominal Resolution chip (top-left / header)
-//   - ImageryControl popover for base layer, date, and overlay settings
-//   - FireControl popover for FIRMS settings (day range, night-only, source)
-//   - Attribution chip (bottom-right, permanent)
-//   - Responsive: rail → horizontal bar on mobile
-// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * GEOSINT — Cakrapala Global Earth Intelligence & Situational Awareness.
+ *
+ * Curated exclusively around 100% live, global, sustainable open data layers
+ * driven dynamically from `LAYER_REGISTRY`:
+ *   - Satellite Imagery (NASA GIBS daily 250m + Bing Maps Aerial ~1m auto-switch)
+ *   - Global Earthquakes (USGS real-time GeoJSON)
+ *   - Active Wildfires (NASA FIRMS 375m VIIRS NRT)
+ *   - Tropical Cyclones (NOAA NHC + GDACS Global)
+ *   - Live Air Traffic (adsb.lol ODbL + 60fps dead-reckoning)
+ */
 
 import { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import Link from 'next/link';
+import Image from 'next/image';
+import {
+  Activity,
+  Flame,
+  CloudLightning,
+  Plane,
+  Satellite,
+  ArrowLeft,
+  SlidersHorizontal,
+  X,
+  ExternalLink,
+  Search,
+  Globe2,
+} from 'lucide-react';
 import type { BBox, LayerId, OsintEntity } from '@/lib/osint/types';
 import { LAYER_REGISTRY, resolveDisplayMode } from '@/lib/osint/registry';
 import { useLayer } from '@/lib/osint/useLayer';
-import DataAgeBadge from '@/components/osint/DataAgeBadge';
 import type { OsintGlobeHandle } from '@/components/osint/OsintGlobe';
 import { OSINT_Z_INDEX } from '@/lib/osint/constants/zIndex';
 import {
@@ -39,23 +51,17 @@ import StormControl, {
 } from '@/components/osint/StormControl';
 import AirControl from '@/components/osint/AirControl';
 import type { AirFilterSettings } from '@/components/osint/layers/AirLayer';
-import SeaControl from '@/components/osint/SeaControl';
-import type { SeaFilterSettings } from '@/components/osint/layers/SeaLayer';
-import EyesControl from '@/components/osint/EyesControl';
-import type { EyesFilterSettings } from '@/components/osint/layers/EyesLayer';
-import WebcamViewer from '@/components/osint/WebcamViewer';
-import { isBBoxAreaAllowed } from '@/lib/osint/layers/fire';
-import { bboxToCenterRadius } from '@/lib/osint/layers/air/geo';
-import { isWithinSeaCoverage } from '@/lib/osint/layers/sea';
 import { DebugOverlay } from '@/components/osint/DebugOverlay';
 
-// Dynamic imports for Cesium components (no SSR).
 const OsintGlobe = dynamic(() => import('@/components/osint/OsintGlobe'), {
   ssr: false,
   loading: () => (
-    <div className="w-full h-full flex items-center justify-center bg-slate-950">
-      <div className="text-slate-400 animate-pulse font-mono text-sm">
-        Loading globe…
+    <div className="flex h-full w-full items-center justify-center bg-[#01030a]">
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-9 w-9 animate-spin rounded-full border border-white/15 border-t-white/80" />
+        <span className="font-mono text-[10px] tracking-[0.34em] text-slate-400 uppercase">
+          Initializing Earth Intelligence Globe
+        </span>
       </div>
     </div>
   ),
@@ -81,50 +87,67 @@ const AirLayer = dynamic(
   { ssr: false },
 );
 
-const SeaLayer = dynamic(
-  () => import('@/components/osint/layers/SeaLayer'),
-  { ssr: false },
-);
+type ControlPanelId = 'imagery' | 'fire' | 'storm' | 'air';
 
-const EyesLayer = dynamic(
-  () => import('@/components/osint/layers/EyesLayer'),
-  { ssr: false },
-);
-
-import {
-  Activity,
-  Flame,
-  CloudLightning,
-  Plane,
-  Ship,
-  Eye,
-  Satellite,
-  ChevronDown,
-} from 'lucide-react';
-
-// ── Layer icon mapping ──────────────────────────────────────────────────────
-
-const LAYER_ICONS: Record<LayerId, React.ComponentType<{ className?: string }>> = {
+const LAYER_ICONS: Partial<
+  Record<LayerId, React.ComponentType<{ className?: string }>>
+> = {
+  imagery: Satellite,
   quake: Activity,
   fire: Flame,
   storm: CloudLightning,
   air: Plane,
-  sea: Ship,
-  eyes: Eye,
-  imagery: Satellite,
 };
 
-const LAYER_ORDER: LayerId[] = [
-  'quake',
-  'air',
-  'sea',
+const CONFIGURABLE_LAYERS = new Set<LayerId>([
+  'imagery',
   'fire',
   'storm',
-  'eyes',
-  'imagery',
-];
+  'air',
+]);
 
-// ── Page component ──────────────────────────────────────────────────────────
+const LAYER_ORDER: LayerId[] = ['imagery', 'quake', 'storm', 'fire', 'air'];
+
+const QUICK_VIEWS = [
+  { id: 'global', label: 'Global', lat: -2.0, lon: 112.0, altM: 18_500_000 },
+  { id: 'indonesia', label: 'Indonesia', lat: -6.21, lon: 106.85, altM: 260_000 },
+  { id: 'japan', label: 'Japan', lat: 35.68, lon: 139.69, altM: 280_000 },
+  { id: 'europe', label: 'Europe', lat: 48.85, lon: 8.5, altM: 300_000 },
+] as const;
+
+/**
+ * Clamps a viewport BBox around its center so upstream regional APIs
+ * (adsb.lol max 250 nm, NASA FIRMS max 60°x60°) always query cleanly
+ * around what the user is viewing without failing silently on wide monitors.
+ */
+function clampBBoxToCenter(
+  bbox: BBox | undefined,
+  maxHalfLatDeg: number,
+  maxHalfLonDeg: number,
+): BBox | undefined {
+  if (!bbox) return undefined;
+  const [w, s, e, n] = bbox;
+  const cLat = Math.max(-85, Math.min(85, (s + n) / 2));
+  const cLon = w <= e ? (w + e) / 2 : (((w + e + 360) / 2 + 180) % 360) - 180;
+  const halfLat = Math.min(Math.max(Math.abs(n - s) / 2, 0.25), maxHalfLatDeg);
+  const cosLat = Math.max(0.25, Math.cos((cLat * Math.PI) / 180));
+  const effMaxHalfLon = maxHalfLonDeg / cosLat;
+  const rawHalfLon = w <= e ? (e - w) / 2 : (e + 360 - w) / 2;
+  const halfLon = Math.min(Math.max(rawHalfLon, 0.25), effMaxHalfLon);
+  return [
+    Math.max(-180, Number((cLon - halfLon).toFixed(4))),
+    Math.max(-89, Number((cLat - halfLat).toFixed(4))),
+    Math.min(180, Number((cLon + halfLon).toFixed(4))),
+    Math.min(89, Number((cLat + halfLat).toFixed(4))),
+  ];
+}
+
+function formatAltitude(altM: number): string {
+  if (altM >= 1_000_000) return `${(altM / 1_000_000).toFixed(1)}M m`;
+  if (altM >= 10_000) return `${Math.round(altM / 1000).toLocaleString()} km`;
+  if (altM >= 1_000) return `${(altM / 1000).toFixed(1)} km`;
+  return `${Math.round(altM)} m`;
+}
 
 export default function OsintPage() {
   const globeRef = useRef<OsintGlobeHandle>(null);
@@ -133,88 +156,91 @@ export default function OsintPage() {
   const [cameraAltM, setCameraAltM] = useState(2e7);
   const displayMode = resolveDisplayMode(cameraAltM);
   const [bbox, setBBox] = useState<BBox | undefined>(undefined);
-  const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
-    new Set(['quake', 'imagery', 'fire', 'storm', 'air', 'eyes']),
+  const [timeUtc, setTimeUtc] = useState('');
+
+  // Curated enabled layers dynamically read from LAYER_REGISTRY
+  const enabledLayerIds = useMemo(
+    () => LAYER_ORDER.filter((id) => LAYER_REGISTRY[id]?.enabled),
+    [],
   );
-  const [selectedEntity, setSelectedEntity] = useState<
-    import('@/lib/osint/types').OsintEntity | null
-  >(null);
-  const [isOverflowOpen, setIsOverflowOpen] = useState(false);
+
+  // Start cleanly with global overview layers (no immediate zoom-gate errors on load)
+  const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(
+    () => new Set(['imagery', 'quake', 'storm']),
+  );
+  const [openPanel, setOpenPanel] = useState<ControlPanelId | null>(null);
+  const [selectedEntity, setSelectedEntity] = useState<OsintEntity | null>(null);
+  const [activeImagerySource, setActiveImagerySource] = useState<string>('');
 
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      (window as any).__flyTo = (lat: number, lon: number, altM?: number) =>
-        globeRef.current?.flyTo(lat, lon, altM);
-    }
+    const tick = () =>
+      setTimeUtc(new Date().toUTCString().slice(17, 25) + ' UTC');
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, []);
 
-  // GIBS Imagery settings.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setOpenPanel(null);
+        setSelectedEntity(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, []);
+
+  // Satellite Imagery settings
   const defaultBase = useMemo(() => getDefaultBaseLayer(), []);
   const [imagerySettings, setImagerySettings] = useState<ImagerySettings>({
     baseLayerId: defaultBase.id,
     dateStr: getMaxDateForLayer(defaultBase),
+    hiResMode: 'auto',
     overlays: {
-      Coastlines_15m: { enabled: true, opacity: 0.8 },
+      Coastlines_15m: { enabled: true, opacity: 0.75 },
       Reference_Labels_15m: { enabled: false, opacity: 0.8 },
     },
   });
-  const [isImageryControlOpen, setIsImageryControlOpen] = useState(false);
   const [tileErrorNotice, setTileErrorNotice] = useState<{
     layerId: string;
     message: string;
     fallbackDate: string;
   } | null>(null);
 
-  // FIRMS Fire settings.
+  // Wildfire settings
   const [fireSettings, setFireSettings] = useState<FireSettings>({
     dayRange: 1,
     includeLowConfidence: false,
     nightOnly: false,
     source: 'auto',
   });
-  const [isFireControlOpen, setIsFireControlOpen] = useState(false);
 
-  // Storm Tropical Cyclone settings.
+  // Storm settings
   const [stormSettings, setStormSettings] = useState<StormSettings>({
     allPast: false,
   });
-  const [isStormControlOpen, setIsStormControlOpen] = useState(false);
 
-  // Air (ADS-B Flight Tracking) settings.
+  // Air traffic settings
   const [airSettings, setAirSettings] = useState<AirFilterSettings>({
     hideOnGround: true,
     militaryOnly: false,
     showTrails: true,
     maxAltFt: undefined,
   });
-  const [isAirControlOpen, setIsAirControlOpen] = useState(false);
 
-  // Sea (AIS Vessel Tracking) settings.
-  const [seaSettings, setSeaSettings] = useState<SeaFilterSettings>({
-    category: 'all',
-    hideAnchoredMoored: false,
-    hideOlderThan1Hour: true,
-    showTrails: true,
-  });
-  const [isSeaControlOpen, setIsSeaControlOpen] = useState(false);
+  // ── Live Data Layer Hooks ────────────────────────────────────────────────
 
-  // Eyes (Public Webcams) settings.
-  const [eyesSettings, setEyesSettings] = useState<EyesFilterSettings>({
-    provider: 'all',
-    hideInactive: true,
-  });
-  const [isEyesControlOpen, setIsEyesControlOpen] = useState(false);
-
-  // Quake layer hook.
   const quakeEnabled = activeLayers.has('quake');
   const quake = useLayer('quake', bbox, cameraAltM, quakeEnabled);
 
-  // Fire layer hook:
-  // Aggregate mode restriction: only fetch if camera <= 3M meters AND area <= 60°x60°
   const fireEnabled = activeLayers.has('fire');
-  const fireZoomAllowed = cameraAltM <= 3_000_000 && isBBoxAreaAllowed(bbox);
+  const fireZoomAllowed = cameraAltM <= 3_000_000 && Boolean(bbox);
+  const fireBBox = useMemo(
+    () => clampBBoxToCenter(bbox, 22, 22),
+    [bbox],
+  );
   const firePollingEnabled = fireEnabled && fireZoomAllowed;
-
   const fireExtraParams = useMemo(
     () => ({
       range: fireSettings.dayRange,
@@ -224,22 +250,17 @@ export default function OsintPage() {
     }),
     [fireSettings],
   );
-
   const fire = useLayer(
     'fire',
-    bbox,
+    fireBBox,
     cameraAltM,
     firePollingEnabled,
     fireExtraParams,
   );
 
-  // Storm layer hook:
-  // Global scope: active in all zoom levels, does not require bbox gating
   const stormEnabled = activeLayers.has('storm');
   const stormExtraParams = useMemo(
-    () => ({
-      allPast: stormSettings.allPast ? '1' : undefined,
-    }),
+    () => ({ allPast: stormSettings.allPast ? '1' : undefined }),
     [stormSettings],
   );
   const storm = useLayer(
@@ -250,49 +271,17 @@ export default function OsintPage() {
     stormExtraParams,
   );
 
-  // Air layer hook:
-  // Restricted: only fetch if camera <= 3M meters AND radius <= 250 nm
   const airEnabled = activeLayers.has('air');
-  const airRadiusCheck = bbox ? bboxToCenterRadius(bbox) : null;
-  const airZoomAllowed =
-    cameraAltM <= 3_000_000 &&
-    (airRadiusCheck ? !airRadiusCheck.isTooLarge : false);
+  const airZoomAllowed = cameraAltM <= 3_000_000 && Boolean(bbox);
+  // Clamp air query to ~2.4° half-span (~200 nm half-diagonal <= adsb.lol 250 nm limit)
+  const airBBox = useMemo(
+    () => clampBBoxToCenter(bbox, 2.3, 2.3),
+    [bbox],
+  );
   const airPollingEnabled = airEnabled && airZoomAllowed;
+  const air = useLayer('air', airBBox, cameraAltM, airPollingEnabled);
 
-  const air = useLayer(
-    'air',
-    bbox,
-    cameraAltM,
-    airPollingEnabled,
-  );
-
-  // Sea layer hook:
-  // Disabled in aggregate mode (> 3,000,000 m). Regional coverage handled gracefully.
-  const seaEnabled = activeLayers.has('sea');
-  const seaZoomAllowed = cameraAltM <= 3_000_000;
-  const seaPollingEnabled = seaEnabled && seaZoomAllowed;
-
-  const sea = useLayer(
-    'sea',
-    bbox,
-    cameraAltM,
-    seaPollingEnabled,
-  );
-
-  // Eyes layer hook:
-  // Strictly user-triggered, disabled in aggregate mode (> 3,000,000 m).
-  const eyesEnabled = activeLayers.has('eyes');
-  const eyesZoomAllowed = cameraAltM <= 3_000_000;
-  const eyesPollingEnabled = eyesEnabled && eyesZoomAllowed;
-
-  const eyes = useLayer(
-    'eyes',
-    bbox,
-    cameraAltM,
-    eyesPollingEnabled,
-  );
-
-  // ── Callbacks ───────────────────────────────────────────────────────────
+  // ── Handlers ─────────────────────────────────────────────────────────────
 
   const handleCameraAltChange = useCallback((alt: number) => {
     setCameraAltM(alt);
@@ -305,31 +294,42 @@ export default function OsintPage() {
   const toggleLayer = useCallback(
     (layerId: LayerId) => {
       const config = LAYER_REGISTRY[layerId];
-      if (!config.enabled) return; // Disabled layers can't be toggled.
+      if (!config?.enabled) return;
 
+      const wasActive = activeLayers.has(layerId);
       setActiveLayers((prev) => {
         const next = new Set(prev);
         if (next.has(layerId)) {
           next.delete(layerId);
-          if (layerId === 'imagery') setIsImageryControlOpen(false);
-          if (layerId === 'fire') setIsFireControlOpen(false);
-          if (layerId === 'storm') setIsStormControlOpen(false);
-          if (layerId === 'air') setIsAirControlOpen(false);
-          if (layerId === 'sea') setIsSeaControlOpen(false);
-          if (layerId === 'eyes') setIsEyesControlOpen(false);
+          setOpenPanel((cur) => (cur === layerId ? null : cur));
         } else {
           next.add(layerId);
-          if (layerId === 'fire') setIsFireControlOpen(true);
-          if (layerId === 'storm') setIsStormControlOpen(true);
-          if (layerId === 'air') setIsAirControlOpen(true);
-          if (layerId === 'sea') setIsSeaControlOpen(true);
-          if (layerId === 'eyes') setIsEyesControlOpen(true);
         }
         return next;
       });
+
+      // If user turns ON a regional live layer (Aircraft or Wildfires) while zoomed out > 3,000 km,
+      // smoothly fly closer so live data appears immediately instead of showing an empty screen.
+      if (!wasActive && (layerId === 'air' || layerId === 'fire') && cameraAltM > 3_000_000) {
+        const targetLat = bbox ? (bbox[1] + bbox[3]) / 2 : -6.21;
+        const targetLon = bbox ? (bbox[0] + bbox[2]) / 2 : 106.85;
+        const safeLat = Math.abs(targetLat) > 70 ? -6.21 : targetLat;
+        const safeLon = Math.abs(targetLat) > 70 ? 106.85 : targetLon;
+        globeRef.current?.flyTo(safeLat, safeLon, layerId === 'air' ? 260_000 : 900_000);
+      }
     },
-    [],
+    [activeLayers, cameraAltM, bbox],
   );
+
+  const toggleSettingsPanel = useCallback((panelId: ControlPanelId) => {
+    setActiveLayers((prev) => {
+      if (prev.has(panelId)) return prev;
+      const next = new Set(prev);
+      next.add(panelId);
+      return next;
+    });
+    setOpenPanel((cur) => (cur === panelId ? null : panelId));
+  }, []);
 
   const handleApplyFallbackDate = useCallback((fallbackDate: string) => {
     setImagerySettings((prev) => ({ ...prev, dateStr: fallbackDate }));
@@ -338,78 +338,78 @@ export default function OsintPage() {
 
   const handleFlyToAircraft = useCallback((entity: OsintEntity) => {
     setSelectedEntity(entity);
-    globeRef.current?.flyTo(entity.position.lat, entity.position.lon, 25000);
+    globeRef.current?.flyTo(entity.position.lat, entity.position.lon, 35_000);
   }, []);
-
-  const handleFlyToVessel = useCallback((entity: OsintEntity) => {
-    setSelectedEntity(entity);
-    globeRef.current?.flyTo(entity.position.lat, entity.position.lon, 25000);
-  }, []);
-
-  // ── Active base layer info ──────────────────────────────────────────────
 
   const activeBaseDef: GibsLayer =
     GIBS_LAYERS.find((l) => l.id === imagerySettings.baseLayerId) ?? defaultBase;
 
-  // ── Active attributions ─────────────────────────────────────────────────
-
   const activeAttributions = useMemo(() => {
     const list: string[] = [];
-
-    // Quake
-    if (activeLayers.has('quake')) {
-      list.push(LAYER_REGISTRY.quake.attribution);
-    }
-
-    // Fire
-    if (activeLayers.has('fire')) {
-      list.push(LAYER_REGISTRY.fire.attribution);
-    }
-
-    // Storm
-    if (activeLayers.has('storm')) {
-      list.push(LAYER_REGISTRY.storm.attribution);
-    }
-
-    // Air
-    if (activeLayers.has('air')) {
-      list.push(LAYER_REGISTRY.air.attribution);
-    }
-
-    // Imagery
+    if (activeLayers.has('quake')) list.push(LAYER_REGISTRY.quake.attribution);
+    if (activeLayers.has('fire')) list.push(LAYER_REGISTRY.fire.attribution);
+    if (activeLayers.has('storm')) list.push(LAYER_REGISTRY.storm.attribution);
+    if (activeLayers.has('air')) list.push(LAYER_REGISTRY.air.attribution);
     if (activeLayers.has('imagery')) {
-      list.push(activeBaseDef.attribution);
+      list.push(
+        activeImagerySource.includes('Bing')
+          ? 'Bing Maps / Microsoft'
+          : activeBaseDef.attribution,
+      );
       if (imagerySettings.overlays['Coastlines_15m']?.enabled) {
         list.push('Coastlines: OSM / NASA GIBS');
       }
-      if (imagerySettings.overlays['Reference_Labels_15m']?.enabled) {
-        list.push('Labels: OSM / NASA GIBS');
-      }
     }
-
-    // Deduplicate
     return Array.from(new Set(list.filter(Boolean)));
-  }, [activeLayers, activeBaseDef.attribution, imagerySettings.overlays]);
+  }, [
+    activeLayers,
+    activeBaseDef.attribution,
+    activeImagerySource,
+    imagerySettings.overlays,
+  ]);
 
-  // ── Compute Layers Pending Closer Zoom ──────────────────────────────────
-  const zoomPendingLayers = useMemo(() => {
-    const list: { id: string; label: string; icon: string }[] = [];
-    if (fireEnabled && !fireZoomAllowed) list.push({ id: 'fire', label: 'Wildfires (FIRMS)', icon: '🔥' });
-    if (airEnabled && !airZoomAllowed) list.push({ id: 'air', label: 'Aircraft (ADS-B)', icon: '✈️' });
-    if (seaEnabled && !seaZoomAllowed) list.push({ id: 'sea', label: 'Vessels (AIS)', icon: '🚢' });
-    if (eyesEnabled && !eyesZoomAllowed) list.push({ id: 'eyes', label: 'Webcams', icon: '👁️' });
-    return list;
-  }, [fireEnabled, fireZoomAllowed, airEnabled, airZoomAllowed, seaEnabled, seaZoomAllowed, eyesEnabled, eyesZoomAllowed]);
+  // Pending zoom hints (only for active layers that need closer altitude)
+  const zoomPendingLabels = useMemo(() => {
+    const items: string[] = [];
+    if (fireEnabled && !fireZoomAllowed) items.push('Wildfires');
+    if (airEnabled && !airZoomAllowed) items.push('Aircraft');
+    return items;
+  }, [fireEnabled, fireZoomAllowed, airEnabled, airZoomAllowed]);
 
-  // ── Debug layer status for ?debug=1 overlay ─────────────────────────────
+  // Per-layer live status summary for the left rail
+  const getLayerMeta = (layerId: LayerId): string => {
+    if (!activeLayers.has(layerId)) return 'Off';
+    switch (layerId) {
+      case 'imagery':
+        return activeImagerySource.includes('Bing')
+          ? '~1m Aerial'
+          : `${activeBaseDef.resolution}`;
+      case 'quake':
+        return quake.status === 'loading'
+          ? 'Syncing'
+          : `${quake.entities.length}`;
+      case 'storm':
+        return storm.status === 'loading'
+          ? 'Syncing'
+          : `${storm.entities.length}`;
+      case 'fire':
+        if (fire.error === 'MISSING_KEY') return 'No Key';
+        if (!fireZoomAllowed) return 'Zoom in';
+        return fire.status === 'loading' ? 'Syncing' : `${fire.entities.length}`;
+      case 'air':
+        if (!airZoomAllowed) return 'Zoom in';
+        return air.status === 'loading' ? 'Syncing' : `${air.entities.length}`;
+      default:
+        return 'On';
+    }
+  };
+
   const debugLayers = useMemo(
     () => [
-      { id: 'quake' as LayerId, enabled: quakeEnabled, active: activeLayers.has('quake'), displayMode, fetchedCount: quake.entities.length },
-      { id: 'fire' as LayerId, enabled: fireEnabled, active: activeLayers.has('fire'), displayMode, fetchedCount: fire.entities.length },
-      { id: 'storm' as LayerId, enabled: stormEnabled, active: activeLayers.has('storm'), displayMode, fetchedCount: storm.entities.length },
-      { id: 'air' as LayerId, enabled: airEnabled, active: activeLayers.has('air'), displayMode, fetchedCount: air.entities.length },
-      { id: 'sea' as LayerId, enabled: seaEnabled, active: activeLayers.has('sea'), displayMode, fetchedCount: sea.entities.length },
-      { id: 'eyes' as LayerId, enabled: eyesEnabled, active: activeLayers.has('eyes'), displayMode, fetchedCount: eyes.entities.length },
+      { id: 'quake' as LayerId, enabled: quakeEnabled, active: quakeEnabled, displayMode, fetchedCount: quake.entities.length },
+      { id: 'fire' as LayerId, enabled: fireEnabled, active: fireEnabled, displayMode, fetchedCount: fire.entities.length },
+      { id: 'storm' as LayerId, enabled: stormEnabled, active: stormEnabled, displayMode, fetchedCount: storm.entities.length },
+      { id: 'air' as LayerId, enabled: airEnabled, active: airEnabled, displayMode, fetchedCount: air.entities.length },
       { id: 'imagery' as LayerId, enabled: activeLayers.has('imagery'), active: activeLayers.has('imagery'), displayMode, fetchedCount: activeLayers.has('imagery') ? 1 : 0 },
     ],
     [
@@ -422,366 +422,13 @@ export default function OsintPage() {
       storm.entities.length,
       airEnabled,
       air.entities.length,
-      seaEnabled,
-      sea.entities.length,
-      eyesEnabled,
-      eyes.entities.length,
       displayMode,
     ],
   );
 
-  // ── Construct top-right status chips ────────────────────────────────────
-  const topChips: { id: string; node: React.ReactNode }[] = [];
-
-  // Zoom pending chip
-  if (zoomPendingLayers.length > 0) {
-    topChips.push({
-      id: 'zoom-pending',
-      node: (
-        <div key="zoom-pending" className="relative group">
-          <div
-            className="
-              flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-              bg-slate-900/90 hover:bg-slate-800/90 border border-amber-500/40
-              text-amber-200 text-xs font-mono shadow-lg backdrop-blur-md
-              cursor-help transition-all duration-150
-            "
-            title="Zoom in closer on the globe to load data for this layer"
-          >
-            <span>🔍</span>
-            <span className="font-semibold">
-              {zoomPendingLayers.length === 1
-                ? `Zoom in to load ${zoomPendingLayers[0].label.split(' ')[0]}`
-                : `Zoom in to load (${zoomPendingLayers.length} layers)`}
-            </span>
-            {zoomPendingLayers.length > 1 && (
-              <span className="text-[10px] text-amber-400/80">▾</span>
-            )}
-          </div>
-
-          {zoomPendingLayers.length > 1 && (
-            <div
-              className="
-                absolute top-full right-0 mt-1.5 hidden group-hover:flex
-                flex-col gap-1.5 p-2.5 rounded-xl bg-slate-900/95 border border-slate-700/80
-                shadow-2xl backdrop-blur-md text-[11px] text-slate-300 min-w-[220px] z-30
-              "
-            >
-              <span className="text-[10px] uppercase font-mono text-slate-400 tracking-wider font-semibold border-b border-slate-800 pb-1">
-                Pending Closer Zoom:
-              </span>
-              {zoomPendingLayers.map((l) => (
-                <div key={l.id} className="flex items-center gap-2 font-mono">
-                  <span className="text-sm">{l.icon}</span>
-                  <span className="text-slate-200">{l.label}</span>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      ),
-    });
-  }
-
-  // Imagery chip
-  if (activeLayers.has('imagery')) {
-    topChips.push({
-      id: 'imagery',
-      node: (
-        <button
-          key="imagery"
-          onClick={() => setIsImageryControlOpen((prev) => !prev)}
-          className="
-            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-            transition-all duration-150 hover:border-slate-500 cursor-pointer
-          "
-          title="Open NASA GIBS satellite imagery settings"
-          aria-label="NASA GIBS satellite imagery settings"
-        >
-          <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-          <span className="font-semibold text-slate-100">
-            Imagery: {imagerySettings.dateStr}
-          </span>
-          <span className="text-slate-500">·</span>
-          <span className="text-slate-300 font-sans">
-            {activeBaseDef.label.split(' ')[0]} {activeBaseDef.resolution}
-          </span>
-          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-        </button>
-      ),
-    });
-  }
-
-  // Quake freshness badge
-  if (quakeEnabled && quake.status !== 'idle') {
-    topChips.push({
-      id: 'quake-age',
-      node: (
-        <DataAgeBadge
-          key="quake-age"
-          name={LAYER_REGISTRY.quake.nameId}
-          ageMs={quake.ageMs}
-          status={quake.status}
-          refreshMs={LAYER_REGISTRY.quake.refreshMs}
-        />
-      ),
-    });
-  }
-
-  // Fire badges & controls
-  if (fireEnabled && fire.error === 'MISSING_KEY') {
-    topChips.push({
-      id: 'fire-error',
-      node: (
-        <button
-          key="fire-error"
-          onClick={() => setIsFireControlOpen(true)}
-          className="
-            px-2.5 py-1 rounded-lg bg-amber-950/70 border border-amber-500/50
-            text-[11px] text-amber-200 font-mono flex items-center gap-1.5 shadow
-            hover:bg-amber-900/80 transition-colors
-          "
-          title="FIRMS MAP_KEY environment variable is not configured on server"
-        >
-          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
-          <span>Wildfires: Configuration required</span>
-        </button>
-      ),
-    });
-  } else if (fireEnabled && fire.status !== 'idle' && !fire.error) {
-    topChips.push({
-      id: 'fire-age',
-      node: (
-        <div key="fire-age" title="NASA FIRMS NRT latency is 1-3 hours from satellite observation.">
-          <DataAgeBadge
-            name={LAYER_REGISTRY.fire.nameId}
-            ageMs={fire.ageMs}
-            status={fire.status}
-            refreshMs={LAYER_REGISTRY.fire.refreshMs}
-          />
-        </div>
-      ),
-    });
-  }
-  if (fireEnabled && fireZoomAllowed) {
-    topChips.push({
-      id: 'fire-control',
-      node: (
-        <button
-          key="fire-control"
-          onClick={() => setIsFireControlOpen((prev) => !prev)}
-          className="
-            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-            transition-all duration-150 hover:border-amber-500/50 cursor-pointer
-          "
-          title="Open NASA FIRMS wildfire settings"
-          aria-label="NASA FIRMS wildfire settings"
-        >
-          <span className="w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
-          <span className="font-semibold text-slate-100">
-            Fire: {fireSettings.dayRange}d ({fire.entities.length} hotspots)
-          </span>
-          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-        </button>
-      ),
-    });
-  }
-
-  // Storm freshness & active control
-  if (stormEnabled && storm.status !== 'idle') {
-    topChips.push({
-      id: 'storm-age',
-      node: (
-        <div key="storm-age" title="Tropical cyclone advisories published every 6 hours (03/09/15/21 UTC).">
-          <DataAgeBadge
-            name={LAYER_REGISTRY.storm.nameId}
-            ageMs={storm.ageMs}
-            status={storm.status}
-            refreshMs={LAYER_REGISTRY.storm.refreshMs}
-          />
-        </div>
-      ),
-    });
-  }
-  if (stormEnabled) {
-    topChips.push({
-      id: 'storm-control',
-      node: (
-        <button
-          key="storm-control"
-          onClick={() => setIsStormControlOpen((prev) => !prev)}
-          className="
-            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-            transition-all duration-150 hover:border-violet-500/50 cursor-pointer
-          "
-          title="Open tropical cyclone settings"
-          aria-label="Tropical cyclone settings"
-        >
-          <span className="w-2 h-2 rounded-full bg-violet-400 animate-pulse" />
-          <span className="font-semibold text-slate-100">
-            Storms: {storm.entities.length} active
-          </span>
-          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-        </button>
-      ),
-    });
-  }
-  if (stormEnabled && storm.status === 'ok' && storm.entities.length === 0) {
-    topChips.push({
-      id: 'storm-empty',
-      node: (
-        <div key="storm-empty" className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/80 border border-slate-700/40 text-slate-400 text-xs shadow-lg backdrop-blur-md">
-          <span>🌀</span>
-          <span>No active tropical cyclones currently</span>
-        </div>
-      ),
-    });
-  }
-
-  // Air freshness & control
-  if (airEnabled && airZoomAllowed && air.status !== 'idle') {
-    topChips.push({
-      id: 'air-age',
-      node: (
-        <div key="air-age" title="Live ADS-B feed from adsb.lol contributors (ODbL)">
-          <DataAgeBadge
-            name={LAYER_REGISTRY.air.nameId}
-            ageMs={air.ageMs}
-            status={air.status}
-            refreshMs={LAYER_REGISTRY.air.refreshMs}
-          />
-        </div>
-      ),
-    });
-  }
-  if (airEnabled && airZoomAllowed) {
-    topChips.push({
-      id: 'air-control',
-      node: (
-        <button
-          key="air-control"
-          onClick={() => setIsAirControlOpen((prev) => !prev)}
-          className="
-            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-            transition-all duration-150 hover:border-cyan-500/50 cursor-pointer
-          "
-          title="Open ADS-B air traffic settings"
-          aria-label="ADS-B air traffic settings"
-        >
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse" />
-          <span className="font-semibold text-slate-100">
-            Air: {air.entities.length}
-            {air.entities[0]?.raw?.prunedCount
-              ? ` (${air.entities.length} of ${Number(air.entities[0].raw.totalFound)} closest)`
-              : ' aircraft'}
-          </span>
-          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-        </button>
-      ),
-    });
-  }
-
-  // Sea freshness, coverage, control
-  if (seaEnabled && seaZoomAllowed && sea.status !== 'idle') {
-    topChips.push({
-      id: 'sea-age',
-      node: (
-        <div key="sea-age" title="AIS data from Fintraffic Digitraffic (CC BY 4.0)">
-          <DataAgeBadge
-            name={LAYER_REGISTRY.sea.nameId}
-            ageMs={sea.ageMs}
-            status={sea.status}
-            refreshMs={LAYER_REGISTRY.sea.refreshMs}
-          />
-        </div>
-      ),
-    });
-  }
-  if (seaEnabled && seaZoomAllowed && (sea.error === 'OUT_OF_COVERAGE' || (bbox && !isWithinSeaCoverage(bbox)))) {
-    topChips.push({
-      id: 'sea-coverage',
-      node: (
-        <div key="sea-coverage" className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900/90 border border-teal-500/40 text-teal-300 text-xs shadow-lg backdrop-blur-md">
-          <span>ℹ️</span>
-          <span>AIS coverage is currently limited to the Baltic Sea and Norway. Global coverage to follow.</span>
-        </div>
-      ),
-    });
-  } else if (seaEnabled && seaZoomAllowed && sea.error !== 'OUT_OF_COVERAGE' && (!bbox || isWithinSeaCoverage(bbox))) {
-    topChips.push({
-      id: 'sea-control',
-      node: (
-        <button
-          key="sea-control"
-          onClick={() => setIsSeaControlOpen((prev) => !prev)}
-          className="
-            flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-            bg-slate-900/85 hover:bg-slate-800/95 border border-slate-700/60
-            text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-            transition-all duration-150 hover:border-teal-500/50 cursor-pointer
-          "
-          title="Open AIS marine traffic settings"
-          aria-label="AIS marine traffic settings"
-        >
-          <span className="w-2 h-2 rounded-full bg-teal-400 animate-pulse" />
-          <span className="font-semibold text-slate-100">
-            Sea: {sea.entities.length}
-            {Boolean(sea.entities[0]?.raw?.cutCount)
-              ? ` (${sea.entities.length} of ${Number(sea.entities[0]?.raw?.totalFound)} closest)`
-              : ' vessels'}
-          </span>
-          <span className="text-[10px] text-slate-400 ml-0.5">⚙️</span>
-        </button>
-      ),
-    });
-  }
-
-  // Eyes freshness & control
-  if (eyesEnabled && eyesZoomAllowed && eyes.status !== 'idle') {
-    topChips.push({
-      id: 'eyes-age',
-      node: (
-        <div key="eyes-age" title="Public webcam data (Windy & Official Agencies)">
-          <DataAgeBadge
-            name={LAYER_REGISTRY.eyes.nameId}
-            ageMs={eyes.ageMs}
-            status={eyes.status}
-            refreshMs={LAYER_REGISTRY.eyes.refreshMs}
-            entityCount={eyes.entities.length}
-            noPulse={true}
-          />
-        </div>
-      ),
-    });
-  }
-  if (eyesEnabled && eyesZoomAllowed) {
-    topChips.push({
-      id: 'eyes-control',
-      node: (
-        <EyesControl
-          key="eyes-control"
-          filters={eyesSettings}
-          onChange={setEyesSettings}
-        />
-      ),
-    });
-  }
-
-  const MAX_VISIBLE_CHIPS = 4;
-  const visibleChips = topChips.length > MAX_VISIBLE_CHIPS ? topChips.slice(0, MAX_VISIBLE_CHIPS) : topChips;
-  const overflowChips = topChips.length > MAX_VISIBLE_CHIPS ? topChips.slice(MAX_VISIBLE_CHIPS) : [];
-
   return (
-    <div className="relative w-screen h-[100dvh] overflow-hidden bg-slate-950">
-      {/* Globe */}
+    <div className="relative h-[100dvh] w-screen overflow-hidden bg-[#01030a] font-sans text-slate-100 select-none">
+      {/* ── Full-Viewport 3D Cesium Globe ─────────────────────────────────── */}
       <div className="absolute inset-0" style={{ zIndex: OSINT_Z_INDEX.globe }}>
         <OsintGlobe
           ref={globeRef}
@@ -791,14 +438,16 @@ export default function OsintPage() {
           activeBaseLayerId={imagerySettings.baseLayerId}
           imageryDate={imagerySettings.dateStr}
           overlaySettings={imagerySettings.overlays}
+          hiResMode={imagerySettings.hiResMode}
+          onActiveSourceChange={setActiveImagerySource}
           onTileError={setTileErrorNotice}
           onViewerReady={setViewer}
           onViewerDestroy={() => setViewer(null)}
-          movingLayersActive={(airEnabled && airZoomAllowed) || (seaEnabled && seaZoomAllowed)}
+          movingLayersActive={airEnabled && airZoomAllowed}
         />
       </div>
 
-      {/* Quake entities rendered on globe */}
+      {/* ── Active Cesium Entity Layers ───────────────────────────────────── */}
       {viewer && quakeEnabled && (
         <QuakeLayer
           viewer={viewer}
@@ -808,7 +457,6 @@ export default function OsintPage() {
         />
       )}
 
-      {/* Fire entities rendered on globe (also renders prominent fires in aggregate mode) */}
       {viewer && fireEnabled && (fireZoomAllowed || fire.entities.length > 0) && (
         <FireLayer
           viewer={viewer}
@@ -819,7 +467,6 @@ export default function OsintPage() {
         />
       )}
 
-      {/* Storm entities rendered on globe */}
       {viewer && stormEnabled && (
         <StormLayer
           viewer={viewer}
@@ -830,7 +477,6 @@ export default function OsintPage() {
         />
       )}
 
-      {/* Air entities rendered on globe */}
       {viewer && airEnabled && airZoomAllowed && (
         <AirLayer
           viewer={viewer}
@@ -842,159 +488,236 @@ export default function OsintPage() {
         />
       )}
 
-      {/* Sea entities rendered on globe */}
-      {viewer && seaEnabled && seaZoomAllowed && (
-        <SeaLayer
-          viewer={viewer}
-          entities={sea.entities}
-          displayMode={displayMode}
-          filters={seaSettings}
-          selectedEntityId={selectedEntity?.id}
-          onSelectEntity={setSelectedEntity}
-        />
-      )}
-
-      {/* Eyes entities rendered on globe */}
-      {viewer && eyesEnabled && eyesZoomAllowed && (
-        <EyesLayer
-          viewer={viewer}
-          entities={eyes.entities}
-          displayMode={displayMode}
-          filters={eyesSettings}
-          selectedEntityId={selectedEntity?.id}
-          onSelectEntity={setSelectedEntity}
-        />
-      )}
-
-      {/* ── Layer Rail (left on desktop, top on mobile) ─────────────────── */}
-      <nav
-        aria-label="OSINT layer controls"
-        className="
-          absolute left-4 md:left-6 top-1/2 -translate-y-1/2
-          p-2 rounded-2xl bg-slate-900/90 border border-slate-700/70
-          shadow-[0_8px_32px_rgba(0,0,0,0.75)] backdrop-blur-md flex flex-col gap-2.5
-          max-md:flex-row max-md:left-1/2 max-md:-translate-x-1/2 max-md:top-4
-          max-md:translate-y-0 max-md:max-w-[calc(100vw-32px)] max-md:overflow-x-auto
-        "
-        style={{ zIndex: OSINT_Z_INDEX.layerRail }}
-      >
-        {LAYER_ORDER.map((layerId) => {
-          const config = LAYER_REGISTRY[layerId];
-          const isActive = activeLayers.has(layerId);
-          const isDisabled = !config.enabled;
-          const Icon = LAYER_ICONS[layerId];
-
-          return (
-            <button
-              key={layerId}
-              onClick={() => toggleLayer(layerId)}
-              disabled={isDisabled}
-              title={
-                isDisabled
-                  ? `${config.nameEn} — Soon`
-                  : config.nameEn
-              }
-              aria-label={`${config.nameEn}: ${isDisabled ? 'Soon' : isActive ? 'active' : 'inactive'}`}
-              aria-pressed={isActive}
-              className={`
-                relative w-11 h-11 rounded-xl flex items-center justify-center
-                transition-all duration-200
-                border backdrop-blur-md
-                ${
-                  isDisabled
-                    ? 'opacity-30 cursor-not-allowed border-slate-700/40 bg-slate-800/30 text-slate-500'
-                    : isActive
-                      ? 'border-white/20 bg-slate-800/70 shadow-lg shadow-purple-500/10 scale-105 text-white'
-                      : 'border-slate-700/40 bg-slate-800/50 hover:bg-slate-700/60 hover:scale-105 text-slate-300'
-                }
-              `}
-              style={
-                isActive && !isDisabled
-                  ? { boxShadow: `0 0 12px ${config.color}40` }
-                  : undefined
-              }
-            >
-              <Icon className="w-5 h-5 transition-transform" />
-              {/* Active indicator dot */}
-              {isActive && !isDisabled && (
-                <span
-                  className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full animate-pulse"
-                  style={{ backgroundColor: config.color }}
-                />
-              )}
-              {/* "Soon" tooltip for disabled */}
-              {isDisabled && (
-                <span className="absolute -bottom-5 text-[9px] text-slate-500 font-medium whitespace-nowrap">
-                  Soon
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </nav>
-
-      {/* ── Top-Right Chrome: Badges, Imagery & Layer Controls ───────────────── */}
-      <div
-        className="
-          absolute top-3 right-4 md:right-6 max-md:top-16 max-md:right-4
-          flex flex-wrap justify-end items-center gap-2
-          max-w-[calc(100vw-120px)] md:max-w-[700px]
-          pr-2 pointer-events-none
-        "
+      {/* ── 1. Minimalist Luxury Top Header Bar ───────────────────────────── */}
+      <header
+        className="pointer-events-none fixed inset-x-0 top-0 px-4 pt-3.5 sm:px-6 lg:px-8"
         style={{ zIndex: OSINT_Z_INDEX.topBar }}
       >
-        <div className="flex flex-wrap justify-end items-center gap-2 pointer-events-auto">
-          {visibleChips.map((c) => (
-            <div key={c.id}>{c.node}</div>
-          ))}
+        <div className="pointer-events-auto mx-auto flex max-w-[1560px] items-center justify-between gap-3">
+          {/* Left: Back to Home + Brand */}
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <Link
+              href="/"
+              className="group inline-flex items-center gap-2 rounded-full border border-white/[0.11] bg-[#030714]/58 px-3.5 py-2 text-[11px] font-medium tracking-[0.12em] text-slate-200 uppercase backdrop-blur-xl transition-all hover:border-white/25 hover:bg-white/[0.1] hover:text-white"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 text-slate-300 transition-transform group-hover:-translate-x-0.5" />
+              <span className="hidden sm:inline">Observatory</span>
+            </Link>
 
-          {overflowChips.length > 0 && (
-            <div className="relative">
-              <button
-                onClick={() => setIsOverflowOpen((prev) => !prev)}
-                className="
-                  flex items-center gap-1.5 px-3 py-1.5 rounded-xl
-                  bg-slate-900/90 hover:bg-slate-800/95 border border-slate-700/70
-                  text-slate-200 text-xs font-mono shadow-lg backdrop-blur-md
-                  transition-all duration-150 cursor-pointer
-                "
-                aria-label={`${overflowChips.length} additional status chips`}
-              >
-                <span className="font-semibold text-slate-100">+{overflowChips.length} more</span>
-                <ChevronDown
-                  className={`w-3.5 h-3.5 text-slate-400 transition-transform ${isOverflowOpen ? 'rotate-180' : ''}`}
+            <div className="flex items-center gap-2.5 rounded-full border border-white/[0.08] bg-[#030714]/50 py-1.5 pr-4 pl-2 backdrop-blur-xl">
+              <div className="flex h-7 w-7 items-center justify-center rounded-full border border-white/15 bg-white/[0.05] p-1">
+                <Image
+                  src="/cakrapala.png"
+                  alt="Cakrapala"
+                  width={24}
+                  height={24}
+                  className="h-full w-full object-contain"
                 />
-              </button>
-
-              {isOverflowOpen && (
-                <div
-                  className="
-                    absolute top-full right-0 mt-2 p-2.5 rounded-xl
-                    bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-md
-                    flex flex-col gap-2 min-w-[240px] max-w-[340px] z-50
-                  "
-                >
-                  <div className="text-[10px] uppercase font-mono text-slate-400 font-semibold px-1 pb-1 border-b border-slate-800">
-                    Additional Status ({overflowChips.length})
-                  </div>
-                  <div className="flex flex-col gap-2 items-end">
-                    {overflowChips.map((c) => (
-                      <div key={c.id} className="w-full flex justify-end">
-                        {c.node}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
+              </div>
+              <span className="font-[family-name:var(--font-orbitron)] text-[11px] font-medium tracking-[0.22em] text-white/95 sm:text-xs">
+                GEOINT
+              </span>
             </div>
-          )}
+          </div>
+
+          {/* Center: Quiet Telemetry & Active Basemap Pill */}
+          <button
+            type="button"
+            onClick={() => toggleSettingsPanel('imagery')}
+            className="hidden cursor-pointer items-center gap-2.5 rounded-full border border-white/[0.09] bg-[#030714]/55 px-4 py-1.5 backdrop-blur-xl transition-all hover:border-white/25 hover:bg-white/[0.08] md:flex"
+            title="Configure Satellite Imagery"
+          >
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+            <span className="font-mono text-[10px] font-medium tracking-[0.16em] text-white/90 uppercase">
+              {activeLayers.has('imagery')
+                ? activeImagerySource || `${activeBaseDef.label.split(' ')[0]} ${activeBaseDef.resolution}`
+                : 'Natural Earth Base'}
+            </span>
+            <span className="text-white/20">·</span>
+            <span className="font-mono text-[10px] tracking-[0.14em] text-slate-400 uppercase">
+              Alt {formatAltitude(cameraAltM)}
+            </span>
+          </button>
+
+          {/* Right: Live UTC + Sources Link */}
+          <div className="flex items-center gap-2">
+            <div className="hidden items-center gap-2 rounded-full border border-white/[0.08] bg-[#030714]/50 px-3.5 py-2 font-mono text-[10px] tracking-[0.14em] text-slate-300 backdrop-blur-xl sm:flex">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400/90" />
+              <span className="text-white/90">{timeUtc || '00:00:00 UTC'}</span>
+            </div>
+
+            <Link
+              href="/osint/sumber"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.10] bg-[#030714]/55 px-3 py-2 font-mono text-[10px] tracking-[0.14em] text-slate-300 uppercase backdrop-blur-xl transition-colors hover:border-white/25 hover:bg-white/[0.1] hover:text-white"
+            >
+              <span>Sources</span>
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
+        </div>
+      </header>
+
+      {/* ── 2A. Desktop Left Curated Layer Rail (md+) ─────────────────────── */}
+      <aside
+        aria-label="Earth Intelligence Layers"
+        className="pointer-events-auto fixed top-20 left-5 hidden w-52 flex-col gap-3 md:flex"
+        style={{ zIndex: OSINT_Z_INDEX.layerRail }}
+      >
+        <div className="rounded-2xl border border-white/[0.11] bg-[#020612]/74 p-2.5 backdrop-blur-2xl shadow-[0_16px_48px_rgba(0,0,0,0.6)]">
+          <div className="mb-1.5 flex items-center justify-between px-2.5 pt-0.5 pb-1">
+            <span className="font-mono text-[9px] font-medium tracking-[0.24em] text-slate-400 uppercase">
+              Live Layers
+            </span>
+            <span className="font-mono text-[9px] text-slate-500">
+              {activeLayers.size}/{enabledLayerIds.length}
+            </span>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            {enabledLayerIds.map((layerId) => {
+              const config = LAYER_REGISTRY[layerId];
+              const isActive = activeLayers.has(layerId);
+              const Icon = LAYER_ICONS[layerId] ?? Globe2;
+              const isConfigurable = CONFIGURABLE_LAYERS.has(layerId);
+              const meta = getLayerMeta(layerId);
+
+              return (
+                <div
+                  key={layerId}
+                  className={`flex items-center justify-between rounded-xl px-2 py-1.5 transition-all ${
+                    isActive
+                      ? 'bg-white/[0.10] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]'
+                      : 'text-slate-400 hover:bg-white/[0.05] hover:text-slate-200'
+                  }`}
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleLayer(layerId)}
+                    aria-pressed={isActive}
+                    className="flex min-w-0 flex-1 cursor-pointer items-center gap-2.5 text-left"
+                  >
+                    <span
+                      className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition-colors"
+                      style={{
+                        borderColor: isActive
+                          ? `${config.color}55`
+                          : 'rgba(255,255,255,0.08)',
+                        backgroundColor: isActive
+                          ? `${config.color}1c`
+                          : 'rgba(255,255,255,0.03)',
+                        color: isActive ? config.color : undefined,
+                      }}
+                    >
+                      <Icon className="h-3.5 w-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <span className="block truncate text-[11px] font-medium tracking-[0.03em]">
+                        {config.nameEn}
+                      </span>
+                      <span className="block font-mono text-[9px] text-slate-400">
+                        {meta}
+                      </span>
+                    </div>
+                  </button>
+
+                  {isConfigurable && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        toggleSettingsPanel(layerId as ControlPanelId)
+                      }
+                      aria-label={`${config.nameEn} settings`}
+                      title={`${config.nameEn} settings`}
+                      className={`ml-1 flex h-6 w-6 shrink-0 cursor-pointer items-center justify-center rounded-lg transition-colors ${
+                        openPanel === layerId
+                          ? 'bg-white/15 text-white'
+                          : 'text-slate-400 hover:bg-white/10 hover:text-white'
+                      }`}
+                    >
+                      <SlidersHorizontal className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Quick Regional Focus Presets (lets users zoom into live ADS-B / FIRMS effortlessly) */}
+        <div className="rounded-2xl border border-white/[0.10] bg-[#020612]/70 p-2.5 backdrop-blur-2xl shadow-[0_12px_36px_rgba(0,0,0,0.55)]">
+          <span className="mb-1.5 block px-2 font-mono text-[9px] font-medium tracking-[0.24em] text-slate-400 uppercase">
+            Quick Focus
+          </span>
+          <div className="grid grid-cols-2 gap-1">
+            {QUICK_VIEWS.map((v) => (
+              <button
+                key={v.id}
+                type="button"
+                onClick={() => globeRef.current?.flyTo(v.lat, v.lon, v.altM)}
+                className="cursor-pointer rounded-lg border border-white/[0.06] bg-white/[0.03] px-2 py-1.5 font-mono text-[9.5px] text-slate-300 transition-colors hover:border-white/20 hover:bg-white/[0.09] hover:text-white"
+              >
+                {v.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </aside>
+
+      {/* ── 2B. Mobile Horizontal Layer Strip (< md) ──────────────────────── */}
+      <div
+        className="pointer-events-none fixed inset-x-0 top-16 flex px-3 md:hidden"
+        style={{ zIndex: OSINT_Z_INDEX.layerRail }}
+      >
+        <div className="pointer-events-auto flex w-full items-center gap-1.5 overflow-x-auto rounded-full border border-white/[0.09] bg-[#030714]/65 p-1.5 backdrop-blur-xl">
+          {enabledLayerIds.map((layerId) => {
+            const config = LAYER_REGISTRY[layerId];
+            const isActive = activeLayers.has(layerId);
+            const Icon = LAYER_ICONS[layerId] ?? Globe2;
+            return (
+              <button
+                key={layerId}
+                type="button"
+                onClick={() => toggleLayer(layerId)}
+                className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-medium tracking-wider uppercase transition-all ${
+                  isActive
+                    ? 'bg-white/15 text-white'
+                    : 'text-slate-400'
+                }`}
+              >
+                <Icon className="h-3 w-3" />
+                <span>{config.nameEn}</span>
+              </button>
+            );
+          })}
         </div>
       </div>
 
-      {/* ── Imagery Control Popover ──────────────────────────────────────── */}
+      {/* ── 3. Bottom-Center Zoom Hint (Only when zoomed out > 3,000 km with Air/Fire active) ── */}
+      {zoomPendingLabels.length > 0 && !selectedEntity && (
+        <div
+          className="pointer-events-auto fixed bottom-12 left-1/2 -translate-x-1/2"
+          style={{ zIndex: OSINT_Z_INDEX.topBar }}
+        >
+          <div className="flex items-center gap-2.5 rounded-full border border-amber-400/35 bg-[#020612]/82 py-1.5 pr-2 pl-4 font-mono text-[10.5px] text-amber-100 backdrop-blur-xl shadow-[0_12px_36px_rgba(0,0,0,0.65)]">
+            <Search className="h-3.5 w-3.5 shrink-0 text-amber-300" />
+            <span className="whitespace-nowrap">
+              Zoom closer for {zoomPendingLabels.join(' & ')}
+            </span>
+            <button
+              type="button"
+              onClick={() => globeRef.current?.flyTo(-6.21, 106.85, 260_000)}
+              className="cursor-pointer rounded-full border border-amber-300/35 bg-amber-400/20 px-2.5 py-0.5 text-[9.5px] font-semibold tracking-wider text-amber-100 uppercase transition-colors hover:bg-amber-400/35"
+            >
+              Zoom In
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ── 4. Single-Active Settings Popovers (Never Overlap) ────────────── */}
       <ImageryControl
-        isOpen={isImageryControlOpen && activeLayers.has('imagery')}
-        onClose={() => setIsImageryControlOpen(false)}
+        isOpen={openPanel === 'imagery' && activeLayers.has('imagery')}
+        onClose={() => setOpenPanel(null)}
         settings={imagerySettings}
         onChange={setImagerySettings}
         tileErrorNotice={tileErrorNotice}
@@ -1002,269 +725,138 @@ export default function OsintPage() {
         onApplyFallbackDate={handleApplyFallbackDate}
       />
 
-      {/* ── Fire Control Popover ─────────────────────────────────────────── */}
       <FireControl
-        isOpen={isFireControlOpen && activeLayers.has('fire')}
-        onClose={() => setIsFireControlOpen(false)}
+        isOpen={openPanel === 'fire' && activeLayers.has('fire')}
+        onClose={() => setOpenPanel(null)}
         settings={fireSettings}
         onChange={setFireSettings}
         error={fire.error}
       />
 
-      {/* ── Storm Control Popover ────────────────────────────────────────── */}
       <StormControl
-        isOpen={isStormControlOpen && activeLayers.has('storm')}
-        onClose={() => setIsStormControlOpen(false)}
+        isOpen={openPanel === 'storm' && activeLayers.has('storm')}
+        onClose={() => setOpenPanel(null)}
         settings={stormSettings}
         onChange={setStormSettings}
         error={storm.error}
       />
 
-      {/* ── Air Control Popover ──────────────────────────────────────────── */}
       <AirControl
-        isOpen={isAirControlOpen && activeLayers.has('air')}
-        onClose={() => setIsAirControlOpen(false)}
+        isOpen={openPanel === 'air' && activeLayers.has('air')}
+        onClose={() => setOpenPanel(null)}
         settings={airSettings}
         onChange={setAirSettings}
         entities={air.entities}
         onFlyTo={handleFlyToAircraft}
       />
 
-      {/* ── Sea Control Popover ──────────────────────────────────────────── */}
-      <SeaControl
-        isOpen={isSeaControlOpen && activeLayers.has('sea')}
-        onClose={() => setIsSeaControlOpen(false)}
-        settings={seaSettings}
-        onChange={setSeaSettings}
-        vessels={sea.entities}
-        onFlyTo={handleFlyToVessel}
-      />
-
-      {/* ── Webcam Viewer Modal (Eyes layer) ─────────────────────────────── */}
-      {selectedEntity && selectedEntity.id.startsWith('eyes:') && (
-        <WebcamViewer
-          entity={selectedEntity}
-          onClose={() => setSelectedEntity(null)}
-        />
-      )}
-
-      {/* ── Selected Entity Panel (minimal, for other layers) ───────────── */}
-      {selectedEntity && !selectedEntity.id.startsWith('eyes:') && (
-        <div className="absolute z-10 bottom-16 left-1/2 -translate-x-1/2 max-w-sm w-full mx-4">
-          <div className="bg-slate-900/90 backdrop-blur-md border border-slate-700/50 rounded-xl p-4 shadow-xl">
+      {/* ── 5. Selected Entity Inspector Card ─────────────────────────────── */}
+      {selectedEntity && (
+        <div
+          className="pointer-events-auto fixed bottom-12 left-1/2 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2"
+          style={{ zIndex: OSINT_Z_INDEX.topBar }}
+        >
+          <div className="rounded-2xl border border-white/[0.12] bg-[#030714]/82 p-4 backdrop-blur-2xl shadow-[0_24px_64px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.1)]">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-slate-100 truncate">
+              <div className="min-w-0 flex-1">
+                <span className="font-mono text-[9px] tracking-[0.22em] text-slate-400 uppercase">
+                  {LAYER_REGISTRY[selectedEntity.layer]?.nameEn ?? selectedEntity.layer}
+                </span>
+                <h3 className="mt-0.5 truncate text-sm font-semibold text-white">
                   {selectedEntity.label}
                 </h3>
+
                 {selectedEntity.layer === 'quake' && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Mag:{' '}
-                    {selectedEntity.raw?.mag != null
-                      ? String(selectedEntity.raw.mag)
-                      : '–'}{' '}
-                    · Depth:{' '}
-                    {Math.abs(selectedEntity.position.altM / 1000).toFixed(1)} km
+                  <p className="mt-1.5 font-mono text-[11px] text-slate-300">
+                    Magnitude{' '}
+                    <strong className="text-fuchsia-300">
+                      {selectedEntity.raw?.mag != null
+                        ? String(selectedEntity.raw.mag)
+                        : '–'}
+                    </strong>{' '}
+                    · Depth{' '}
+                    <strong className="text-white">
+                      {Math.abs(selectedEntity.position.altM / 1000).toFixed(1)} km
+                    </strong>
                   </p>
                 )}
+
                 {selectedEntity.layer === 'fire' && (
-                  <p className="text-xs text-slate-400 mt-1">
-                    Intensity:{' '}
-                    {selectedEntity.raw?.frp != null
-                      ? `${selectedEntity.raw.frp} MW`
-                      : '–'}{' '}
-                    · Confidence:{' '}
-                    {String(selectedEntity.raw?.confidence || 'nominal').toUpperCase()} ·{' '}
-                    {selectedEntity.raw?.daynight === 'N' ? '🌙 Night' : '☀️ Day'}
+                  <p className="mt-1.5 font-mono text-[11px] text-slate-300">
+                    Radiative Power{' '}
+                    <strong className="text-amber-300">
+                      {selectedEntity.raw?.frp != null
+                        ? `${selectedEntity.raw.frp} MW`
+                        : '–'}
+                    </strong>{' '}
+                    · Confidence{' '}
+                    <strong className="text-white">
+                      {String(selectedEntity.raw?.confidence || 'nominal').toUpperCase()}
+                    </strong>
                   </p>
                 )}
+
                 {selectedEntity.layer === 'air' && (
-                  <div className="space-y-1 mt-1 text-xs text-slate-400">
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-cyan-300 font-mono">
+                  <div className="mt-1.5 space-y-1 font-mono text-[11px] text-slate-300">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="text-sky-300">
                         {Boolean(selectedEntity.raw?.onGround)
-                          ? 'ON GROUND'
-                          : `${Math.round(selectedEntity.position.altM * 3.28084).toLocaleString()} ft (${Math.round(selectedEntity.position.altM)} m)`}
+                          ? 'On Ground'
+                          : `${Math.round(selectedEntity.position.altM * 3.28084).toLocaleString()} ft`}
                       </span>
                       {Boolean(selectedEntity.raw?.acType) && (
-                        <span className="text-slate-300 font-mono">
+                        <span className="text-slate-400">
                           · {String(selectedEntity.raw?.acType)}
                         </span>
                       )}
                       {Boolean(selectedEntity.raw?.isMilitary) && (
-                        <span className="px-1.5 py-0.2 rounded bg-amber-950 text-amber-300 border border-amber-800/60 font-semibold text-[10px]">
-                          MILITARY
+                        <span className="rounded-full border border-amber-400/35 bg-amber-400/15 px-2 py-0.5 text-[9px] text-amber-200 uppercase">
+                          Military
                         </span>
                       )}
                     </div>
-                    <p>
-                      Speed:{' '}
-                      <span className="font-mono text-slate-200">
-                        {Math.round(Number(selectedEntity.raw?.speedKt ?? ((selectedEntity.speedMs ?? 0) * 1.94384)))} kt
+                    <p className="text-slate-400">
+                      Speed{' '}
+                      <span className="text-white">
+                        {Math.round(
+                          Number(
+                            selectedEntity.raw?.speedKt ??
+                              (selectedEntity.speedMs ?? 0) * 1.94384,
+                          ),
+                        )}{' '}
+                        kt
                       </span>
-                      {' '}({Math.round((selectedEntity.speedMs ?? 0) * 3.6)} km/h)
                       {selectedEntity.headingDeg != null && (
-                        <span> · Heading: {Math.round(selectedEntity.headingDeg)}°</span>
+                        <span> · Heading {Math.round(selectedEntity.headingDeg)}°</span>
                       )}
                     </p>
-                    {selectedEntity.raw?.verticalRateMs != null && (
-                      <p>
-                        Vertical Rate:{' '}
-                        <span className="font-mono text-slate-200">
-                          {Math.round(Number(selectedEntity.raw.verticalRateMs) / 0.00508)} ft/min
-                        </span>
-                      </p>
-                    )}
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400 pt-0.5">
-                      {Boolean(selectedEntity.raw?.registration) && (
-                        <span>Reg: {String(selectedEntity.raw?.registration)}</span>
-                      )}
-                      {Boolean(selectedEntity.raw?.squawk) && (
-                        <span>· Squawk: {String(selectedEntity.raw?.squawk)}</span>
-                      )}
-                      {Boolean(selectedEntity.raw?.hex) && (
-                        <span>· Hex: {String(selectedEntity.raw?.hex).toUpperCase()}</span>
-                      )}
-                    </div>
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/80">
-                      <span>Source: {String(selectedEntity.raw?.posSource || 'adsb_icao')}</span>
-                      <span>Position: {selectedEntity.raw?.seenPosS != null ? `${selectedEntity.raw.seenPosS}s ago` : 'fresh'}</span>
-                    </div>
                   </div>
                 )}
-                {selectedEntity.layer === 'sea' && (
-                  <div className="space-y-1 mt-1 text-xs text-slate-400">
-                    {/* Emergency SART Alert Banner */}
-                    {Boolean(selectedEntity.raw?.isEmergency) && (
-                      <div className="px-2 py-1 rounded bg-red-950/90 border border-red-500/80 text-red-200 text-xs font-semibold flex items-center gap-1.5 animate-pulse">
-                        <span>🚨</span>
-                        <span>{String(selectedEntity.raw?.navStatLabel || 'ACTIVE AIS SART EMERGENCY SIGNAL')}</span>
-                      </div>
-                    )}
-                    <div className="flex items-center gap-2">
-                      <span className="font-semibold text-teal-300 font-mono">
-                        {String(selectedEntity.raw?.shipTypeLabel || 'Vessel')}
-                      </span>
-                      {Boolean(selectedEntity.raw?.navStatLabel) && !selectedEntity.raw?.isEmergency && (
-                        <span
-                          className={`px-1.5 py-0.2 rounded text-[10px] font-medium border ${
-                            selectedEntity.raw?.isSpecialNav
-                              ? 'bg-amber-950/60 text-amber-300 border-amber-800/60'
-                              : 'bg-slate-800 text-slate-300 border-slate-700'
-                          }`}
-                        >
-                          {String(selectedEntity.raw?.navStatLabel)}
-                        </span>
-                      )}
-                    </div>
-                    <p>
-                      Speed:{' '}
-                      <span className="font-mono text-slate-200">
-                        {selectedEntity.raw?.sogKnots != null ? `${selectedEntity.raw.sogKnots} kt` : '–'}
-                      </span>
-                      {' '}({selectedEntity.speedMs != null ? `${Math.round(selectedEntity.speedMs * 3.6)} km/h` : '–'})
-                      {selectedEntity.raw?.cogRaw != null && Number(selectedEntity.raw.cogRaw) < 360 && (
-                        <span> · COG: {Math.round(Number(selectedEntity.raw.cogRaw))}°</span>
-                      )}
-                      {selectedEntity.headingDeg != null && (
-                        <span> · Heading: {Math.round(selectedEntity.headingDeg)}°</span>
-                      )}
-                      {selectedEntity.raw?.headingRaw === 511 && (
-                        <span className="text-[10px] text-slate-500"> (Heading n/a)</span>
-                      )}
-                    </p>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400">
-                      <span>MMSI: {String(selectedEntity.raw?.mmsi)}</span>
-                      {Boolean(selectedEntity.raw?.imo) && (
-                        <span>· IMO: {String(selectedEntity.raw?.imo)}</span>
-                      )}
-                      {Boolean(selectedEntity.raw?.callsign) && (
-                        <span>· Call: {String(selectedEntity.raw?.callsign)}</span>
-                      )}
-                    </div>
-                    {(selectedEntity.raw?.destination != null || selectedEntity.raw?.draughtM != null || selectedEntity.raw?.lengthM != null) && (
-                      <div className="flex items-center justify-between text-[11px] text-slate-300 pt-0.5">
-                        {Boolean(selectedEntity.raw?.destination) && (
-                          <span>Destination: {String(selectedEntity.raw?.destination)}</span>
-                        )}
-                        {Boolean(selectedEntity.raw?.draughtM) && (
-                          <span>Draught: {Number(selectedEntity.raw?.draughtM).toFixed(1)} m</span>
-                        )}
-                        {Boolean(selectedEntity.raw?.lengthM) && (
-                          <span>Dimensions: {String(selectedEntity.raw?.lengthM)}x{String(selectedEntity.raw?.widthM || '?')} m</span>
-                        )}
-                      </div>
-                    )}
-                    <div className="flex items-center justify-between text-[10px] text-slate-500 pt-1 border-t border-slate-800/80">
-                      <span>
-                        Reliability:{' '}
-                        {selectedEntity.raw?.positionReliable !== false ? (
-                          <span className="text-teal-400">Accurate (GNSS)</span>
-                        ) : (
-                          <span className="text-amber-400">Degraded</span>
-                        )}
-                      </span>
-                      <span>
-                        Position:{' '}
-                        {selectedEntity.raw?.ageS != null ? (
-                          Number(selectedEntity.raw.ageS) < 60
-                            ? `${selectedEntity.raw.ageS}s ago`
-                            : Number(selectedEntity.raw.ageS) < 3600
-                              ? `${Math.round(Number(selectedEntity.raw.ageS) / 60)}m ago`
-                              : `${Math.round(Number(selectedEntity.raw.ageS) / 3600)}h ago`
-                        ) : 'fresh'}
-                      </span>
-                    </div>
-                  </div>
-                )}
+
                 {selectedEntity.layer === 'storm' && (
-                  <div className="space-y-1 mt-1 text-xs text-slate-400">
-                    <div className="flex items-center gap-2">
-                      <span className="font-medium text-slate-200">
-                        {Math.round(Number(selectedEntity.raw?.windKmh ?? (selectedEntity.severity * 80 * 3.6)))} km/h
-                        {' '}({Math.round(Number(selectedEntity.raw?.windKt ?? (selectedEntity.severity * 80 / 0.514444)))} kt)
-                      </span>
+                  <div className="mt-1.5 space-y-1 text-xs text-slate-300">
+                    <p className="font-mono text-[11px]">
+                      Winds{' '}
+                      <strong className="text-violet-300">
+                        {Math.round(
+                          Number(
+                            selectedEntity.raw?.windKmh ??
+                              selectedEntity.severity * 80 * 3.6,
+                          ),
+                        )}{' '}
+                        km/h
+                      </strong>
                       {selectedEntity.raw?.pressureMb != null && (
-                        <span>· {String(selectedEntity.raw.pressureMb)} mb</span>
+                        <span> · {String(selectedEntity.raw.pressureMb)} mb</span>
                       )}
-                      <span
-                        className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
-                          selectedEntity.raw?.alertLevel === 'Red'
-                            ? 'bg-red-950 text-red-300 border border-red-800/60'
-                            : selectedEntity.raw?.alertLevel === 'Orange'
-                              ? 'bg-orange-950 text-orange-300 border border-orange-800/60'
-                              : 'bg-violet-950 text-violet-300 border border-violet-800/60'
-                        }`}
-                      >
-                        Alert {String(selectedEntity.raw?.alertLevel || 'Green')}
-                      </span>
-                    </div>
-                    {selectedEntity.raw?.movementDir != null && (
-                      <p>
-                        Heading: {String(selectedEntity.raw.movementDir)}°
-                        {selectedEntity.raw?.movementSpeedKt != null
-                          ? ` · Speed: ${Math.round(Number(selectedEntity.raw.movementSpeedKt))} kt`
-                          : ''}
-                      </p>
-                    )}
-                    {Array.isArray(selectedEntity.raw?.affectedCountries) &&
-                      selectedEntity.raw.affectedCountries.length > 0 && (
-                        <p className="text-slate-300">
-                          Affected Areas: {selectedEntity.raw.affectedCountries.join(', ')}
-                        </p>
-                      )}
-                    {selectedEntity.raw?.advisoryNum != null && (
-                      <p className="text-slate-400 text-[11px]">
-                        Advisory #{String(selectedEntity.raw.advisoryNum)}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-2 pt-1">
+                    </p>
+                    <div className="flex flex-wrap gap-3 pt-0.5 font-mono text-[10px]">
                       {selectedEntity.raw?.advisoryUrl != null && (
                         <a
                           href={String(selectedEntity.raw.advisoryUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[11px] text-sky-400 hover:text-sky-300 underline inline-flex items-center gap-0.5"
+                          className="text-sky-300 hover:text-white"
                         >
                           NHC Advisory ↗
                         </a>
@@ -1274,7 +866,7 @@ export default function OsintPage() {
                           href={String(selectedEntity.raw.reportUrl)}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="text-[11px] text-violet-400 hover:text-violet-300 underline inline-flex items-center gap-0.5"
+                          className="text-violet-300 hover:text-white"
                         >
                           GDACS Report ↗
                         </a>
@@ -1282,50 +874,40 @@ export default function OsintPage() {
                     </div>
                   </div>
                 )}
-                <p className="text-xs text-slate-500 mt-0.5">
+
+                <p className="mt-2 font-mono text-[10px] text-slate-500">
                   {selectedEntity.position.lat.toFixed(3)}°,{' '}
                   {selectedEntity.position.lon.toFixed(3)}° ·{' '}
-                  {new Date(selectedEntity.observedAt).toLocaleString('en-US')}
+                  {new Date(selectedEntity.observedAt).toUTCString().slice(5, 22)} UTC
                 </p>
               </div>
+
               <button
+                type="button"
                 onClick={() => setSelectedEntity(null)}
-                className="text-slate-500 hover:text-slate-300 text-lg leading-none"
-                aria-label="Close panel"
+                aria-label="Close entity inspector"
+                className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition-colors hover:bg-white/12 hover:text-white"
               >
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Attribution Chip (bottom-right, permanent) ──────────────────── */}
+      {/* ── 6. Quiet Minimal Attribution Footer ───────────────────────────── */}
       {activeAttributions.length > 0 && (
         <div
-          className="absolute bottom-7 right-2 max-w-md pointer-events-auto"
+          className="pointer-events-auto fixed right-4 bottom-3 max-w-lg"
           style={{ zIndex: OSINT_Z_INDEX.attribution }}
         >
-          <div className="bg-black/70 backdrop-blur-sm rounded-lg px-2.5 py-1 text-[10px] text-slate-400 leading-tight flex items-center justify-between gap-2 border border-slate-800/80 shadow-lg">
-            <div>
-              {activeAttributions.map((attr, i) => (
-                <span key={i}>
-                  {i > 0 && ' · '}
-                  {attr}
-                </span>
-              ))}
-            </div>
-            <a
-              href="/osint/sumber"
-              className="text-lime-400 hover:text-lime-300 underline font-mono text-[9px] shrink-0"
-            >
-              Sources &amp; Licenses ↗
-            </a>
+          <div className="rounded-full border border-white/[0.07] bg-[#020510]/55 px-3.5 py-1 font-mono text-[9.5px] text-slate-400 backdrop-blur-md">
+            {activeAttributions.join(' · ')}
           </div>
         </div>
       )}
 
-      {/* ── Development Debug HUD (?debug=1) ─────────────────────────────── */}
+      {/* ── Development Debug HUD (?debug=1) ──────────────────────────────── */}
       <DebugOverlay
         viewer={viewer}
         cameraAltM={cameraAltM}

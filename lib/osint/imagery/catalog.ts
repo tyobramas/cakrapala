@@ -1,44 +1,73 @@
 /**
- * NASA GIBS Imagery Catalog
+ * Imagery Catalog — NASA GIBS + Cesium Ion
  *
- * Verifikasi langsung dari GetCapabilities WMTS EPSG:4326:
+ * GIBS layers verified from WMTS GetCapabilities EPSG:4326:
  * URL: https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/1.0.0/WMTSCapabilities.xml
- * Tanggal Verifikasi: 2026-09-21
+ * Verified: 2026-09-21
+ *
+ * Cesium Ion layer uses Ion default World Imagery (Bing Maps Aerial).
  */
 
 export type GibsLayerType = 'base' | 'overlay';
 
 export interface GibsLayer {
-  /** Identifier resmi layer di WMTS Capabilities (ows:Identifier) */
+  /** Official layer identifier (WMTS ows:Identifier or internal key) */
   id: string;
-  /** Label ramah manusia untuk antarmuka pengguna */
+  /** Human-readable label for UI */
   label: string;
-  /** Jenis layer: 'base' untuk citra utama permukaan, 'overlay' untuk lapisan tematik di atasnya */
+  /** Layer kind: 'base' for surface imagery, 'overlay' for thematic overlay */
   type: GibsLayerType;
-  /** MIME type tile format */
+  /** Tile format MIME type */
   format: 'image/jpeg' | 'image/png';
-  /** TileMatrixSet identifier (e.g. '250m', '500m', '15.625m') */
+  /** TileMatrixSet identifier (e.g. '250m', '500m', '15.625m', 'webmercator') */
   tileMatrixSetID: string;
-  /** Level zoom maksimum (0-indexed: TileMatrix '0'..'N' => maximumLevel = N) */
+  /** Maximum zoom level (0-indexed: TileMatrix '0'..'N' => maximumLevel = N) */
   maximumLevel: number;
-  /** Resolusi nominal untuk tampilan informatif (misal: '250m', '500m', '15m') */
+  /** Nominal resolution for informational display (e.g. '250m', '~1m') */
   resolution: string;
-  /** Apakah layer memiliki dimensi waktu (harian) atau statis */
+  /** Whether the layer has a daily time dimension */
   hasTime: boolean;
   /**
-   * Latensi ketersediaan data dalam hari (UTC).
-   * Produk TrueColor membutuhkan ~1 hari (kemarin UTC), sedangkan produk Night Band
-   * (DNB) membutuhkan ~2 hari untuk mosaik global lengkap.
-   * Overlay statis memiliki latensi 0.
+   * Data availability latency in days (UTC).
+   * TrueColor products require ~1 day (yesterday UTC), Night Band (DNB)
+   * requires ~2 days for a complete global mosaic.
+   * Static overlays have latency 0.
    */
   latencyDays: number;
-  /** Apakah aktif secara default saat pertama kali dimuat */
+  /** Whether this layer is active by default on first load */
   defaultActive?: boolean;
-  /** Teks atribusi hak cipta / data source */
+  /** Copyright / data source attribution text */
   attribution: string;
+  /**
+   * Tiling scheme. Defaults to 'geographic' (EPSG:4326) for GIBS layers.
+   * Set to 'webmercator' for standard web map tiles (e.g. Cesium Ion, Esri).
+   */
+  tilingScheme?: 'geographic' | 'webmercator';
+  /**
+   * If true, this layer is sourced from Cesium Ion (requires Ion token).
+   * The provider factory uses createWorldImageryAsync() instead of URL templates.
+   */
+  isCesiumIon?: boolean;
 }
 
+export const ION_WORLD_IMAGERY_LAYER: GibsLayer = {
+  id: 'CesiumIon_WorldImagery',
+  label: 'High-Res Satellite (Bing)',
+  type: 'base',
+  format: 'image/jpeg',
+  tileMatrixSetID: 'webmercator',
+  maximumLevel: 19,
+  resolution: '~1m',
+  hasTime: false,
+  latencyDays: 0,
+  defaultActive: false,
+  attribution: 'Bing Maps / Microsoft',
+  tilingScheme: 'webmercator',
+  isCesiumIon: true,
+};
+
 export const GIBS_LAYERS: GibsLayer[] = [
+  // ── NASA GIBS Satellite Layers ────────────────────────────────────────
   {
     id: 'VIIRS_SNPP_CorrectedReflectance_TrueColor',
     label: 'VIIRS SNPP True Color',
@@ -67,7 +96,7 @@ export const GIBS_LAYERS: GibsLayer[] = [
   },
   {
     id: 'VIIRS_SNPP_DayNightBand_At_Sensor_Radiance',
-    label: 'VIIRS Lampu Malam (DNB)',
+    label: 'VIIRS Night Lights (DNB)',
     type: 'base',
     format: 'image/png',
     tileMatrixSetID: '500m',
@@ -80,7 +109,7 @@ export const GIBS_LAYERS: GibsLayer[] = [
   },
   {
     id: 'Coastlines_15m',
-    label: 'Garis Pantai (15m)',
+    label: 'Coastlines (15m)',
     type: 'overlay',
     format: 'image/png',
     tileMatrixSetID: '15.625m',
@@ -93,7 +122,7 @@ export const GIBS_LAYERS: GibsLayer[] = [
   },
   {
     id: 'Reference_Labels_15m',
-    label: 'Label Wilayah (15m)',
+    label: 'Region Labels (15m)',
     type: 'overlay',
     format: 'image/png',
     tileMatrixSetID: '15.625m',
@@ -106,7 +135,7 @@ export const GIBS_LAYERS: GibsLayer[] = [
   },
 ];
 
-/** Ambil entri layer default aktif untuk base imagery */
+/** Get the default active base layer entry for base imagery */
 export function getDefaultBaseLayer(): GibsLayer {
   return (
     GIBS_LAYERS.find((l) => l.type === 'base' && l.defaultActive) ??
@@ -114,12 +143,17 @@ export function getDefaultBaseLayer(): GibsLayer {
   );
 }
 
-/** Ambil seluruh layer base */
+/** Get all base layers */
 export function getBaseLayers(): GibsLayer[] {
   return GIBS_LAYERS.filter((l) => l.type === 'base');
 }
 
-/** Ambil seluruh layer overlay */
+/** Get all overlay layers */
 export function getOverlayLayers(): GibsLayer[] {
   return GIBS_LAYERS.filter((l) => l.type === 'overlay');
+}
+
+/** Get the Cesium Ion hi-res layer entry */
+export function getCesiumIonLayer(): GibsLayer {
+  return ION_WORLD_IMAGERY_LAYER;
 }

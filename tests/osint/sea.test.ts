@@ -115,7 +115,7 @@ describe('OSINT Sea Layer (AIS Vessel Tracking) — 18 Test Cases', () => {
 
   // ── 6. Timestamp Trap (timestamp 41 vs timestampExternal) ──────────────────
   it('6. ignores raw second "timestamp" for observation time; uses "timestampExternal" epoch', async () => {
-    const nowEpoch = 1789975012417;
+    const nowEpoch = Date.now() - 10_000;
     const adapter = new DigitrafficSourceAdapter();
 
     vi.spyOn(global, 'fetch').mockImplementation(async (url) => {

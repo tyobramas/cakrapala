@@ -8,7 +8,7 @@ interface SatelliteModeTabsProps {
 const tabs = [
     {
         id: "focus" as const,
-        href: "/iss",
+        href: "/satellites",
         label: "FOCUS TRACKER",
         tagline: "Single-Object Telemetry & Fly-Around",
         badge: "6 FLAGSHIP CRAFT",
@@ -16,7 +16,7 @@ const tabs = [
     },
     {
         id: "catalog" as const,
-        href: "/iss/catalog",
+        href: "/satellites/catalog",
         label: "ORBITAL CATALOG",
         tagline: "1,000+ Multi-Object Earth Constellations",
         badge: "SGP4 PROPAGATOR",

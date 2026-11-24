@@ -9,64 +9,28 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
-import { ArrowLeft, Satellite as SatIcon } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { SATELLITE_CATALOG } from "@/lib/satellites/satelliteCatalog";
 import { CURRENT_ISS_CREW } from "@/lib/iss/issService";
 import SatelliteModeTabs from "@/components/space/SatelliteModeTabs";
+import ObservatoryLoader from "@/components/ui/ObservatoryLoader";
 
 
-// Dynamic import — NO SSR, with full loading screen
+// Dynamic import — NO SSR, with unified luxury observatory loader
 const RealtimeISSTracker = dynamic(
   () => import("@/components/landing/RealtimeISSTracker"),
   {
     ssr: false,
-    loading: () => <SatelliteLoading />,
+    loading: () => (
+      <ObservatoryLoader
+        variant="container"
+        title="CAKRAPALA"
+        subtitle="Acquiring NORAD SGP4 telemetry"
+        className="h-[500px] sm:h-[600px] lg:h-[680px] rounded-2xl border border-white/[0.08]"
+      />
+    ),
   }
 );
-
-function SatelliteLoading() {
-  return (
-    <div className="w-full h-[500px] sm:h-[600px] lg:h-[680px] flex flex-col items-center justify-center bg-[#020617] rounded-2xl border border-cyan-500/20">
-      <div className="relative w-28 h-28 flex items-center justify-center mb-6">
-        <div className="absolute inset-0 rounded-full border border-dashed border-cyan-500/25 animate-[spin_14s_linear_infinite]" />
-        <div className="absolute inset-2 rounded-full border-2 border-transparent border-t-cyan-400 border-b-amber-400 animate-[spin_3s_linear_infinite_reverse]" />
-        <div className="absolute inset-5 rounded-full border border-cyan-300/30 animate-ping opacity-25" />
-        <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-slate-800 to-slate-700 border border-cyan-500/40 shadow-[0_0_24px_rgba(6,182,212,0.5)] flex items-center justify-center">
-          <SatIcon className="w-4 h-4 text-cyan-300" />
-        </div>
-      </div>
-
-      <div className="flex flex-col items-center gap-1 mb-4">
-        <span className="text-[11px] font-mono tracking-[0.2em] text-cyan-500 uppercase font-semibold">
-          Cakrapala Space Operations
-        </span>
-        <span className="text-base font-bold text-white">
-          Satellite Flight Operations Console
-        </span>
-      </div>
-
-      <div className="w-64 sm:w-80 bg-slate-900/80 rounded-full p-1 border border-cyan-500/25 mb-3">
-        <div
-          className="h-2 rounded-full bg-gradient-to-r from-cyan-500 via-blue-400 to-amber-400 shadow-[0_0_10px_rgba(6,182,212,0.5)]"
-          style={{ animation: "loading 1.5s ease-in-out infinite" }}
-        />
-      </div>
-
-      <span className="flex items-center gap-1.5 text-xs font-mono text-slate-400">
-        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-ping" />
-        ACQUIRING NORAD SGP4 TELEMETRY SIGNAL...
-      </span>
-
-      <style jsx>{`
-        @keyframes loading {
-          0% { width: 15%; }
-          50% { width: 85%; }
-          100% { width: 15%; }
-        }
-      `}</style>
-    </div>
-  );
-}
 
 export default function ISSMissionConsole() {
   const [showCatalog, setShowCatalog] = useState(true);

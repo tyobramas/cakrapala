@@ -1,32 +1,18 @@
 'use client';
-// components/osint/DataAgeBadge.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Displays data freshness: "{name} · {age} ago"
-//
-// Status colours:
-//   Green (pulsing)  — ageMs < 2× refreshMs
-//   Yellow           — ageMs >= 2× refreshMs
-//   Red              — status === 'error'
-//
-// Accessibility: descriptive aria-label, icon/text status indicator,
-// minimum 4.5:1 contrast on dark transparent background.
-// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * DataAgeBadge — Subtle Luxury Telemetry Freshness Pill.
+ */
 
 import { useMemo } from 'react';
 import type { LayerStatus } from '@/lib/osint/useLayer';
 
 export interface DataAgeBadgeProps {
-  /** Human-readable name (e.g. "Earthquakes"). */
   name: string;
-  /** Age in milliseconds (live counter from useLayer). */
   ageMs: number;
-  /** Current layer status. */
   status: LayerStatus;
-  /** refreshMs from registry — used for colour thresholds. */
   refreshMs: number;
-  /** Optional count of entities currently displayed. */
   entityCount?: number;
-  /** If true, suppress live pulse animation. */
   noPulse?: boolean;
 }
 
@@ -40,36 +26,22 @@ function formatAge(ms: number): string {
   return `${hours}h`;
 }
 
-type BadgeColour = 'green' | 'yellow' | 'red';
+type BadgeTone = 'fresh' | 'stale' | 'error';
 
-function resolveColour(
+function resolveTone(
   ageMs: number,
   refreshMs: number,
   status: LayerStatus,
-): BadgeColour {
-  if (status === 'error') return 'red';
-  if (refreshMs > 0 && ageMs >= 2 * refreshMs) return 'yellow';
-  return 'green';
+): BadgeTone {
+  if (status === 'error') return 'error';
+  if (refreshMs > 0 && ageMs >= 2 * refreshMs) return 'stale';
+  return 'fresh';
 }
 
-const COLOUR_CLASSES: Record<BadgeColour, string> = {
-  green: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40',
-  yellow: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
-  red: 'bg-red-500/20 text-red-300 border-red-500/40',
-};
-
-const PULSE_CLASS = 'animate-pulse';
-
-const STATUS_ICONS: Record<BadgeColour, string> = {
-  green: '●',
-  yellow: '◐',
-  red: '✕',
-};
-
-const STATUS_LABELS: Record<BadgeColour, string> = {
-  green: 'Fresh data',
-  yellow: 'Stale data',
-  red: 'Failed to load data',
+const DOT_CLASSES: Record<BadgeTone, string> = {
+  fresh: 'bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.8)]',
+  stale: 'bg-amber-400 shadow-[0_0_6px_rgba(251,191,36,0.75)]',
+  error: 'bg-rose-400 shadow-[0_0_6px_rgba(251,113,133,0.75)]',
 };
 
 export default function DataAgeBadge({
@@ -78,34 +50,27 @@ export default function DataAgeBadge({
   status,
   refreshMs,
   entityCount,
-  noPulse,
 }: DataAgeBadgeProps) {
-  const colour = useMemo(
-    () => resolveColour(ageMs, refreshMs, status),
+  const tone = useMemo(
+    () => resolveTone(ageMs, refreshMs, status),
     [ageMs, refreshMs, status],
   );
 
   const ageText = formatAge(ageMs);
-  const isPulsing = !noPulse && refreshMs > 0 && colour === 'green';
-  const countSuffix = entityCount !== undefined ? ` (${entityCount} cameras)` : '';
-  const ariaLabel = `${name}: ${STATUS_LABELS[colour]}. Last updated ${ageText} ago${countSuffix}.`;
+  const countSuffix = entityCount !== undefined ? ` · ${entityCount}` : '';
 
   return (
     <div
       role="status"
-      aria-label={ariaLabel}
-      className={`
-        inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium
-        border backdrop-blur-sm
-        ${COLOUR_CLASSES[colour]}
-        ${isPulsing ? PULSE_CLASS : ''}
-      `}
+      aria-label={`${name}: updated ${ageText} ago${countSuffix}`}
+      className="inline-flex items-center gap-2 rounded-full border border-white/[0.09] bg-[#030714]/55 px-3 py-1 font-mono text-[10px] tracking-[0.08em] text-slate-200/90 backdrop-blur-xl"
     >
-      <span aria-hidden="true" className="text-[10px]">
-        {STATUS_ICONS[colour]}
-      </span>
-      <span>
-        {name} · {ageText} ago{countSuffix}
+      <span className={`h-1.5 w-1.5 rounded-full ${DOT_CLASSES[tone]}`} />
+      <span>{name}</span>
+      <span className="text-white/25">·</span>
+      <span className="text-slate-400">
+        {ageText}
+        {countSuffix}
       </span>
     </div>
   );

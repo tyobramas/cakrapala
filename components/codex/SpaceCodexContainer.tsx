@@ -1,21 +1,23 @@
 "use client";
 
 /**
- * SpaceCodexContainer — 100% English Astronomical Encyclopedia & Aerospace Almanac HUD.
- * 
+ * SpaceCodexContainer — Luxury Compact Split-Pane Astronomy, NASA & Astrophysics Encyclopedia (/codex).
+ *
  * Features:
- *   - Real-time search across terms, definitions, formulas, and tags
- *   - Category filtering across 6 core astrophysics & planetary defense domains
- *   - A–Z quick alphabet scrubber bar & difficulty level filter
- *   - Featured "Astronomical Entry of the Day" spotlight
- *   - Deep-Dive Technical Inspector Modal with mathematical equations & real-world scales
- *   - Direct SYS-AI Terminal Bridge to query the AI assistant on any term with 1 click
+ *   - 110+ IAU & NASA-verified space, orbital, cosmological, and planetary defense terms
+ *   - Unified corner-pinned compact header ([ ← | logo SPACE CODEX ]) + instant Spotlight Search ('/' or ⌘K)
+ *   - 7 scientific domains, A–Z scrubber, Difficulty filter, Bookmarks (localStorage), and Random Discovery
+ *   - Split-pane master-detail reading observatory on desktop + clean full-screen sheet on mobile
+ *   - Clickable cross-referenced hypertext graph, formula copy, and 1-click Cakrapala AI Terminal bridge
  */
 
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
+import Image from "next/image";
 import {
+  ArrowLeft,
   Search,
-  BookOpen,
+  Rocket,
   Atom,
   ShieldAlert,
   Compass,
@@ -24,16 +26,16 @@ import {
   Globe,
   X,
   Bot,
-  Layers,
-  ChevronRight,
-  Zap,
-  Tag,
-  BookMarked,
-  ArrowRight,
-  Filter,
   Check,
   Copy,
+  Bookmark,
+  Shuffle,
+  ArrowUpRight,
+  Sigma,
+  ChevronRight,
+  BookOpen,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 
 import {
   CODEX_ENTRIES,
@@ -43,7 +45,8 @@ import {
 } from "@/lib/astronomy/spaceCodexData";
 import AstronomyTerminal from "@/components/ai/AstronomyTerminal";
 
-const CATEGORY_ICONS: Record<string, any> = {
+const CATEGORY_ICONS: Record<string, LucideIcon> = {
+  Rocket,
   Atom,
   ShieldAlert,
   Compass,
@@ -53,620 +56,800 @@ const CATEGORY_ICONS: Record<string, any> = {
 };
 
 const ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+const BOOKMARKS_KEY = "cakrapala_codex_bookmarks_v1";
+
+/**
+ * Converts clean LaTeX math strings into crisp readable Unicode aerospace notation
+ * while preserving the raw LaTeX for 1-click copy.
+ */
+function formatReadableFormula(latex: string): string {
+  return latex
+    .replace(/\\text\{([^}]*)\}/g, "$1")
+    .replace(/\\frac\{([^}]*)\}\{([^}]*)\}/g, "($1) / ($2)")
+    .replace(/\\sqrt\{([^}]*)\}/g, "√($1)")
+    .replace(/\\left\(/g, "(")
+    .replace(/\\right\)/g, ")")
+    .replace(/\\times/g, "×")
+    .replace(/\\cdot/g, "·")
+    .replace(/\\approx/g, "≈")
+    .replace(/\\pm/g, "±")
+    .replace(/\\le/g, "≤")
+    .replace(/\\ge/g, "≥")
+    .replace(/\\implies/g, "⇒")
+    .replace(/\\quad/g, "  ")
+    .replace(/\\Delta/g, "Δ")
+    .replace(/\\Lambda/g, "Λ")
+    .replace(/\\Omega/g, "Ω")
+    .replace(/\\pi/g, "π")
+    .replace(/\\mu/g, "μ")
+    .replace(/\\nu/g, "ν")
+    .replace(/\\alpha/g, "α")
+    .replace(/\\rho/g, "ρ")
+    .replace(/\\hbar/g, "ℏ")
+    .replace(/\\dot\{m\}/g, "ṁ")
+    .replace(/\^\{([^}]*)\}/g, "^$1")
+    .replace(/_\{([^}]*)\}/g, "_$1")
+    .replace(/\\/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
 
 export default function SpaceCodexContainer() {
-  const [searchQuery, setSearchQuery] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<CodexCategory | "all">("all");
-  const [selectedDifficulty, setSelectedDifficulty] = useState<string>("all");
+  const [selectedDifficulty, setSelectedDifficulty] = useState<
+    "all" | "Fundamental" | "Intermediate" | "Advanced"
+  >("all");
   const [selectedLetter, setSelectedLetter] = useState<string>("all");
-  const [activeEntry, setActiveEntry] = useState<CodexEntry | null>(null);
+  const [bookmarksOnly, setBookmarksOnly] = useState(false);
+  const [bookmarks, setBookmarks] = useState<string[]>([]);
 
-  // AI Terminal Modal Integration
-  const [isAiTerminalOpen, setIsAiTerminalOpen] = useState<boolean>(false);
-  const [aiInitialPrompt, setAiInitialPrompt] = useState<string>("");
+  // Active reading term (always populated on desktop; mobile opens sheet explicitly)
+  const [selectedId, setSelectedId] = useState<string>(CODEX_ENTRIES[0]?.id ?? "");
+  const [mobileSheetOpen, setMobileSheetOpen] = useState(false);
 
-  const [copiedFormula, setCopiedFormula] = useState<boolean>(false);
+  // AI Terminal Bridge
+  const [isAiTerminalOpen, setIsAiTerminalOpen] = useState(false);
+  const [aiInitialPrompt, setAiInitialPrompt] = useState("");
+  const [copiedFormula, setCopiedFormula] = useState(false);
+
   const searchInputRef = useRef<HTMLInputElement | null>(null);
 
-  // Keyboard shortcut: Press '/' to focus search bar
+  // Load saved bookmarks cleanly
   useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "/" && document.activeElement !== searchInputRef.current) {
-        e.preventDefault();
-        searchInputRef.current?.focus();
-      }
-      if (e.key === "Escape" && activeEntry) {
-        setActiveEntry(null);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [activeEntry]);
-
-  // Filtered entries memo
-  const filteredEntries = useMemo(() => {
-    return CODEX_ENTRIES.filter((entry) => {
-      // Category filter
-      if (selectedCategory !== "all" && entry.category !== selectedCategory) {
-        return false;
-      }
-      // Difficulty filter
-      if (selectedDifficulty !== "all" && entry.difficulty !== selectedDifficulty) {
-        return false;
-      }
-      // A-Z Alphabet filter
-      if (selectedLetter !== "all") {
-        if (!entry.term.toUpperCase().startsWith(selectedLetter)) {
-          return false;
+    try {
+      const raw = localStorage.getItem(BOOKMARKS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          queueMicrotask(() => setBookmarks(parsed.filter((x) => typeof x === "string")));
         }
       }
-      // Search query
-      if (searchQuery.trim()) {
-        const q = searchQuery.toLowerCase();
-        const matchesTerm = entry.term.toLowerCase().includes(q);
-        const matchesShort = entry.shortDefinition.toLowerCase().includes(q);
-        const matchesFull = entry.fullExplanation.toLowerCase().includes(q);
-        const matchesTags = entry.tags.some((t) => t.toLowerCase().includes(q));
-        const matchesExample = entry.realWorldExample.toLowerCase().includes(q);
-        return matchesTerm || matchesShort || matchesFull || matchesTags || matchesExample;
-      }
-      return true;
-    });
-  }, [searchQuery, selectedCategory, selectedDifficulty, selectedLetter]);
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
-  // Featured Term of the Day (Deterministic daily rotation based on day of year)
+  const toggleBookmark = useCallback((id: string) => {
+    setBookmarks((prev) => {
+      const next = prev.includes(id) ? prev.filter((b) => b !== id) : [...prev, id];
+      try {
+        localStorage.setItem(BOOKMARKS_KEY, JSON.stringify(next));
+      } catch {
+        // ignore
+      }
+      return next;
+    });
+  }, []);
+
+  // Fast ID lookup map for cross-referenced related terms
+  const entryMap = useMemo(() => {
+    const m = new Map<string, CodexEntry>();
+    for (const e of CODEX_ENTRIES) m.set(e.id, e);
+    return m;
+  }, []);
+
+  // Category counts & available letters
+  const categoryCounts = useMemo(() => {
+    const counts: Record<string, number> = { all: CODEX_ENTRIES.length };
+    for (const e of CODEX_ENTRIES) {
+      counts[e.category] = (counts[e.category] || 0) + 1;
+    }
+    return counts;
+  }, []);
+
+  const availableLetters = useMemo(() => {
+    const set = new Set<string>();
+    for (const e of CODEX_ENTRIES) {
+      const ch = e.term.trim()[0]?.toUpperCase();
+      if (ch) set.add(ch);
+    }
+    return set;
+  }, []);
+
+  // Deterministic Term of the Day
   const featuredEntry = useMemo(() => {
     const now = new Date();
     const start = new Date(now.getFullYear(), 0, 0);
-    const diff = now.getTime() - start.getTime();
-    const dayOfYear = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86_400_000);
     return CODEX_ENTRIES[dayOfYear % CODEX_ENTRIES.length];
   }, []);
 
-  const handleLaunchAiWithTerm = (term: CodexEntry) => {
-    const prompt = `Provide a comprehensive technical briefing on "${term.term}" (${CODEX_CATEGORIES[term.category].name}). Detail its mathematical formulation, astronomical applications, and recent discoveries.`;
-    setAiInitialPrompt(prompt);
+  // Filtered & alphabetically sorted entries
+  const filteredEntries = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return CODEX_ENTRIES.filter((entry) => {
+      if (bookmarksOnly && !bookmarks.includes(entry.id)) return false;
+      if (selectedCategory !== "all" && entry.category !== selectedCategory) return false;
+      if (selectedDifficulty !== "all" && entry.difficulty !== selectedDifficulty) return false;
+      if (selectedLetter !== "all" && !entry.term.toUpperCase().startsWith(selectedLetter)) {
+        return false;
+      }
+      if (q) {
+        return (
+          entry.term.toLowerCase().includes(q) ||
+          entry.shortDefinition.toLowerCase().includes(q) ||
+          entry.fullExplanation.toLowerCase().includes(q) ||
+          entry.realWorldExample.toLowerCase().includes(q) ||
+          (entry.iauStandardNotation?.toLowerCase().includes(q) ?? false) ||
+          entry.tags.some((t) => t.toLowerCase().includes(q))
+        );
+      }
+      return true;
+    }).sort((a, b) => a.term.localeCompare(b.term));
+  }, [searchQuery, selectedCategory, selectedDifficulty, selectedLetter, bookmarksOnly, bookmarks]);
+
+  const activeEntry = useMemo(() => {
+    return (
+      entryMap.get(selectedId) ??
+      filteredEntries[0] ??
+      CODEX_ENTRIES[0]
+    );
+  }, [entryMap, selectedId, filteredEntries]);
+
+  const handleSelectEntry = useCallback((entry: CodexEntry, openMobile = true) => {
+    setSelectedId(entry.id);
+    setCopiedFormula(false);
+    if (openMobile) setMobileSheetOpen(true);
+  }, []);
+
+  const handleRandomEntry = useCallback(() => {
+    const pool = filteredEntries.length > 0 ? filteredEntries : CODEX_ENTRIES;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick) handleSelectEntry(pick, true);
+  }, [filteredEntries, handleSelectEntry]);
+
+  // Keyboard shortcuts: '/' or ⌘K search, ↑/↓ cycle entries, Esc clear/close
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const activeEl = document.activeElement;
+      const isInput = activeEl?.tagName === "INPUT" || activeEl?.tagName === "TEXTAREA";
+
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (e.key === "/" && !isInput) {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+      if (e.key === "Escape") {
+        if (mobileSheetOpen) {
+          setMobileSheetOpen(false);
+        } else if (searchQuery) {
+          setSearchQuery("");
+        }
+        return;
+      }
+      if (!isInput && (e.key === "ArrowDown" || e.key === "ArrowUp") && filteredEntries.length > 0) {
+        e.preventDefault();
+        const idx = filteredEntries.findIndex((x) => x.id === activeEntry?.id);
+        const nextIdx =
+          e.key === "ArrowDown"
+            ? (idx + 1) % filteredEntries.length
+            : (idx - 1 + filteredEntries.length) % filteredEntries.length;
+        setSelectedId(filteredEntries[nextIdx].id);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [filteredEntries, activeEntry, mobileSheetOpen, searchQuery]);
+
+  const handleLaunchAi = useCallback((entry: CodexEntry) => {
+    const catName = CODEX_CATEGORIES[entry.category].name;
+    setAiInitialPrompt(
+      `Provide a concise, rigorous astrophysics briefing on "${entry.term}" (${catName}). Include its mathematical formulation, NASA/observational applications, and recent discoveries.`,
+    );
     setIsAiTerminalOpen(true);
+  }, []);
+
+  const handleCopyFormula = useCallback((latex: string) => {
+    navigator.clipboard?.writeText(latex);
+    setCopiedFormula(true);
+    setTimeout(() => setCopiedFormula(false), 1800);
+  }, []);
+
+  const resetAllFilters = () => {
+    setSearchQuery("");
+    setSelectedCategory("all");
+    setSelectedDifficulty("all");
+    setSelectedLetter("all");
+    setBookmarksOnly(false);
   };
 
-  const handleCopyFormula = (latex: string) => {
-    navigator.clipboard.writeText(latex);
-    setCopiedFormula(true);
-    setTimeout(() => setCopiedFormula(false), 2000);
+  const hasFilters =
+    searchQuery.trim() !== "" ||
+    selectedCategory !== "all" ||
+    selectedDifficulty !== "all" ||
+    selectedLetter !== "all" ||
+    bookmarksOnly;
+
+  const renderDetailContent = (entry: CodexEntry) => {
+    const cat = CODEX_CATEGORIES[entry.category];
+    const CatIcon = CATEGORY_ICONS[cat.icon] || Atom;
+    const isBookmarked = bookmarks.includes(entry.id);
+    const related = entry.relatedTermIds
+      .map((id) => entryMap.get(id))
+      .filter((x): x is CodexEntry => Boolean(x));
+
+    return (
+      <div className="flex h-full flex-col overflow-hidden">
+        {/* Top Dossier Header */}
+        <div className="border-b border-white/[0.08] px-5 pt-5 pb-4 sm:px-7">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <span
+                className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-medium"
+                style={{
+                  borderColor: `${cat.colorHex}40`,
+                  background: `${cat.colorHex}14`,
+                  color: cat.colorHex,
+                }}
+              >
+                <CatIcon className="h-3 w-3" />
+                <span>{cat.name}</span>
+              </span>
+
+              <span
+                className={`rounded-full border px-2 py-0.5 font-mono text-[9.5px] font-medium ${
+                  entry.difficulty === "Fundamental"
+                    ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-300"
+                    : entry.difficulty === "Intermediate"
+                      ? "border-amber-400/25 bg-amber-400/10 text-amber-300"
+                      : "border-rose-400/25 bg-rose-400/10 text-rose-300"
+                }`}
+              >
+                {entry.difficulty}
+              </span>
+
+              {entry.iauStandardNotation && (
+                <span className="rounded-full border border-white/[0.10] bg-white/[0.04] px-2.5 py-0.5 font-mono text-[10px] text-slate-300">
+                  {entry.iauStandardNotation}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => toggleBookmark(entry.id)}
+                title={isBookmarked ? "Remove bookmark" : "Bookmark term"}
+                className={`flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-3 font-mono text-[10px] transition-all ${
+                  isBookmarked
+                    ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                    : "border-white/[0.10] bg-white/[0.04] text-slate-300 hover:border-white/25 hover:text-white"
+                }`}
+              >
+                <Bookmark className={`h-3 w-3 ${isBookmarked ? "fill-amber-300" : ""}`} />
+                <span className="hidden sm:inline">{isBookmarked ? "Saved" : "Save"}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleLaunchAi(entry)}
+                className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-sky-400/35 bg-sky-400/15 px-3 font-mono text-[10px] font-medium text-sky-200 transition-all hover:bg-sky-400/25 hover:text-white"
+              >
+                <Bot className="h-3.5 w-3.5" />
+                <span>Ask AI</span>
+              </button>
+
+              {mobileSheetOpen && (
+                <button
+                  type="button"
+                  onClick={() => setMobileSheetOpen(false)}
+                  className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.05] text-slate-300 lg:hidden"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          <h1 className="mt-3 font-sans text-2xl font-semibold tracking-tight text-white sm:text-3xl">
+            {entry.term}
+          </h1>
+
+          {entry.pronunciation && (
+            <p className="mt-1 font-mono text-xs text-slate-400">{entry.pronunciation}</p>
+          )}
+
+          <p className="mt-3 text-sm leading-relaxed text-slate-200 sm:text-[15px]">
+            {entry.shortDefinition}
+          </p>
+        </div>
+
+        {/* Scrollable Editorial Body */}
+        <div className="flex-1 space-y-5 overflow-y-auto px-5 py-5 sm:px-7">
+          {/* Mathematical Formula Card */}
+          {entry.formula && (
+            <div className="rounded-xl border border-white/[0.09] bg-white/[0.025] p-4">
+              <div className="mb-2 flex items-center justify-between font-mono text-[9.5px] tracking-[0.16em] text-slate-400 uppercase">
+                <span className="flex items-center gap-1.5 text-sky-300">
+                  <Sigma className="h-3.5 w-3.5" />
+                  Mathematical Formulation
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleCopyFormula(entry.formula!.latex)}
+                  className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-white/[0.10] bg-white/[0.04] px-2 py-0.5 text-[9.5px] text-slate-300 transition-colors hover:bg-white/[0.10] hover:text-white"
+                >
+                  {copiedFormula ? (
+                    <>
+                      <Check className="h-2.5 w-2.5 text-emerald-400" />
+                      <span>Copied LaTeX</span>
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="h-2.5 w-2.5" />
+                      <span>Copy LaTeX</span>
+                    </>
+                  )}
+                </button>
+              </div>
+              <div className="overflow-x-auto rounded-lg bg-black/45 px-4 py-3 font-mono text-sm font-medium text-sky-100">
+                {formatReadableFormula(entry.formula.latex)}
+              </div>
+              <p className="mt-2 text-xs leading-relaxed text-slate-400">
+                {entry.formula.explanation}
+              </p>
+            </div>
+          )}
+
+          {/* Full Scientific Context */}
+          <section className="space-y-2">
+            <h2 className="font-mono text-[10px] font-semibold tracking-[0.18em] text-slate-400 uppercase">
+              Technical Overview
+            </h2>
+            <p className="text-sm leading-7 text-slate-300">{entry.fullExplanation}</p>
+          </section>
+
+          {/* Two-Column NASA Example & Relevance */}
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <div className="mb-1.5 font-mono text-[9.5px] font-semibold tracking-[0.16em] text-sky-300 uppercase">
+                Real-World &amp; NASA Example
+              </div>
+              <p className="text-xs leading-6 text-slate-300">{entry.realWorldExample}</p>
+            </div>
+
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4">
+              <div className="mb-1.5 font-mono text-[9.5px] font-semibold tracking-[0.16em] text-emerald-300 uppercase">
+                Astronomical Relevance
+              </div>
+              <p className="text-xs leading-6 text-slate-300">{entry.astronomicalRelevance}</p>
+            </div>
+          </div>
+
+          {/* Tags */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            {entry.tags.map((tag) => (
+              <button
+                key={tag}
+                type="button"
+                onClick={() => {
+                  setSearchQuery(tag);
+                  setMobileSheetOpen(false);
+                }}
+                className="cursor-pointer rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-0.5 font-mono text-[10px] text-slate-400 transition-colors hover:border-sky-400/40 hover:text-sky-200"
+              >
+                #{tag}
+              </button>
+            ))}
+          </div>
+
+          {/* Cross-Referenced Related Terms */}
+          {related.length > 0 && (
+            <section className="border-t border-white/[0.08] pt-4">
+              <div className="mb-2.5 font-mono text-[10px] font-semibold tracking-[0.18em] text-slate-400 uppercase">
+                Related Codex Entries
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {related.map((rel) => {
+                  const rCat = CODEX_CATEGORIES[rel.category];
+                  return (
+                    <button
+                      key={rel.id}
+                      type="button"
+                      onClick={() => handleSelectEntry(rel, true)}
+                      className="group flex cursor-pointer items-center justify-between gap-2 rounded-xl border border-white/[0.08] bg-white/[0.025] px-3 py-2.5 text-left transition-all hover:border-white/[0.20] hover:bg-white/[0.06]"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            className="h-1.5 w-1.5 shrink-0 rounded-full"
+                            style={{ background: rCat.colorHex }}
+                          />
+                          <span className="truncate font-mono text-[11px] font-semibold text-white group-hover:text-sky-200">
+                            {rel.term}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 truncate text-[10.5px] text-slate-400">
+                          {rel.shortDefinition}
+                        </p>
+                      </div>
+                      <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-slate-500 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:text-white" />
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          )}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className="min-h-screen w-full bg-[#020617] text-slate-100 font-sans selection:bg-cyan-500/30 selection:text-cyan-200">
-      
-      {/* ── Top Ambient Cosmic Radial Glows ─────────────────────────────────── */}
-      <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden">
-        <div className="absolute -top-40 left-1/4 w-[600px] h-[600px] bg-cyan-500/10 rounded-full blur-[140px]" />
-        <div className="absolute top-1/3 -right-40 w-[500px] h-[500px] bg-indigo-500/10 rounded-full blur-[160px]" />
-        <div className="absolute bottom-10 left-10 w-[450px] h-[450px] bg-purple-500/08 rounded-full blur-[150px]" />
-      </div>
+    <div className="relative flex h-[100dvh] w-screen flex-col overflow-hidden bg-[#02040a] font-sans text-slate-100 select-none">
+      {/* Whisper-subtle atmospheric top radial light */}
+      <div
+        className="pointer-events-none fixed inset-0 z-0"
+        style={{
+          background:
+            "radial-gradient(ellipse 65% 38% at 50% 0%, rgba(56,189,248,0.06) 0%, rgba(15,23,42,0.16) 45%, rgba(2,4,10,0) 80%)",
+        }}
+      />
 
-      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-24 pb-20">
-        
-        {/* ══════════════════════════════════════════════════════════════════════
-            HEADER HUD: BRANDING & SEARCH COMMAND DECK
-        ══════════════════════════════════════════════════════════════════════ */}
-        <div className="space-y-6 text-center max-w-4xl mx-auto mb-10">
-          
-          {/* Tactical Status Reticle */}
-          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-cyan-500/10 border border-cyan-500/30 shadow-[0_0_20px_rgba(6,182,212,0.2)] font-mono text-xs">
-            <BookOpen className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
-            <span className="text-cyan-300 font-bold tracking-widest uppercase text-[10px] sm:text-xs">
-              CAKRAPALA // SPACE CODEX
-            </span>
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
-            <span className="text-slate-400 text-[10px] hidden sm:inline">IAU J2000 COMPLIANT</span>
+      {/* ── 1. Compact Corner-Pinned Top Command Bar ──────────────────────── */}
+      <header className="relative z-30 shrink-0 border-b border-white/[0.07] bg-[#02040a]/85 px-2 py-2 backdrop-blur-2xl sm:px-3">
+        <div className="flex w-full items-center justify-between gap-2">
+          {/* Top-Left Corner Capsule (matches /solar-system, /sky, /asteroids, /satellites) */}
+          <div className="flex h-8 shrink-0 items-center rounded-full border border-white/[0.10] bg-[#030714]/75 p-0.5 pr-3">
+            <Link
+              href="/"
+              aria-label="Back to Home"
+              title="Back to Home"
+              className="group inline-flex h-7 w-7 items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/[0.10] hover:text-white"
+            >
+              <ArrowLeft className="h-3.5 w-3.5 transition-transform group-hover:-translate-x-0.5" />
+            </Link>
+
+            <span className="mx-1 h-3.5 w-px bg-white/[0.12]" />
+
+            <div className="flex items-center gap-1.5 pl-1">
+              <Image
+                src="/cakrapala1.png"
+                alt="Cakrapala"
+                width={18}
+                height={18}
+                className="h-[18px] w-[18px] rounded-full object-contain opacity-95"
+              />
+              <span className="font-[family-name:var(--font-orbitron)] text-[10px] font-medium tracking-[0.18em] text-white/95">
+                SPACE CODEX
+              </span>
+            </div>
           </div>
 
-          <h1 className="text-3xl sm:text-5xl lg:text-6xl font-black text-white tracking-tight font-sans">
-            The Universal{" "}
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-sky-300 to-indigo-400">
-              Space Codex
-            </span>
-          </h1>
+          {/* Center: Compact Spotlight Search */}
+          <div className="relative max-w-xl flex-1">
+            <Search className="pointer-events-none absolute top-1/2 left-3 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+            <input
+              ref={searchInputRef}
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={`Search ${CODEX_ENTRIES.length} NASA, astronomy, orbit & physics terms...`}
+              className="h-8 w-full rounded-full border border-white/[0.10] bg-white/[0.04] pr-14 pl-8 font-mono text-[11px] text-white placeholder:text-slate-500 transition-colors focus:border-sky-400/50 focus:bg-white/[0.06] focus:outline-none"
+            />
+            {searchQuery ? (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="absolute top-1/2 right-2.5 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-white"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
+            ) : (
+              <kbd className="pointer-events-none absolute top-1/2 right-2.5 hidden -translate-y-1/2 rounded border border-white/15 bg-white/[0.05] px-1.5 py-0.5 font-mono text-[9px] text-slate-400 sm:inline">
+                ⌘K
+              </kbd>
+            )}
+          </div>
 
-          <p className="text-sm sm:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-            The comprehensive interactive encyclopedia and astrophysical almanac. Explore certified definitions, mathematical formulations, orbital mechanics, and planetary defense protocols.
-          </p>
+          {/* Right: Random, Saved Bookmarks, AI Terminal */}
+          <div className="flex shrink-0 items-center gap-1.5">
+            <button
+              type="button"
+              onClick={handleRandomEntry}
+              title="Discover random astronomy term"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/[0.10] bg-[#030714]/75 text-slate-300 transition-colors hover:border-white/25 hover:text-white"
+            >
+              <Shuffle className="h-3.5 w-3.5" />
+            </button>
 
-          {/* ── Real-Time Interactive Search Command Bar ────────────────────────── */}
-          <div className="relative max-w-2xl mx-auto mt-4">
-            <div className="relative flex items-center rounded-2xl bg-[#070e22]/90 border border-cyan-500/40 shadow-[0_0_35px_rgba(6,182,212,0.25),inset_0_1px_1px_rgba(255,255,255,0.1)] backdrop-blur-2xl focus-within:border-cyan-400 focus-within:shadow-[0_0_40px_rgba(6,182,212,0.4)] transition-all">
-              <Search className="w-5 h-5 ml-4 text-cyan-400 shrink-0" />
-              <input
-                ref={searchInputRef}
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search astronomical terms, formulas, satellites, asteroids... (Press '/' to focus)"
-                className="w-full px-4 py-3.5 bg-transparent text-sm sm:text-base text-white placeholder-slate-500 focus:outline-none font-sans"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={() => setSearchQuery("")}
-                  className="mr-3 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/60 transition-colors"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
-              <div className="mr-4 hidden sm:flex items-center gap-1 font-mono text-[10px] px-2 py-1 rounded bg-slate-900 border border-slate-700 text-slate-400 select-none">
-                <kbd>/</kbd>
-              </div>
-            </div>
+            <button
+              type="button"
+              onClick={() => setBookmarksOnly((v) => !v)}
+              title="Filter saved bookmarks"
+              className={`flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 font-mono text-[10px] transition-all ${
+                bookmarksOnly
+                  ? "border-amber-400/40 bg-amber-400/15 text-amber-200"
+                  : "border-white/[0.10] bg-[#030714]/75 text-slate-300 hover:border-white/25 hover:text-white"
+              }`}
+            >
+              <Bookmark className={`h-3 w-3 ${bookmarksOnly ? "fill-amber-300" : ""}`} />
+              <span className="hidden sm:inline tabular-nums">{bookmarks.length}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setAiInitialPrompt("");
+                setIsAiTerminalOpen(true);
+              }}
+              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-sky-400/30 bg-sky-400/12 px-3 font-mono text-[10px] font-medium text-sky-200 transition-colors hover:bg-sky-400/22 hover:text-white"
+            >
+              <Bot className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">AI Brief</span>
+            </button>
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════════════════════
-            FEATURED SPOTLIGHT: ASTRONOMICAL TERM OF THE DAY
-        ══════════════════════════════════════════════════════════════════════ */}
-        {featuredEntry && !searchQuery && selectedCategory === "all" && (
-          <div className="mb-10 rounded-3xl bg-gradient-to-r from-[#0b162f]/90 via-[#0a1b38]/80 to-[#121132]/90 border border-cyan-500/40 p-6 sm:p-8 shadow-[0_16px_50px_rgba(0,0,0,0.6),inset_0_1px_1px_rgba(255,255,255,0.1)] backdrop-blur-2xl relative overflow-hidden group">
-            <div className="absolute top-0 right-0 w-80 h-80 bg-cyan-500/10 rounded-full blur-3xl pointer-events-none" />
-
-            <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 relative z-10">
-              <div className="space-y-2.5 max-w-3xl">
-                <div className="flex flex-wrap items-center gap-2.5">
-                  <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-300 font-mono text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5">
-                    <Sparkles className="w-3 h-3 text-amber-400" />
-                    FEATURED CELESTIAL METRIC
-                  </span>
-                  <span className="px-2 py-0.5 rounded bg-cyan-500/15 border border-cyan-500/30 text-cyan-300 font-mono text-[10px]">
-                    {CODEX_CATEGORIES[featuredEntry.category].name}
-                  </span>
-                  {featuredEntry.iauStandardNotation && (
-                    <span className="font-mono text-[10px] text-slate-400">
-                      IAU: {featuredEntry.iauStandardNotation}
-                    </span>
-                  )}
-                </div>
-
-                <h2 className="text-2xl sm:text-3xl font-black text-white font-sans group-hover:text-cyan-300 transition-colors">
-                  {featuredEntry.term}
-                </h2>
-
-                <p className="text-sm text-slate-300 leading-relaxed font-sans">
-                  {featuredEntry.shortDefinition}
-                </p>
-
-                {featuredEntry.formula && (
-                  <div className="inline-block p-2.5 rounded-xl bg-[#040817]/90 border border-cyan-500/30 font-mono text-xs text-cyan-300">
-                    <code>{featuredEntry.formula.latex}</code>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col sm:flex-row lg:flex-col gap-2.5 w-full sm:w-auto shrink-0">
-                <button
-                  type="button"
-                  onClick={() => setActiveEntry(featuredEntry)}
-                  className="px-5 py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs font-mono transition-all flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.4)] cursor-pointer"
-                >
-                  <span>INSPECT CODEX ENTRY</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleLaunchAiWithTerm(featuredEntry)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700 hover:border-cyan-400 text-cyan-300 font-mono text-xs font-bold transition-all flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Bot className="w-3.5 h-3.5 text-cyan-400" />
-                  <span>ASK SYS-AI</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ══════════════════════════════════════════════════════════════════════
-            CATEGORY FILTER TABS WITH ENTRY COUNTERS
-        ══════════════════════════════════════════════════════════════════════ */}
-        <div className="space-y-4 mb-8">
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-mono font-bold text-slate-400 uppercase tracking-wider flex items-center gap-2">
-              <Filter className="w-3.5 h-3.5 text-cyan-400" />
-              SCIENTIFIC DOMAINS
-            </span>
-            <span className="text-xs font-mono text-cyan-400">
-              Showing {filteredEntries.length} of {CODEX_ENTRIES.length} entries
-            </span>
-          </div>
-
-          {/* Categories Horizontal Scroll / Grid */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-2">
+        {/* ── 2. Compact Category & A–Z Filter Ribbon ─────────────────────── */}
+        <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
+          {/* Categories */}
+          <div className="flex items-center gap-1 overflow-x-auto pb-0.5 font-mono text-[10px]">
             <button
               type="button"
               onClick={() => setSelectedCategory("all")}
-              className={`p-3 rounded-2xl border text-left transition-all cursor-pointer font-mono text-xs flex flex-col justify-between ${
+              className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all ${
                 selectedCategory === "all"
-                  ? "bg-[#16233b] border-cyan-500/70 text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] font-bold"
-                  : "bg-[#060b18]/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                  ? "border-white/25 bg-white/[0.13] font-semibold text-white"
+                  : "border-white/[0.07] bg-white/[0.02] text-slate-400 hover:border-white/[0.16] hover:text-slate-200"
               }`}
             >
-              <div className="flex items-center justify-between w-full mb-1">
-                <Layers className="w-4 h-4 text-cyan-400" />
-                <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700">
-                  {CODEX_ENTRIES.length}
-                </span>
-              </div>
-              <span className="truncate">ALL DOMAINS</span>
+              <span>All</span>
+              <span className="text-[9px] text-slate-400 tabular-nums">
+                {categoryCounts.all}
+              </span>
             </button>
 
-            {Object.values(CODEX_CATEGORIES).map((cat) => {
-              const Icon = CATEGORY_ICONS[cat.icon] || BookOpen;
-              const count = CODEX_ENTRIES.filter((e) => e.category === cat.id).length;
-              const isSelected = selectedCategory === cat.id;
-
+            {(Object.keys(CODEX_CATEGORIES) as CodexCategory[]).map((catKey) => {
+              const cat = CODEX_CATEGORIES[catKey];
+              const active = selectedCategory === catKey;
               return (
                 <button
-                  key={cat.id}
+                  key={catKey}
                   type="button"
-                  onClick={() => setSelectedCategory(cat.id)}
-                  className={`p-3 rounded-2xl border text-left transition-all cursor-pointer font-mono text-xs flex flex-col justify-between ${
-                    isSelected
-                      ? "bg-[#16233b] border-cyan-500/70 text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.3)] font-bold"
-                      : "bg-[#060b18]/80 border-slate-800 text-slate-400 hover:text-slate-200 hover:bg-slate-800/60"
+                  onClick={() => setSelectedCategory(catKey)}
+                  className={`flex shrink-0 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 py-1 transition-all ${
+                    active
+                      ? "border-white/25 bg-white/[0.12] font-semibold text-white"
+                      : "border-white/[0.07] bg-white/[0.02] text-slate-400 hover:border-white/[0.16] hover:text-slate-200"
                   }`}
                 >
-                  <div className="flex items-center justify-between w-full mb-1">
-                    <Icon className="w-4 h-4" style={{ color: cat.colorHex }} />
-                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-slate-900 border border-slate-700">
-                      {count}
-                    </span>
-                  </div>
-                  <span className="truncate">{cat.name.split(" ")[0]}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* ── A–Z Alphabet Scrubber & Difficulty Selector ───────────────────── */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-3 rounded-2xl bg-[#050b1a]/90 border border-slate-800/80 mb-8 font-mono text-xs">
-          
-          {/* Alphabet Quick Scrubber */}
-          <div className="flex items-center gap-1 overflow-x-auto w-full sm:w-auto pb-1 sm:pb-0 scrollbar-none">
-            <button
-              type="button"
-              onClick={() => setSelectedLetter("all")}
-              className={`px-2 py-1 rounded text-[10px] font-bold transition-colors shrink-0 ${
-                selectedLetter === "all"
-                  ? "bg-cyan-500 text-slate-950"
-                  : "text-slate-400 hover:text-white"
-              }`}
-            >
-              ALL
-            </button>
-            {ALPHABET.map((char) => {
-              const hasEntries = CODEX_ENTRIES.some((e) => e.term.toUpperCase().startsWith(char));
-              return (
-                <button
-                  key={char}
-                  type="button"
-                  disabled={!hasEntries}
-                  onClick={() => setSelectedLetter(char)}
-                  className={`px-1.5 py-1 rounded text-[10px] font-bold transition-colors shrink-0 ${
-                    selectedLetter === char
-                      ? "bg-cyan-500 text-slate-950"
-                      : hasEntries
-                      ? "text-slate-300 hover:text-cyan-300 hover:bg-slate-800"
-                      : "text-slate-700 cursor-not-allowed"
-                  }`}
-                >
-                  {char}
+                  <span
+                    className="h-1.5 w-1.5 rounded-full"
+                    style={{ background: cat.colorHex }}
+                  />
+                  <span>{cat.name}</span>
+                  <span className="text-[9px] opacity-65 tabular-nums">
+                    {categoryCounts[catKey] || 0}
+                  </span>
                 </button>
               );
             })}
           </div>
 
-          {/* Difficulty Filter */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-slate-500 text-[10px] hidden md:inline">LEVEL:</span>
-            {["all", "Fundamental", "Intermediate", "Advanced"].map((level) => (
+          {/* Difficulty Segmented Control */}
+          <div className="hidden items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.02] p-0.5 font-mono text-[9.5px] xl:flex">
+            {(["all", "Fundamental", "Intermediate", "Advanced"] as const).map((lvl) => (
               <button
-                key={level}
+                key={lvl}
                 type="button"
-                onClick={() => setSelectedDifficulty(level)}
-                className={`px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase transition-all ${
-                  selectedDifficulty === level
-                    ? "bg-indigo-500/25 border border-indigo-500/50 text-indigo-300"
+                onClick={() => setSelectedDifficulty(lvl)}
+                className={`cursor-pointer rounded-full px-2 py-0.5 transition-colors ${
+                  selectedDifficulty === lvl
+                    ? "bg-white/[0.14] font-semibold text-white"
                     : "text-slate-400 hover:text-slate-200"
                 }`}
               >
-                {level === "all" ? "ANY LEVEL" : level}
+                {lvl === "all" ? "All Levels" : lvl}
               </button>
             ))}
           </div>
         </div>
 
-        {/* ══════════════════════════════════════════════════════════════════════
-            ENTRIES GRID: RESPONSIVE CARDS
-        ══════════════════════════════════════════════════════════════════════ */}
-        {filteredEntries.length === 0 ? (
-          <div className="text-center py-20 rounded-3xl bg-[#060b18]/60 border border-slate-800/80 p-8">
-            <BookMarked className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-            <h3 className="text-xl font-bold text-white mb-2">No Codex Entries Found</h3>
-            <p className="text-sm text-slate-400 max-w-md mx-auto mb-4 font-sans">
-              No astronomical terms matched your active filters for "{searchQuery}". Try clearing your search or switching domains.
-            </p>
+        {/* Ultra-Slim A–Z Scrubber Strip */}
+        <div className="mt-1.5 flex items-center gap-0.5 overflow-x-auto font-mono text-[9.5px]">
+          <button
+            type="button"
+            onClick={() => setSelectedLetter("all")}
+            className={`cursor-pointer rounded px-1.5 py-0.5 transition-colors ${
+              selectedLetter === "all"
+                ? "bg-sky-400/20 font-semibold text-sky-200"
+                : "text-slate-500 hover:text-slate-200"
+            }`}
+          >
+            A–Z
+          </button>
+          {ALPHABET.map((letter) => {
+            const hasAny = availableLetters.has(letter);
+            const active = selectedLetter === letter;
+            return (
+              <button
+                key={letter}
+                type="button"
+                disabled={!hasAny}
+                onClick={() => setSelectedLetter(active ? "all" : letter)}
+                className={`w-5 shrink-0 cursor-pointer rounded py-0.5 text-center transition-colors disabled:cursor-default disabled:opacity-25 ${
+                  active
+                    ? "bg-sky-400/25 font-bold text-white"
+                    : "text-slate-400 hover:bg-white/[0.07] hover:text-white"
+                }`}
+              >
+                {letter}
+              </button>
+            );
+          })}
+
+          {hasFilters && (
             <button
               type="button"
-              onClick={() => {
-                setSearchQuery("");
-                setSelectedCategory("all");
-                setSelectedDifficulty("all");
-                setSelectedLetter("all");
-              }}
-              className="px-4 py-2 rounded-xl bg-cyan-500/20 border border-cyan-500/40 text-cyan-300 font-mono text-xs font-bold hover:bg-cyan-500/30 transition-all cursor-pointer"
+              onClick={resetAllFilters}
+              className="ml-auto shrink-0 cursor-pointer rounded-full border border-white/15 bg-white/[0.05] px-2 py-0.5 text-[9px] text-slate-300 hover:bg-white/[0.12] hover:text-white"
             >
-              RESET ALL FILTERS
+              Reset
             </button>
+          )}
+        </div>
+      </header>
+
+      {/* ── 3. Split-Pane Master-Detail Observatory Workspace ─────────────── */}
+      <div className="relative z-10 flex min-h-0 flex-1 overflow-hidden">
+        {/* Left Master Index Column */}
+        <aside className="flex h-full w-full flex-col border-r border-white/[0.07] bg-[#02050d]/85 lg:w-[400px] xl:w-[440px]">
+          {/* Daily Term Spotlight Banner (when no filters active) */}
+          {!hasFilters && featuredEntry && (
+            <button
+              type="button"
+              onClick={() => handleSelectEntry(featuredEntry, true)}
+              className="group m-2.5 flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-sky-400/25 bg-gradient-to-r from-sky-500/[0.10] via-indigo-500/[0.06] to-transparent px-3.5 py-2.5 text-left transition-all hover:border-sky-400/45"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 font-mono text-[9px] font-semibold tracking-[0.16em] text-sky-300 uppercase">
+                  <Sparkles className="h-3 w-3" />
+                  <span>Term of the Day</span>
+                </div>
+                <div className="mt-0.5 truncate font-mono text-xs font-semibold text-white">
+                  {featuredEntry.term}
+                </div>
+              </div>
+              <ChevronRight className="h-4 w-4 shrink-0 text-sky-300 transition-transform group-hover:translate-x-0.5" />
+            </button>
+          )}
+
+          {/* Result Count Strip */}
+          <div className="flex items-center justify-between border-b border-white/[0.06] px-3.5 py-1.5 font-mono text-[9.5px] text-slate-500">
+            <span>
+              {filteredEntries.length} of {CODEX_ENTRIES.length} entries
+            </span>
+            <span className="hidden sm:inline">↑/↓ Navigate · / Search</span>
           </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-            {filteredEntries.map((entry) => {
-              const cat = CODEX_CATEGORIES[entry.category];
-              const Icon = CATEGORY_ICONS[cat.icon] || BookOpen;
 
-              return (
-                <div
-                  key={entry.id}
-                  onClick={() => setActiveEntry(entry)}
-                  className="rounded-2xl bg-gradient-to-b from-[#0b1428]/90 to-[#060c1c]/95 border border-slate-800/90 hover:border-cyan-500/50 p-5 shadow-[0_8px_30px_rgba(0,0,0,0.5)] hover:shadow-[0_12px_40px_rgba(6,182,212,0.2)] backdrop-blur-xl transition-all duration-200 flex flex-col justify-between group cursor-pointer"
+          {/* Scrollable Term Index */}
+          <div className="flex-1 overflow-y-auto divide-y divide-white/[0.05]">
+            {filteredEntries.length === 0 ? (
+              <div className="flex flex-col items-center justify-center px-6 py-16 text-center font-mono">
+                <BookOpen className="mb-2.5 h-6 w-6 text-slate-600" />
+                <p className="text-xs text-slate-300">No matching astronomy terms</p>
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="mt-3 cursor-pointer rounded-full border border-white/15 bg-white/[0.06] px-3.5 py-1 text-[10px] text-sky-200 hover:bg-white/[0.12]"
                 >
-                  <div className="space-y-3">
-                    {/* Card Top Category & Difficulty Badge */}
+                  Clear Filters
+                </button>
+              </div>
+            ) : (
+              filteredEntries.map((entry) => {
+                const cat = CODEX_CATEGORIES[entry.category];
+                const isSelected = activeEntry?.id === entry.id;
+                const isSaved = bookmarks.includes(entry.id);
+
+                return (
+                  <button
+                    key={entry.id}
+                    type="button"
+                    onClick={() => handleSelectEntry(entry, true)}
+                    className={`group relative flex w-full cursor-pointer flex-col gap-1 px-3.5 py-3 text-left transition-colors ${
+                      isSelected ? "bg-sky-400/[0.10]" : "hover:bg-white/[0.035]"
+                    }`}
+                  >
+                    {isSelected && (
+                      <span className="absolute top-2 bottom-2 left-0 w-[2.5px] rounded-r-full bg-sky-300" />
+                    )}
+
                     <div className="flex items-center justify-between gap-2">
-                      <span
-                        className="px-2 py-0.5 rounded-lg border text-[10px] font-mono font-bold flex items-center gap-1.5"
-                        style={{
-                          backgroundColor: `${cat.colorHex}15`,
-                          borderColor: `${cat.colorHex}40`,
-                          color: cat.colorHex,
-                        }}
-                      >
-                        <Icon className="w-3 h-3" />
-                        {cat.name.split("&")[0].trim()}
-                      </span>
-
-                      <span
-                        className={`text-[9px] font-mono font-bold px-1.5 py-0.5 rounded ${
-                          entry.difficulty === "Fundamental"
-                            ? "text-emerald-400 bg-emerald-500/10 border border-emerald-500/30"
-                            : entry.difficulty === "Intermediate"
-                            ? "text-amber-400 bg-amber-500/10 border border-amber-500/30"
-                            : "text-purple-400 bg-purple-500/10 border border-purple-500/30"
-                        }`}
-                      >
-                        {entry.difficulty}
-                      </span>
-                    </div>
-
-                    {/* Term Title */}
-                    <div>
-                      <h3 className="text-lg font-bold text-white font-sans group-hover:text-cyan-300 transition-colors flex items-center justify-between">
-                        <span>{entry.term}</span>
-                        <ChevronRight className="w-4 h-4 text-slate-600 group-hover:text-cyan-400 group-hover:translate-x-0.5 transition-all" />
-                      </h3>
-                      {entry.iauStandardNotation && (
-                        <span className="text-[10px] font-mono text-slate-500 block mt-0.5">
-                          IAU Notation: {entry.iauStandardNotation}
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className="h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{ background: cat.colorHex }}
+                        />
+                        <span
+                          className={`truncate font-mono text-[12px] font-semibold ${
+                            isSelected ? "text-white" : "text-slate-100 group-hover:text-white"
+                          }`}
+                        >
+                          {entry.term}
                         </span>
-                      )}
+                      </div>
+
+                      <div className="flex shrink-0 items-center gap-1.5">
+                        {entry.formula && (
+                          <span
+                            title="Includes mathematical equation"
+                            className="rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[8.5px] text-sky-300"
+                          >
+                            fx
+                          </span>
+                        )}
+                        {isSaved && (
+                          <Bookmark className="h-3 w-3 fill-amber-300 text-amber-300" />
+                        )}
+                      </div>
                     </div>
 
-                    {/* Short Definition */}
-                    <p className="text-xs text-slate-300 font-sans leading-relaxed line-clamp-3">
+                    <p className="line-clamp-2 pl-3.5 text-[11.5px] leading-relaxed text-slate-400">
                       {entry.shortDefinition}
                     </p>
 
-                    {/* Formula Teaser (if present) */}
-                    {entry.formula && (
-                      <div className="p-2 rounded-lg bg-[#030612]/90 border border-slate-800 text-[11px] font-mono text-cyan-300 truncate">
-                        <code>{entry.formula.latex}</code>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Card Bottom Meta & Tags */}
-                  <div className="pt-3 mt-3 border-t border-slate-800/80 flex items-center justify-between text-[10px] font-mono text-slate-400">
-                    <div className="flex items-center gap-1.5 truncate max-w-[70%]">
-                      <Tag className="w-3 h-3 text-slate-500 shrink-0" />
-                      <span className="truncate">{entry.tags.slice(0, 2).join(", ")}</span>
+                    <div className="mt-0.5 flex items-center gap-2 pl-3.5 font-mono text-[9px] text-slate-500">
+                      <span>{cat.name}</span>
+                      <span>·</span>
+                      <span>{entry.difficulty}</span>
+                      {entry.iauStandardNotation && (
+                        <>
+                          <span>·</span>
+                          <span className="truncate text-slate-400">
+                            {entry.iauStandardNotation}
+                          </span>
+                        </>
+                      )}
                     </div>
-                    <span className="text-cyan-400 font-bold group-hover:underline shrink-0">
-                      EXPLORE &rarr;
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+                  </button>
+                );
+              })
+            )}
           </div>
-        )}
+        </aside>
 
+        {/* Right Full Editorial Technical Dossier (Desktop Permanent Pane) */}
+        <main className="hidden h-full flex-1 overflow-hidden bg-[#030714]/65 lg:block">
+          {activeEntry && renderDetailContent(activeEntry)}
+        </main>
       </div>
 
-      {/* ══════════════════════════════════════════════════════════════════════
-          DEEP-DIVE INSPECTOR MODAL: COMPLETE SCIENTIFIC BREAKDOWN
-      ══════════════════════════════════════════════════════════════════════ */}
-      {activeEntry && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md animate-fade-in"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setActiveEntry(null);
-          }}
-        >
-          <div
-            className="relative w-full max-w-3xl max-h-[90vh] overflow-y-auto rounded-3xl bg-[#060c1d] border border-cyan-500/50 shadow-[0_0_60px_rgba(0,0,0,0.95),0_0_35px_rgba(6,182,212,0.25)] p-6 sm:p-8 font-sans animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Top Close Button & Reticle */}
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <div className="flex items-center gap-2">
-                <span
-                  className="px-2.5 py-1 rounded-lg border text-xs font-mono font-bold flex items-center gap-1.5"
-                  style={{
-                    backgroundColor: `${CODEX_CATEGORIES[activeEntry.category].colorHex}15`,
-                    borderColor: `${CODEX_CATEGORIES[activeEntry.category].colorHex}40`,
-                    color: CODEX_CATEGORIES[activeEntry.category].colorHex,
-                  }}
-                >
-                  {CODEX_CATEGORIES[activeEntry.category].name}
-                </span>
-                <span className="text-[10px] font-mono text-slate-400 px-2 py-0.5 rounded bg-slate-900 border border-slate-800">
-                  {activeEntry.difficulty}
-                </span>
-              </div>
-
-              <button
-                type="button"
-                onClick={() => setActiveEntry(null)}
-                className="p-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-400 hover:text-white transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {/* Modal Body */}
-            <div className="space-y-6 mt-5">
-              
-              {/* Header Title & Pronunciation */}
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-black text-white font-sans">
-                  {activeEntry.term}
-                </h2>
-                <div className="flex flex-wrap items-center gap-3 mt-1 text-xs font-mono text-slate-400">
-                  {activeEntry.pronunciation && (
-                    <span className="text-cyan-300">{activeEntry.pronunciation}</span>
-                  )}
-                  {activeEntry.iauStandardNotation && (
-                    <span>&bull; IAU Notation: <strong className="text-white">{activeEntry.iauStandardNotation}</strong></span>
-                  )}
-                </div>
-              </div>
-
-              {/* Core Definition Box */}
-              <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/40 text-cyan-100 text-sm sm:text-base leading-relaxed">
-                {activeEntry.shortDefinition}
-              </div>
-
-              {/* Full Scientific Explanation */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                  <BookOpen className="w-4 h-4 text-cyan-400" />
-                  ASTROPHYSICAL EXPLANATION & MECHANICS
-                </h3>
-                <div className="text-sm text-slate-200 leading-relaxed whitespace-pre-wrap font-sans">
-                  {activeEntry.fullExplanation}
-                </div>
-              </div>
-
-              {/* Mathematical Formula Section (if applicable) */}
-              {activeEntry.formula && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                      <Zap className="w-4 h-4 text-amber-400" />
-                      MATHEMATICAL FORMULATION
-                    </h3>
-                    <button
-                      type="button"
-                      onClick={() => handleCopyFormula(activeEntry.formula!.latex)}
-                      className="text-[10px] font-mono text-cyan-400 hover:text-cyan-300 flex items-center gap-1 cursor-pointer"
-                    >
-                      {copiedFormula ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedFormula ? "COPIED" : "COPY LATEX"}</span>
-                    </button>
-                  </div>
-                  <div className="p-4 rounded-2xl bg-[#030614] border border-cyan-500/40 font-mono text-sm sm:text-base text-cyan-300 overflow-x-auto shadow-inner">
-                    <code>{activeEntry.formula.latex}</code>
-                  </div>
-                  <p className="text-xs text-slate-400 font-mono">
-                    {activeEntry.formula.explanation}
-                  </p>
-                </div>
-              )}
-
-              {/* Real World Astronomical Example */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                  <Globe className="w-4 h-4 text-emerald-400" />
-                  OBSERVED CELESTIAL EXAMPLE & SCALE
-                </h3>
-                <div className="p-3.5 rounded-xl bg-slate-900/80 border border-slate-800 text-xs sm:text-sm text-slate-200 leading-relaxed font-sans">
-                  {activeEntry.realWorldExample}
-                </div>
-              </div>
-
-              {/* Astronomical Relevance */}
-              <div className="space-y-2">
-                <h3 className="text-xs font-mono font-bold uppercase tracking-wider text-slate-400 flex items-center gap-2">
-                  <Compass className="w-4 h-4 text-purple-400" />
-                  ASTROPHYSICAL RELEVANCE & MISSIONS
-                </h3>
-                <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-                  {activeEntry.astronomicalRelevance}
-                </p>
-              </div>
-
-              {/* Related Terms Link Chips */}
-              {activeEntry.relatedTermIds.length > 0 && (
-                <div className="space-y-2 pt-2 border-t border-slate-800">
-                  <span className="text-[11px] font-mono text-slate-400 block uppercase tracking-wider">
-                    RELATED CODEX TERMS:
-                  </span>
-                  <div className="flex flex-wrap gap-2">
-                    {activeEntry.relatedTermIds.map((relId) => {
-                      const relTerm = CODEX_ENTRIES.find((e) => e.id === relId);
-                      if (!relTerm) return null;
-                      return (
-                        <button
-                          key={relId}
-                          type="button"
-                          onClick={() => setActiveEntry(relTerm)}
-                          className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 hover:border-cyan-400 text-cyan-300 font-mono text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <span>{relTerm.term}</span>
-                          <ArrowRight className="w-3 h-3 text-cyan-400" />
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Modal Bottom Actions: AI Terminal Query Trigger */}
-              <div className="pt-4 border-t border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
-                <button
-                  type="button"
-                  onClick={() => handleLaunchAiWithTerm(activeEntry)}
-                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-slate-950 font-bold font-mono text-xs flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(6,182,212,0.4)] cursor-pointer"
-                >
-                  <Bot className="w-4 h-4 text-slate-950" />
-                  <span>ASK SYS-AI IN ASTRO-TERMINAL</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveEntry(null)}
-                  className="w-full sm:w-auto px-4 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-slate-300 font-mono text-xs transition-colors cursor-pointer text-center"
-                >
-                  CLOSE INSPECTOR (ESC)
-                </button>
-              </div>
-
-            </div>
-          </div>
+      {/* Mobile Full-Screen Reading Sheet */}
+      {mobileSheetOpen && activeEntry && (
+        <div className="fixed inset-0 z-50 bg-[#02050e] lg:hidden">
+          {renderDetailContent(activeEntry)}
         </div>
       )}
 
-      {/* ── Integrated AI Terminal Modal Instance ────────────────────────────── */}
+      {/* Cakrapala AI Terminal Bridge */}
       <AstronomyTerminal
         isOpen={isAiTerminalOpen}
         onClose={() => setIsAiTerminalOpen(false)}

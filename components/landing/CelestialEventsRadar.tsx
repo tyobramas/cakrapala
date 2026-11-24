@@ -233,7 +233,7 @@ export default function CelestialEventsRadar() {
 
           <div className="border-t border-slate-800 pt-4 mt-4">
             <Link
-              href="/explore"
+              href="/asteroids"
               className="inline-flex items-center justify-between w-full text-xs text-cyan-400 hover:text-cyan-300 group"
             >
               <span>INSPECT ASTEROID DEFENSE RADAR</span>

@@ -33,6 +33,7 @@ import CesiumCameraController from "@/components/cesium/CesiumCameraController";
 import ObserverPanel from "@/components/astronomy/ObserverPanel";
 import SimulationTimePanel from "@/components/astronomy/SimulationTimePanel";
 import CelestialInfoPanel from "@/components/astronomy/CelestialInfoPanel";
+import ObservatoryLoader from "@/components/ui/ObservatoryLoader";
 
 import { DEFAULT_OBSERVER } from "@/lib/astronomy/observer";
 import type {
@@ -47,11 +48,12 @@ const CesiumViewer = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="w-full h-full flex items-center justify-center bg-[#020617]">
-        <p className="text-slate-400 text-sm animate-pulse">
-          Loading Cesium globe…
-        </p>
-      </div>
+      <ObservatoryLoader
+        variant="container"
+        title="CAKRAPALA"
+        subtitle="Calibrating planetary globe"
+        className="h-full w-full"
+      />
     ),
   }
 );

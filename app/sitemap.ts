@@ -18,34 +18,28 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: `${baseUrl}/osint`,
-      lastModified,
-      changeFrequency: 'hourly',
-      priority: 0.9,
-    },
-    {
-      url: `${baseUrl}/osint/sumber`,
-      lastModified,
-      changeFrequency: 'monthly',
-      priority: 0.7,
-    },
-    {
       url: `${baseUrl}/sky`,
       lastModified,
       changeFrequency: 'weekly',
       priority: 0.8,
     },
     {
-      url: `${baseUrl}/explore`,
+      url: `${baseUrl}/asteroids`,
       lastModified,
       changeFrequency: 'daily',
       priority: 0.9,
     },
     {
-      url: `${baseUrl}/iss`,
+      url: `${baseUrl}/satellites`,
       lastModified,
       changeFrequency: 'daily',
       priority: 0.9,
+    },
+    {
+      url: `${baseUrl}/satellites/catalog`,
+      lastModified,
+      changeFrequency: 'daily',
+      priority: 0.85,
     },
     {
       url: `${baseUrl}/codex`,

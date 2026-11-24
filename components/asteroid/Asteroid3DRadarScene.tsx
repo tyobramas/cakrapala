@@ -24,8 +24,11 @@ interface Asteroid3DRadarSceneProps {
   asteroids: AsteroidNeoObject[];
   selectedAsteroid: AsteroidNeoObject | null;
   onSelectAsteroid: (asteroid: AsteroidNeoObject) => void;
+  onOpenInspector?: (asteroid: AsteroidNeoObject) => void;
   selectedLandmark?: Landmark | null;
   isLoading?: boolean;
+  rightDrawerOpen?: boolean;
+  scaleBarVisible?: boolean;
 }
 
 const SYMBOL_PX = {
@@ -375,15 +378,18 @@ export default function Asteroid3DRadarScene({
   asteroids,
   selectedAsteroid,
   onSelectAsteroid,
+  onOpenInspector,
   selectedLandmark,
   isLoading = false,
+  rightDrawerOpen = true,
+  scaleBarVisible = true,
 }: Asteroid3DRadarSceneProps) {
   const { isOps } = useOpsMode();
   const containerRef = useRef<HTMLDivElement>(null);
   const [hoveredAsteroid, setHoveredAsteroid] = useState<AsteroidNeoObject | null>(null);
   const [showOrbits, setShowOrbits] = useState(true);
   const [cameraViewMode, setCameraViewMode] = useState<"free" | "top" | "target">("free");
-  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
+  const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number; maxW: number } | null>(null);
 
   // Dynamic Scale Bar State
   const [scaleBarLD, setScaleBarLD] = useState<number>(10);
@@ -1053,7 +1059,7 @@ export default function Asteroid3DRadarScene({
 
         if (current && current.userData.asteroid) {
           setHoveredAsteroid(current.userData.asteroid);
-          setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+          setTooltipPos({ x: e.clientX - rect.left, y: e.clientY - rect.top, maxW: rect.width });
           container.style.cursor = "pointer";
           return;
         }
@@ -1071,6 +1077,12 @@ export default function Asteroid3DRadarScene({
       onSelectAsteroid(hoveredAsteroid);
     }
   }, [hoveredAsteroid, onSelectAsteroid]);
+
+  const handleDoubleClick = useCallback(() => {
+    if (hoveredAsteroid && onOpenInspector) {
+      onOpenInspector(hoveredAsteroid);
+    }
+  }, [hoveredAsteroid, onOpenInspector]);
 
   // ── Auto-Track Selected Asteroid (Smooth Fly-To Tracking) ──────────────────
   useEffect(() => {
@@ -1126,203 +1138,173 @@ export default function Asteroid3DRadarScene({
   };
 
   return (
-    <div className="relative w-full h-full select-none overflow-hidden" style={{ background: OPS.bg }}>
+    <div className="relative h-full w-full overflow-hidden bg-[#02040a] select-none">
       {/* 3D WebGL Canvas Mount Container */}
       <div
         ref={containerRef}
         onPointerMove={handlePointerMove}
         onClick={handleClick}
-        className="w-full h-full cursor-grab active:cursor-grabbing"
+        onDoubleClick={handleDoubleClick}
+        className="h-full w-full cursor-grab active:cursor-grabbing"
       />
 
-      {/* ── Dynamic 1-2-5 SI Scale Bar (Bottom-Left) ────────────────────────── */}
-      <div className="absolute bottom-4 left-4 z-20 pointer-events-none select-none font-mono">
+      {/* ── Dynamic 1-2-5 SI Scale Bar (Bottom-Left, cleanly above Scale Ruler) ── */}
+      <div
+        className={`pointer-events-none absolute left-3.5 z-20 font-mono transition-all duration-200 select-none ${
+          scaleBarVisible ? "bottom-[104px]" : "bottom-14"
+        }`}
+      >
         <div className="relative mb-1" style={{ width: `${scaleBarPx}px` }}>
-          {/* Horizontal Line */}
-          <div className="h-[1px] w-full" style={{ background: OPS.textDim }} />
-          {/* Left Vertical Endcap */}
-          <div className="absolute left-0 -top-1 w-[1px] h-[7px]" style={{ background: OPS.textDim }} />
-          {/* Right Vertical Endcap */}
-          <div className="absolute right-0 -top-1 w-[1px] h-[7px]" style={{ background: OPS.textDim }} />
+          <div className="h-px w-full bg-slate-400/75" />
+          <div className="absolute -top-1 left-0 h-[7px] w-px bg-slate-400/75" />
+          <div className="absolute -top-1 right-0 h-[7px] w-px bg-slate-400/75" />
         </div>
-        {/* Metric Readouts */}
-        <div className="text-[11px] font-mono tabular-nums leading-none" style={{ color: OPS.text }}>
-          {scaleBarLD} LD
-        </div>
-        {isOps && (
-          <>
-            <div className="text-[9px] font-mono tabular-nums mt-0.5 leading-none" style={{ color: OPS.textFaint }}>
-              {scaleBarKmStr}
-            </div>
-            <div className="text-[8px] tracking-[0.1em] uppercase mt-1 leading-none" style={{ color: OPS.textFaint }}>
-              AT FOCUS PLANE
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ── Overlay Radar HUD Orientation & Controls ────────────────────────── */}
-      <div className="absolute inset-0 pointer-events-none flex flex-col justify-between p-3.5">
-        {/* Top Radar Orientation Bar */}
-        <div
-          className="flex items-center gap-3 px-3 py-1.5 border w-fit pointer-events-auto backdrop-blur-sm"
-          style={{ background: `${OPS.panel}E6`, borderColor: OPS.line }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: OPS.accent }} />
-            <span className={OPS_TYPE.label} style={{ color: OPS.text }}>
-              {isOps ? "TOPOCENTRIC NEO RADAR (WGS-84)" : "3D Asteroid Orbit Radar"}
-            </span>
-          </div>
-          <div className="h-3 w-px" style={{ background: OPS.line }} />
-          <div className={OPS_TYPE.meta} style={{ color: OPS.textDim }}>
-            RANGE: <span style={{ color: OPS.text, fontWeight: 600 }}>50 LD (~19.2M KM)</span>
-          </div>
-          <div className="h-3 w-px" style={{ background: OPS.line }} />
-          <div className={OPS_TYPE.meta} style={{ color: OPS.textDim }}>
-            OBJECTS: <span style={{ color: OPS.safe, fontWeight: 600 }}>{asteroids.length} ACTIVE</span>
-          </div>
-        </div>
-
-        {/* Floating View Controls & Symbology Legend */}
-        <div className="flex items-center justify-end pointer-events-auto gap-3">
-          {/* Legend */}
-          <div
-            className="flex items-center gap-4 px-3 py-1.5 border text-[10px] font-mono backdrop-blur-sm"
-            style={{ background: `${OPS.panel}F2`, borderColor: OPS.line, color: OPS.textDim }}
-          >
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full border" style={{ borderColor: OPS.safe }} />
-              <span>Safe (&gt;10 LD)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: OPS.caution }} />
-              <span>Close Pass (&lt;5 LD)</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rotate-45" style={{ background: OPS.hazard }} />
-              <span style={{ color: OPS.hazard }}>PHA</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: OPS.moon }} />
-              <span>Moon (1 LD)</span>
-            </div>
-          </div>
-
-          {/* Camera Controls */}
-          <div
-            className="flex items-center gap-1 p-1 border backdrop-blur-sm"
-            style={{ background: `${OPS.panel}F2`, borderColor: OPS.line }}
-          >
-            <button
-              onClick={resetCameraFreeView}
-              title="Reset 3D Perspective View"
-              className="px-2.5 py-1 text-[11px] font-mono transition-colors duration-[120ms] flex items-center gap-1.5 cursor-pointer"
-              style={{
-                background: cameraViewMode === "free" ? OPS.grid : "transparent",
-                color: cameraViewMode === "free" ? OPS.text : OPS.textDim,
-                border: cameraViewMode === "free" ? `1px solid ${OPS.accent}` : "1px solid transparent",
-              }}
-            >
-              <RefreshCw className="w-3 h-3" />
-              <span>3D ORBIT</span>
-            </button>
-
-            <button
-              onClick={setCameraTopView}
-              title="Polar Top-Down Radar View"
-              className="px-2.5 py-1 text-[11px] font-mono transition-colors duration-[120ms] flex items-center gap-1.5 cursor-pointer"
-              style={{
-                background: cameraViewMode === "top" ? OPS.grid : "transparent",
-                color: cameraViewMode === "top" ? OPS.text : OPS.textDim,
-                border: cameraViewMode === "top" ? `1px solid ${OPS.accent}` : "1px solid transparent",
-              }}
-            >
-              <Compass className="w-3 h-3" />
-              <span>POLAR 2D</span>
-            </button>
-
-            {selectedAsteroid && (
-              <button
-                onClick={focusSelectedTarget}
-                title="Lock Camera on Target Asteroid"
-                className="px-2.5 py-1 text-[11px] font-mono border transition-colors duration-[120ms] flex items-center gap-1.5 cursor-pointer"
-                style={{
-                  background: OPS.grid,
-                  borderColor: OPS.accent,
-                  color: OPS.accent,
-                }}
-              >
-                <Crosshair className="w-3 h-3" />
-                <span>LOCK TARGET</span>
-              </button>
-            )}
-
-            <button
-              onClick={() => setShowOrbits(!showOrbits)}
-              title="Toggle Extended Flyby Trajectories"
-              className="px-2.5 py-1 text-[11px] font-mono transition-colors duration-[120ms] flex items-center gap-1.5 cursor-pointer"
-              style={{
-                background: showOrbits ? OPS.grid : "transparent",
-                color: showOrbits ? OPS.text : OPS.textFaint,
-                border: showOrbits ? `1px solid ${OPS.line}` : "1px solid transparent",
-              }}
-            >
-              <Layers className="w-3 h-3" />
-              <span>ORBITS</span>
-            </button>
-          </div>
+        <div className="flex items-baseline gap-2 leading-none">
+          <span className="text-[11px] font-medium text-white/90 tabular-nums">
+            {scaleBarLD} LD
+          </span>
+          <span className="text-[9.5px] text-slate-400 tabular-nums">
+            {scaleBarKmStr}
+          </span>
         </div>
       </div>
 
-      {/* ── Interactive Hover Tooltip (Clamped to viewport) ────────────────── */}
+      {/* ── Compact Floating Camera & Symbology Controls (Bottom-Right of Radar) ── */}
+      <div
+        className={`pointer-events-none absolute bottom-3 z-20 flex flex-col items-end gap-1.5 transition-all duration-200 ${
+          rightDrawerOpen ? "right-3 lg:right-[360px]" : "right-3"
+        }`}
+      >
+        {/* Minimal Symbology Legend Pill (Desktop only, tucked neatly above dock) */}
+        <div className="pointer-events-auto hidden items-center gap-3 rounded-full border border-white/[0.08] bg-[#030714]/65 px-3 py-1 font-mono text-[9.5px] text-slate-400 backdrop-blur-2xl xl:flex">
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full border border-emerald-400" />
+            Safe
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-amber-400" />
+            &lt;5 LD
+          </span>
+          <span className="flex items-center gap-1.5 text-rose-300">
+            <span className="h-2 w-2 rotate-45 bg-rose-400" />
+            PHA
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-slate-300" />
+            Moon (1 LD)
+          </span>
+        </div>
+
+        {/* Sleek Glass Camera Dock */}
+        <div className="pointer-events-auto flex items-center gap-0.5 rounded-full border border-white/[0.10] bg-[#030714]/75 p-1 font-mono text-[10px] backdrop-blur-2xl shadow-[0_12px_36px_rgba(0,0,0,0.55)]">
+          <button
+            type="button"
+            onClick={resetCameraFreeView}
+            title="Reset 3D Perspective View"
+            className={`flex h-7 cursor-pointer items-center gap-1.5 rounded-full px-2.5 transition-all ${
+              cameraViewMode === "free"
+                ? "bg-white/[0.14] text-white"
+                : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+            }`}
+          >
+            <RefreshCw className="h-3 w-3" />
+            <span className="hidden sm:inline">3D</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={setCameraTopView}
+            title="Polar Top-Down Radar View"
+            className={`flex h-7 cursor-pointer items-center gap-1.5 rounded-full px-2.5 transition-all ${
+              cameraViewMode === "top"
+                ? "bg-white/[0.14] text-white"
+                : "text-slate-400 hover:bg-white/[0.06] hover:text-white"
+            }`}
+          >
+            <Compass className="h-3 w-3" />
+            <span className="hidden sm:inline">Polar</span>
+          </button>
+
+          {selectedAsteroid && (
+            <button
+              type="button"
+              onClick={focusSelectedTarget}
+              title="Lock Camera on Selected Asteroid"
+              className={`flex h-7 cursor-pointer items-center gap-1.5 rounded-full px-2.5 transition-all ${
+                cameraViewMode === "target"
+                  ? "bg-sky-400/20 text-sky-200"
+                  : "text-sky-300/80 hover:bg-sky-400/12 hover:text-sky-200"
+              }`}
+            >
+              <Crosshair className="h-3 w-3" />
+              <span className="hidden sm:inline">Lock</span>
+            </button>
+          )}
+
+          <span className="mx-0.5 h-3.5 w-px bg-white/[0.10]" />
+
+          <button
+            type="button"
+            onClick={() => setShowOrbits(!showOrbits)}
+            title="Toggle Flyby Trajectory Arcs"
+            className={`flex h-7 cursor-pointer items-center gap-1.5 rounded-full px-2.5 transition-all ${
+              showOrbits
+                ? "bg-white/[0.10] text-white"
+                : "text-slate-500 hover:bg-white/[0.06] hover:text-slate-300"
+            }`}
+          >
+            <Layers className="h-3 w-3" />
+            <span className="hidden sm:inline">Orbits</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ── Interactive Frosted Glass Hover Tooltip ───────────────────────── */}
       {hoveredAsteroid && tooltipPos && (
         <div
-          className="absolute z-30 pointer-events-none transform -translate-x-1/2 -translate-y-full border p-3 text-xs font-mono min-w-[220px] backdrop-blur-md"
+          className="pointer-events-none absolute z-30 min-w-[224px] -translate-x-1/2 -translate-y-full rounded-xl border border-white/[0.12] bg-[#030714]/90 p-3 font-mono text-xs text-slate-100 backdrop-blur-2xl shadow-[0_16px_44px_rgba(0,0,0,0.75)]"
           style={{
-            left: Math.max(120, Math.min((containerRef.current?.clientWidth || 800) - 120, tooltipPos.x)),
-            top: Math.max(20, tooltipPos.y - 15),
-            background: `${OPS.panel}F5`,
-            borderColor: OPS.line,
-            color: OPS.text,
+            left: Math.max(120, Math.min((tooltipPos.maxW || 800) - 120, tooltipPos.x)),
+            top: Math.max(20, tooltipPos.y - 16),
           }}
         >
-          <div className="flex items-center justify-between gap-2 border-b pb-1.5 mb-1.5" style={{ borderColor: OPS.line }}>
-            <span className="font-semibold" style={{ color: OPS.text }}>
-              {hoveredAsteroid.name}
-            </span>
+          <div className="mb-1.5 flex items-center justify-between gap-2 border-b border-white/[0.08] pb-1.5">
+            <span className="font-semibold text-white">{hoveredAsteroid.name}</span>
             {hoveredAsteroid.is_potentially_hazardous_asteroid ? (
-              <span className="text-[9px] font-bold tracking-wider" style={{ color: OPS.hazard }}>
+              <span className="rounded bg-rose-500/20 px-1.5 py-0.5 text-[9px] font-bold tracking-wider text-rose-300">
                 PHA
               </span>
             ) : (hoveredAsteroid.closest_miss_distance_ld || 99) < 5 ? (
-              <span className="text-[9px] font-medium tracking-wider" style={{ color: OPS.caution }}>
-                CLOSE PASS
+              <span className="rounded bg-amber-500/20 px-1.5 py-0.5 text-[9px] font-semibold tracking-wider text-amber-300">
+                CLOSE
               </span>
             ) : (
-              <span className="text-[9px] font-medium tracking-wider" style={{ color: OPS.safe }}>
+              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-medium tracking-wider text-emerald-300">
                 SAFE
               </span>
             )}
           </div>
-          <div className="space-y-1 text-[11px]">
+          <div className="space-y-1 text-[10.5px]">
             <div className="flex justify-between">
-              <span style={{ color: OPS.textDim }}>Miss Distance:</span>
-              <span className="font-mono tabular-nums" style={{ color: OPS.text }}>
+              <span className="text-slate-400">Miss Distance</span>
+              <span className="text-white tabular-nums">
                 {hoveredAsteroid.closest_miss_distance_ld?.toFixed(2)} LD
               </span>
             </div>
             <div className="flex justify-between">
-              <span style={{ color: OPS.textDim }}>Est. Diameter:</span>
-              <span className="font-mono tabular-nums" style={{ color: OPS.text }}>
+              <span className="text-slate-400">Est. Diameter</span>
+              <span className="text-white tabular-nums">
                 {hoveredAsteroid.avg_diameter_meters} m
               </span>
             </div>
             <div className="flex justify-between">
-              <span style={{ color: OPS.textDim }}>Velocity:</span>
-              <span className="font-mono tabular-nums" style={{ color: OPS.text }}>
-                {Math.round(hoveredAsteroid.velocity_kmh || 0).toLocaleString()} km/h
+              <span className="text-slate-400">Velocity</span>
+              <span className="text-white tabular-nums">
+                {(hoveredAsteroid.velocity_kms ?? 0).toFixed(2)} km/s
               </span>
+            </div>
+            <div className="pt-1 text-[9px] text-slate-500">
+              Click to focus · Double-click to inspect
             </div>
           </div>
         </div>

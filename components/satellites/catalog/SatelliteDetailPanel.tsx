@@ -80,101 +80,72 @@ export default function SatelliteDetailPanel({
     return (
         <aside
             aria-label="Selected satellite detail console"
-            className="flex max-h-[85vh] w-[360px] sm:w-[420px] max-w-[calc(100vw-1.5rem)] flex-col overflow-hidden rounded-2xl border border-cyan-400/40 bg-[#020713]/95 shadow-[0_25px_70px_rgba(0,0,0,0.85),0_0_35px_rgba(6,182,212,0.18)] backdrop-blur-2xl transition-all"
+            className="flex max-h-full w-[348px] sm:w-[392px] max-w-[calc(100vw-20px)] flex-col overflow-hidden rounded-2xl border border-white/[0.11] bg-[#030714]/86 shadow-[0_24px_70px_rgba(0,0,0,0.8)] backdrop-blur-2xl transition-all"
         >
-            {/* Header */}
-            <header className="flex items-start justify-between gap-3 border-b border-cyan-500/20 bg-gradient-to-r from-slate-950 via-[#061224] to-slate-950 p-4">
+            {/* Compact Frosted Header */}
+            <header className="flex items-start justify-between gap-2.5 border-b border-white/[0.08] px-3.5 pt-3 pb-2.5">
                 <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                        <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,1)]" />
-                        <span className="font-mono text-[9.5px] font-bold tracking-[0.16em] text-cyan-400 uppercase">
-                            SELECTED OBJECT
-                        </span>
-                        <span className="rounded border border-cyan-500/30 bg-cyan-500/10 px-1.5 py-0.2 font-mono text-[8.5px] text-cyan-300">
+                    <div className="flex items-center gap-1.5">
+                        <span className="h-1.5 w-1.5 rounded-full bg-sky-300 shadow-[0_0_8px_rgba(125,211,252,0.85)]" />
+                        <span className="rounded border border-sky-400/30 bg-sky-400/12 px-1.5 py-0.5 font-mono text-[8.5px] font-semibold tracking-wider text-sky-200 uppercase">
                             {orbitalMetrics.regime}
+                        </span>
+                        <span className="font-mono text-[9.5px] text-slate-400 tabular-nums">
+                            #{satellite.NORAD_CAT_ID}
                         </span>
                     </div>
 
-                    <h3 className="mt-1 truncate font-mono text-base font-bold text-white">
+                    <h3 className="mt-1 truncate font-mono text-sm font-bold text-white">
                         {satellite.OBJECT_NAME}
                     </h3>
 
-                    <p className="mt-0.5 font-mono text-[10.5px] text-slate-400 truncate">
-                        NORAD #{satellite.NORAD_CAT_ID} • {satellite.OBJECT_ID || "COSPAR UNASSIGNED"}
+                    <p className="mt-0.5 truncate font-mono text-[10px] text-slate-400">
+                        {satellite.OBJECT_ID || "COSPAR Unassigned"} · {ownerDisplay.name}
                     </p>
                 </div>
 
                 <button
                     type="button"
                     onClick={onClose}
-                    className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-800 bg-slate-900/80 text-slate-400 transition-colors hover:border-slate-700 hover:text-white"
+                    className="flex h-7 w-7 shrink-0 cursor-pointer items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.04] text-slate-400 transition-colors hover:border-white/25 hover:bg-white/[0.10] hover:text-white"
                     aria-label="Close detail panel"
                 >
-                    <X className="h-4 w-4" />
+                    <X className="h-3.5 w-3.5" />
                 </button>
             </header>
 
-            {/* Navigation Tabs */}
-            <nav className="grid grid-cols-4 border-b border-slate-800/80 bg-slate-950 font-mono text-[10px]">
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("overview")}
-                    className={[
-                        "flex items-center justify-center gap-1.5 py-2.5 transition-all border-b-2",
-                        activeTab === "overview"
-                            ? "border-cyan-400 bg-cyan-500/10 font-bold text-cyan-300"
-                            : "border-transparent text-slate-400 hover:text-slate-200",
-                    ].join(" ")}
-                >
-                    <Layers className="h-3 w-3" />
-                    <span>OVERVIEW</span>
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("orbit")}
-                    className={[
-                        "flex items-center justify-center gap-1.5 py-2.5 transition-all border-b-2",
-                        activeTab === "orbit"
-                            ? "border-cyan-400 bg-cyan-500/10 font-bold text-cyan-300"
-                            : "border-transparent text-slate-400 hover:text-slate-200",
-                    ].join(" ")}
-                >
-                    <OrbitIcon className="h-3 w-3" />
-                    <span>ORBIT</span>
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("analytics")}
-                    className={[
-                        "flex items-center justify-center gap-1.5 py-2.5 transition-all border-b-2",
-                        activeTab === "analytics"
-                            ? "border-cyan-400 bg-cyan-500/10 font-bold text-cyan-300"
-                            : "border-transparent text-slate-400 hover:text-slate-200",
-                    ].join(" ")}
-                >
-                    <BarChart3 className="h-3 w-3" />
-                    <span>ANALYTICS</span>
-                </button>
-
-                <button
-                    type="button"
-                    onClick={() => setActiveTab("source")}
-                    className={[
-                        "flex items-center justify-center gap-1.5 py-2.5 transition-all border-b-2",
-                        activeTab === "source"
-                            ? "border-cyan-400 bg-cyan-500/10 font-bold text-cyan-300"
-                            : "border-transparent text-slate-400 hover:text-slate-200",
-                    ].join(" ")}
-                >
-                    <FileText className="h-3 w-3" />
-                    <span>SOURCE</span>
-                </button>
+            {/* Compact Segmented Tabs */}
+            <nav className="border-b border-white/[0.08] px-3 py-2">
+                <div className="grid grid-cols-4 gap-1 rounded-xl border border-white/[0.08] bg-white/[0.03] p-0.5 font-mono text-[9.5px]">
+                    {[
+                        { id: "overview" as const, label: "Info", icon: Layers },
+                        { id: "orbit" as const, label: "Orbit", icon: OrbitIcon },
+                        { id: "analytics" as const, label: "Stats", icon: BarChart3 },
+                        { id: "source" as const, label: "OMM", icon: FileText },
+                    ].map((tab) => {
+                        const Icon = tab.icon;
+                        const active = activeTab === tab.id;
+                        return (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                onClick={() => setActiveTab(tab.id)}
+                                className={`flex cursor-pointer items-center justify-center gap-1 rounded-lg py-1.5 font-medium tracking-wider uppercase transition-all ${
+                                    active
+                                        ? "bg-white/[0.13] text-white shadow-sm"
+                                        : "text-slate-400 hover:text-slate-200"
+                                }`}
+                            >
+                                <Icon className="h-2.5 w-2.5" />
+                                <span>{tab.label}</span>
+                            </button>
+                        );
+                    })}
+                </div>
             </nav>
 
             {/* Scrollable Content Body */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-4 max-h-[580px]">
+            <div className="flex-1 overflow-y-auto p-3.5 space-y-3">
                 {/* 1. OVERVIEW TAB */}
                 {activeTab === "overview" && (
                     <div className="space-y-4">
@@ -430,34 +401,34 @@ export default function SatelliteDetailPanel({
                 )}
             </div>
 
-            {/* Bottom Actions Bar */}
-            <footer className="flex items-center gap-2 border-t border-cyan-500/20 bg-slate-950 p-3">
+            {/* Compact Bottom Actions Bar */}
+            <footer className="flex items-center gap-1.5 border-t border-white/[0.08] bg-white/[0.02] p-2.5">
                 {focusId && (
                     <Link
-                        href={`/iss?sat=${focusId}`}
-                        className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-cyan-400/50 bg-cyan-500/20 py-2.5 font-mono text-xs font-bold text-cyan-200 transition-all hover:bg-cyan-500/30 hover:shadow-[0_0_20px_rgba(6,182,212,0.3)] min-h-[44px]"
+                        href={`/satellites?sat=${focusId}`}
+                        className="flex h-8 flex-1 items-center justify-center gap-1.5 rounded-full border border-sky-400/35 bg-sky-400/15 font-mono text-[10px] font-semibold tracking-wider text-sky-200 uppercase transition-all hover:bg-sky-400/25 hover:text-white"
                     >
-                        <ExternalLink className="h-3.5 w-3.5" />
-                        <span>FOCUS 3D</span>
+                        <ExternalLink className="h-3 w-3" />
+                        <span>Focus Ops</span>
                     </Link>
                 )}
 
                 <button
                     type="button"
                     onClick={onRecenterCamera}
-                    className="flex flex-1 items-center justify-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900 py-2.5 font-mono text-xs font-semibold text-slate-300 transition-all hover:border-slate-700 hover:text-white min-h-[44px]"
+                    className="flex h-8 flex-1 cursor-pointer items-center justify-center gap-1.5 rounded-full border border-white/[0.10] bg-white/[0.05] font-mono text-[10px] font-medium tracking-wider text-slate-200 uppercase transition-all hover:border-white/25 hover:bg-white/[0.10] hover:text-white"
                 >
-                    <Compass className="h-3.5 w-3.5 text-cyan-400" />
-                    <span>RE-CENTER</span>
+                    <Compass className="h-3 w-3 text-sky-300" />
+                    <span>Re-Center</span>
                 </button>
 
                 <button
                     type="button"
                     onClick={onClose}
-                    className="flex items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 px-3 py-2.5 font-mono text-xs text-slate-400 hover:border-slate-700 hover:text-white min-h-[44px]"
+                    className="flex h-8 cursor-pointer items-center justify-center rounded-full border border-white/[0.08] bg-white/[0.03] px-3 font-mono text-[10px] text-slate-400 uppercase transition-colors hover:border-white/20 hover:text-white"
                     title="Clear selected satellite"
                 >
-                    CLEAR
+                    Clear
                 </button>
             </footer>
         </aside>

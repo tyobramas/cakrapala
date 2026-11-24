@@ -38,6 +38,8 @@ export interface CesiumISSGlobeProps {
   futureOrbit: OrbitPoint[];
   userLat: number;
   userLon: number;
+  solarLatDeg?: number;
+  solarLonDeg?: number;
 }
 
 const GLOBE_RADIUS = 2.0;
@@ -111,6 +113,8 @@ export default function CesiumISSGlobe({
   futureOrbit,
   userLat,
   userLon,
+  solarLatDeg = 0,
+  solarLonDeg = 0,
 }: CesiumISSGlobeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
 
@@ -142,9 +146,27 @@ export default function CesiumISSGlobe({
     futureOrbit,
     userLat,
     userLon,
+    solarLatDeg,
+    solarLonDeg,
   });
 
-  propsRef.current = {
+  useEffect(() => {
+    propsRef.current = {
+      satelliteId,
+      satelliteName,
+      iconSvg,
+      themeColor,
+      latitude,
+      longitude,
+      altitude,
+      orbitTrail,
+      futureOrbit,
+      userLat,
+      userLon,
+      solarLatDeg,
+      solarLonDeg,
+    };
+  }, [
     satelliteId,
     satelliteName,
     iconSvg,
@@ -156,7 +178,9 @@ export default function CesiumISSGlobe({
     futureOrbit,
     userLat,
     userLon,
-  };
+    solarLatDeg,
+    solarLonDeg,
+  ]);
 
   // ── 1. Bootstrap Three.js Scene ─────────────────────────────────────────────
   useEffect(() => {
@@ -213,25 +237,38 @@ export default function CesiumISSGlobe({
     const skyMesh = new THREE.Mesh(skyGeo, skyMat);
     scene.add(skyMesh);
 
-    // ── 3. High-Definition Earth (Bright, Brilliant Blue Oceans & Crisp Land) ──
-    const dayMap = textureLoader.load("/textures/planets/earth_4k.jpg");
+    // ── 3. Photorealistic 8K Earth with True Real-Time Day/Night Solar Terminator & City Lights ──
+    const maxAniso = Math.min(renderer.capabilities.getMaxAnisotropy(), 8);
+    const dayMap = textureLoader.load("/textures/planets/earth_day_8k.webp");
     dayMap.colorSpace = THREE.SRGBColorSpace;
+    dayMap.anisotropy = maxAniso;
 
     const waterMaskMap = textureLoader.load("/textures/planets/earth_water_mask.png");
-    const nightMap = textureLoader.load("/textures/planets/earth_night.jpg");
+    const nightMap = textureLoader.load("/textures/planets/earth_night_8k.webp");
     nightMap.colorSpace = THREE.SRGBColorSpace;
+    nightMap.anisotropy = maxAniso;
+
+    const cloudsMap = textureLoader.load("/textures/planets/earth_clouds_8k.webp");
+    cloudsMap.colorSpace = THREE.SRGBColorSpace;
+    cloudsMap.anisotropy = maxAniso;
 
     const earthGeo = new THREE.SphereGeometry(GLOBE_RADIUS, 96, 96);
 
-    // Celestial Sun direction in Space
-    const sunDir = new THREE.Vector3(15.0, 10.0, 20.0).normalize();
+    // Exact real-time VSOP87 subsolar vector in Earth-Fixed coordinates
+    const sunDir = latLonAltToVector3(
+      propsRef.current.solarLatDeg,
+      propsRef.current.solarLonDeg,
+      0,
+      1.0,
+    ).normalize();
 
-    // Custom World-Space Earth Shader
+    // Physically-inspired Real-Time Day / Golden Twilight / Night City Lights Shader
     const earthMat = new THREE.ShaderMaterial({
       uniforms: {
         dayTexture: { value: dayMap },
         waterMaskTexture: { value: waterMaskMap },
         nightTexture: { value: nightMap },
+        cloudsTexture: { value: cloudsMap },
         sunDirection: { value: sunDir },
         uCameraPosition: { value: camera.position.clone() },
       },
@@ -256,6 +293,7 @@ export default function CesiumISSGlobe({
         uniform sampler2D dayTexture;
         uniform sampler2D waterMaskTexture;
         uniform sampler2D nightTexture;
+        uniform sampler2D cloudsTexture;
         uniform vec3 sunDirection;
 
         varying vec3 vWorldNormal;
@@ -268,56 +306,51 @@ export default function CesiumISSGlobe({
           vec3 viewDir = normalize(vWorldViewDir);
           vec3 sDir = normalize(sunDirection);
 
-          // Texture samples
-          vec4 daySample = texture2D(dayTexture, vUv);
-          float isWater = texture2D(waterMaskTexture, vUv).r; // 1.0 = ocean, 0.0 = land/ice
-          vec4 nightSample = texture2D(nightTexture, vUv);
+          vec3 daySample = texture2D(dayTexture, vUv).rgb;
+          float isWater = texture2D(waterMaskTexture, vUv).r;
+          vec3 nightSample = texture2D(nightTexture, vUv).rgb;
+          float cloudVal = texture2D(cloudsTexture, vUv).r;
 
-          // 1. Vibrant, Radiant Blue Oceans (Bright & High-Visibility):
-          // Deep ocean: rich sapphire / cobalt blue (vec3(0.04, 0.28, 0.72))
-          // Shallow / coastal waters: luminous azure / cyan (vec3(0.08, 0.52, 0.88))
-          vec3 oceanDeep = vec3(0.04, 0.28, 0.72);
-          vec3 oceanShallow = vec3(0.08, 0.52, 0.88);
-          vec3 baseOcean = mix(oceanDeep, oceanShallow, clamp(daySample.b * 1.6, 0.0, 1.0));
+          // Rich sunlit oceans + crisp natural terrain
+          vec3 oceanDeep = vec3(0.015, 0.095, 0.28);
+          vec3 oceanShallow = vec3(0.04, 0.24, 0.52);
+          vec3 baseOcean = mix(oceanDeep, oceanShallow, clamp(daySample.b * 1.5, 0.0, 1.0));
+          vec3 surfaceDay = mix(daySample * 1.18, baseOcean, isWater * 0.72);
 
-          // 2. Daytime Surface Color:
-          vec3 enhancedLand = daySample.rgb * 1.30;
-          vec3 dayColor = mix(enhancedLand, baseOcean, isWater);
-
-          // 3. Multi-directional Illumination (Bright, High-Clarity Global Fill):
+          // Blend crisp sunlit cloud formations on the day side
           float sunDot = dot(normal, sDir);
-          float sunDiff = clamp(sunDot, 0.0, 1.0);
+          float dayMask = smoothstep(-0.14, 0.16, sunDot);
+          float diffuse = pow(max(sunDot, 0.0), 0.78);
+          vec3 sunlitSurface = mix(surfaceDay, vec3(0.95, 0.97, 1.0), cloudVal * 0.44);
 
-          // Opposite fill light
-          vec3 fillDir = normalize(vec3(-sDir.x, 0.3, -sDir.z));
-          float fillDiff = clamp(dot(normal, fillDir), 0.0, 1.0) * 0.35;
+          // Day illumination (natural orbital sunlight) + subtle starlit night ambient so continents remain faintly legible
+          vec3 nightBase = surfaceDay * vec3(0.032, 0.048, 0.088);
+          vec3 litColor = mix(nightBase, sunlitSurface * (0.28 + diffuse * 1.08), dayMask);
 
-          // Camera-facing fill so the observed Earth hemisphere is always beautifully illuminated
-          float camDiff = clamp(dot(normal, viewDir), 0.0, 1.0) * 0.25;
+          // Golden-amber atmospheric Rayleigh twilight scatter right along the exact sunset/sunrise terminator
+          float twilightBand = exp(-pow((sunDot + 0.01) / 0.11, 2.0));
+          vec3 twilightGlow = vec3(1.0, 0.44, 0.15) * twilightBand * 0.20 * (1.0 - cloudVal * 0.35);
 
-          // High baseline ambient for bright, tactical satellite radar visibility
-          float ambient = 0.55;
-
-          float totalLight = sunDiff * 0.45 + fillDiff + camDiff + ambient;
-
-          // 4. Crisp Specular Sun Glint Reflection on Oceans:
+          // Specular solar glint over sunlit oceans (masked by clouds)
           vec3 halfVec = normalize(sDir + viewDir);
           float NdotH = max(0.0, dot(normal, halfVec));
-          float specular = pow(NdotH, 96.0) * isWater * clamp(sunDot * 2.5, 0.0, 1.0) * 0.45;
-          vec3 sunGlint = vec3(0.92, 0.96, 1.0) * specular;
+          float specular = pow(NdotH, 92.0) * isWater * (1.0 - cloudVal * 0.75) * smoothstep(0.02, 0.25, sunDot) * 0.52;
+          vec3 sunGlint = vec3(0.96, 0.98, 1.0) * specular;
 
-          // 5. City Night Lights on unlit land:
-          float nightTransition = clamp(1.0 - sunDiff * 3.0, 0.0, 1.0);
-          vec3 cityLights = nightSample.rgb * vec3(1.0, 0.85, 0.45) * nightTransition * (1.0 - isWater) * 1.2;
+          // Radiant 8K NASA City Night Lights across Earth's dark hemisphere
+          float nightMask = smoothstep(0.06, -0.18, sunDot);
+          vec3 cityLights = nightSample * vec3(1.15, 0.88, 0.52) * nightMask * (1.0 - cloudVal * 0.35) * 1.85;
 
-          // 6. Integrated Atmospheric Limb Scattering (Soft Cyan-Blue Edge):
-          float limbFresnel = pow(1.0 - max(0.0, dot(normal, viewDir)), 3.8);
-          vec3 atmosScatter = vec3(0.15, 0.55, 0.95) * limbFresnel * 0.40;
+          // Physically-modulated atmospheric Rayleigh limb glow (bright cyan-blue on day limb, faint indigo on night limb)
+          float fresnel = pow(1.0 - max(0.0, dot(normal, viewDir)), 3.6);
+          vec3 limbCol = mix(vec3(0.06, 0.14, 0.32), vec3(0.22, 0.62, 1.0), dayMask);
+          vec3 atmosScatter = limbCol * fresnel * mix(0.26, 0.62, dayMask);
 
-          // Final Color Output
-          vec3 finalColor = dayColor * totalLight + sunGlint + cityLights + atmosScatter;
+          vec3 finalColor = litColor + twilightGlow + sunGlint + cityLights + atmosScatter;
 
           gl_FragColor = vec4(finalColor, 1.0);
+          #include <tonemapping_fragment>
+          #include <colorspace_fragment>
         }
       `,
     });
@@ -552,6 +585,12 @@ export default function CesiumISSGlobe({
       observerGroupRef.current.position.copy(obsPos);
       observerGroupRef.current.lookAt(obsPos.clone().multiplyScalar(2));
     }
+
+    // 6. Update Real-Time Solar Subpoint Direction for Exact Day/Night Terminator
+    if (earthMatRef.current) {
+      const realSunDir = latLonAltToVector3(solarLatDeg, solarLonDeg, 0, 1.0).normalize();
+      earthMatRef.current.uniforms.sunDirection.value.copy(realSunDir);
+    }
   }, [
     satelliteId,
     satelliteName,
@@ -564,6 +603,8 @@ export default function CesiumISSGlobe({
     futureOrbit,
     userLat,
     userLon,
+    solarLatDeg,
+    solarLonDeg,
   ]);
 
   return (

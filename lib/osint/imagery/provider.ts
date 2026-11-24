@@ -1,16 +1,19 @@
 /**
- * NASA GIBS Imagery Provider Factory
+ * Imagery Provider Factory — NASA GIBS + Cesium Ion
  *
- * Menghasilkan URL template dan instance UrlTemplateImageryProvider Cesium
- * yang terkonfigurasi dengan EPSG:4326 GeographicTilingScheme.
+ * Produces URL templates and Cesium UrlTemplateImageryProvider instances
+ * configured for GIBS EPSG:4326 GeographicTilingScheme, as well as
+ * Cesium Ion World Imagery (Bing Maps Aerial) via IonImageryProvider.
  *
- * PENTING:
- * 1. GeographicTilingScheme wajib digunakan untuk EPSG:4326 (2 tile horizontal pada level 0).
- * 2. URL builder memiliki 2 cabang kanonik:
- *    - Layer statis (!hasTime): segmen {Time} dihilangkan sama sekali.
- *    - Layer berwaktu (hasTime): menyertakan {Time} dalam format YYYY-MM-DD.
- * 3. maximumLevel tidak dinaikkan di atas spesifikasi GetCapabilities agar tidak
- *    memicu tile 404/400. Cesium menangani upsampling secara otomatis.
+ * IMPORTANT:
+ * 1. GeographicTilingScheme is required for GIBS EPSG:4326 (2 tiles horizontally at level 0).
+ * 2. URL builder has 2 canonical branches:
+ *    - Static layers (!hasTime): {Time} segment is omitted entirely.
+ *    - Temporal layers (hasTime): includes {Time} in YYYY-MM-DD format.
+ * 3. maximumLevel is not raised above GetCapabilities spec to avoid
+ *    triggering 404/400 tiles. Cesium handles upsampling automatically.
+ * 4. Cesium Ion layers bypass the GIBS URL template entirely and use
+ *    createWorldImageryAsync() which returns a ready-to-use provider.
  */
 
 import type { GibsLayer } from './catalog';
@@ -19,16 +22,16 @@ import { resolveImageryDate } from './time';
 const GIBS_BASE_URL = 'https://gibs.earthdata.nasa.gov/wmts/epsg4326/best';
 
 /**
- * Mendapatkan ekstensi file dari MIME format layer ('jpeg' atau 'png').
+ * Returns the file extension from the layer's MIME format ('jpeg' or 'png').
  */
 export function getLayerFileExtension(layer: GibsLayer): 'jpeg' | 'png' {
   return layer.format === 'image/png' ? 'png' : 'jpeg';
 }
 
 /**
- * Membangun URL tile kanonik untuk satu tile tertentu (pure function, testable tanpa Cesium).
+ * Builds the canonical tile URL for a single tile (pure function, testable without Cesium).
  *
- * Format kanonik:
+ * Canonical format:
  * - Layer berwaktu (hasTime: true):
  *   https://gibs.earthdata.nasa.gov/wmts/epsg4326/best/{layer}/default/{time}/{tileMatrixSet}/{z}/{row}/{col}.{ext}
  * - Layer statis (hasTime: false):
@@ -50,9 +53,9 @@ export function buildGibsTileUrl(
 }
 
 /**
- * Membangun URL template REST untuk Cesium UrlTemplateImageryProvider.
+ * Builds the REST URL template for Cesium UrlTemplateImageryProvider.
  *
- * Menggunakan token Cesium standard:
+ * Uses standard Cesium tokens:
  * - {z} untuk TileMatrix / level
  * - {y} untuk TileRow (North ke South pada GeographicTilingScheme)
  * - {x} untuk TileCol (West ke East pada GeographicTilingScheme)
@@ -173,7 +176,7 @@ export function createGibsGeographicTilingScheme(Cesium: typeof import('cesium')
 }
 
 /**
- * Membuat instance UrlTemplateImageryProvider Cesium untuk layer GIBS.
+ * Creates a NASA GIBS UrlTemplateImageryProvider.
  */
 export function createGibsImageryProvider(
   Cesium: typeof import('cesium'),
@@ -204,7 +207,7 @@ export function createGibsImageryProvider(
 }
 
 /**
- * Membuat instance ImageryLayer Cesium lengkap dengan opacity.
+ * Creates a GIBS ImageryLayer with opacity.
  */
 export function createGibsImageryLayer(
   Cesium: typeof import('cesium'),
@@ -216,4 +219,66 @@ export function createGibsImageryLayer(
     show: true,
   });
   return imageryLayer;
+}
+
+/**
+ * Creates a Cesium Ion World Imagery (Bing Maps Aerial) imagery layer.
+ * Requires a valid Cesium Ion access token (Ion.defaultAccessToken).
+ */
+export async function createCesiumIonImageryLayer(
+  Cesium: typeof import('cesium'),
+  options?: { opacity?: number },
+): Promise<import('cesium').ImageryLayer> {
+  const provider = await Cesium.IonImageryProvider.fromAssetId(2); // Asset 2 = Bing Maps Aerial
+  const imageryLayer = new Cesium.ImageryLayer(provider, {
+    alpha: options?.opacity ?? 1.0,
+    show: true,
+  });
+  return imageryLayer;
+}
+
+const ESRI_WORLD_IMAGERY_URL =
+  'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}';
+
+const ESRI_BOUNDARIES_LABELS_URL =
+  'https://services.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}';
+
+/**
+ * Creates a fixed, high-resolution global Satellite Imagery layer (Esri World Imagery).
+ * Free, no API key or date latency, crisp from global view down to street level (~0.3m-1m).
+ */
+export function createEsriSatelliteImageryLayer(
+  Cesium: typeof import('cesium'),
+  options?: { opacity?: number },
+): import('cesium').ImageryLayer {
+  const provider = new Cesium.UrlTemplateImageryProvider({
+    url: ESRI_WORLD_IMAGERY_URL,
+    tilingScheme: new Cesium.WebMercatorTilingScheme(),
+    maximumLevel: 18,
+    credit: 'Esri, Maxar, Earthstar Geographics',
+  });
+  return new Cesium.ImageryLayer(provider, {
+    alpha: options?.opacity ?? 1.0,
+    show: true,
+  });
+}
+
+/**
+ * Creates a crisp transparent Boundaries & Places reference overlay for satellite maps.
+ */
+export function createEsriBoundariesOverlayLayer(
+  Cesium: typeof import('cesium'),
+  options?: { opacity?: number },
+): import('cesium').ImageryLayer {
+  const provider = new Cesium.UrlTemplateImageryProvider({
+    url: ESRI_BOUNDARIES_LABELS_URL,
+    tilingScheme: new Cesium.WebMercatorTilingScheme(),
+    maximumLevel: 13,
+    hasAlphaChannel: true,
+    credit: 'Esri Reference Overlay',
+  });
+  return new Cesium.ImageryLayer(provider, {
+    alpha: options?.opacity ?? 0.85,
+    show: true,
+  });
 }

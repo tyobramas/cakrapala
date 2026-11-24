@@ -1,12 +1,14 @@
 'use client';
 // components/osint/OsintGlobe.tsx
 // ─────────────────────────────────────────────────────────────────────────────
-// Lightweight Cesium globe for the OSINT module.
+// Cesium globe for the OSINT module.
 //
 // Features:
 //   - NaturalEarthII offline basemap permanently at layer 0 (never black globe)
-//   - NASA GIBS imagery layer (EPSG:4326 GeographicTilingScheme) on top at layer 1
+//   - NASA GIBS imagery (EPSG:4326 GeographicTilingScheme) at layer 1
+//   - Cesium Ion World Imagery (Bing Maps Aerial, ~1m) auto-switch for deep zoom
 //   - NASA GIBS static overlays (Coastlines, Reference Labels) on top
+//   - Height-based auto-switch with 400km/600km hysteresis
 //   - Camera altitude tracking (cameraAltM callback)
 //   - Bounding box tracking (bbox callback)
 //   - Clean lifecycle management: zero layer leaks across base/date changes
@@ -21,6 +23,7 @@ import {
   forwardRef,
   useImperativeHandle,
 } from 'react';
+import type * as CesiumTypes from 'cesium';
 import type { BBox } from '@/lib/osint/types';
 import {
   setCesiumBaseUrl,
@@ -32,6 +35,7 @@ import { destroyViewer } from '@/lib/cesium/cesiumResourceManager';
 import {
   GIBS_LAYERS,
   getDefaultBaseLayer,
+  getCesiumIonLayer,
   type GibsLayer,
 } from '@/lib/osint/imagery/catalog';
 import {
@@ -39,9 +43,18 @@ import {
   formatUtcDate,
   parseUtcDate,
 } from '@/lib/osint/imagery/time';
-import { createGibsImageryLayer } from '@/lib/osint/imagery/provider';
+import {
+  createGibsImageryLayer,
+  createCesiumIonImageryLayer,
+} from '@/lib/osint/imagery/provider';
 
 const getCesium = () => import('cesium');
+
+/** Hysteresis thresholds for auto-switching between GIBS and hi-res basemaps */
+const HIRES_SWITCH_DOWN_ALT = 400_000; // Switch TO hi-res when descending below 400 km
+const HIRES_SWITCH_UP_ALT = 600_000;   // Switch TO GIBS when ascending above 600 km
+
+export type HiResMode = 'auto' | 'always-gibs' | 'always-hires';
 
 export interface OsintGlobeHandle {
   /** The raw Cesium.Viewer instance (may be null before bootstrap). */
@@ -77,11 +90,20 @@ export interface OsintGlobeProps {
     fallbackDate: string;
   }) => void;
   /** Notifies parent when Cesium Viewer is fully instantiated and ready. */
-  onViewerReady?: (viewer: any) => void;
+  onViewerReady?: (viewer: CesiumTypes.Viewer) => void;
   /** Notifies parent when Cesium Viewer is being destroyed. */
   onViewerDestroy?: () => void;
   /** When true, disables requestRenderMode so moving layers animate at 60fps. */
   movingLayersActive?: boolean;
+  /**
+   * Hi-res basemap mode:
+   * - 'auto' (default): auto-switch between GIBS and Cesium Ion based on altitude hysteresis
+   * - 'always-gibs': always use GIBS imagery, never switch to hi-res
+   * - 'always-hires': always use Cesium Ion hi-res imagery
+   */
+  hiResMode?: HiResMode;
+  /** Called when the actually-mounted basemap source changes (e.g. "VIIRS SNPP True Color" or "High-Res Satellite (Bing)") */
+  onActiveSourceChange?: (source: string) => void;
 }
 
 const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
@@ -97,6 +119,8 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
       onViewerReady,
       onViewerDestroy,
       movingLayersActive = false,
+      hiResMode = 'auto',
+      onActiveSourceChange,
     },
     ref,
   ) {
@@ -105,6 +129,9 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
     const viewerRef = useRef<any>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const [viewer, setViewer] = useState<any>(null);
+    // Counter that increments when camera altitude crosses a hysteresis threshold,
+    // triggering the hi-res auto-switch effect to re-evaluate.
+    const [hiResTrigger, setHiResTrigger] = useState(0);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const gibsBaseLayerRef = useRef<any>(null);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -114,11 +141,19 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
     const currentBaseIdRef = useRef<string | null>(null);
     const currentDateRef = useRef<string | null>(null);
     const tileErrorCountRef = useRef<number>(0);
+    // Track altitude for hi-res hysteresis
+    const currentAltRef = useRef<number>(180_000);
+    // Track which base source is active: 'gibs' or 'hires' (state ensures GIBS effect re-runs on switch back)
+    const activeBaseSourceRef = useRef<'gibs' | 'hires'>('gibs');
+    const [activeBaseSource, setActiveBaseSource] = useState<'gibs' | 'hires'>('gibs');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const hiResLayerRef = useRef<any>(null);
 
     const callbackRefs = useRef({
       onCameraAltChange,
       onBBoxChange,
       onTileError,
+      onActiveSourceChange,
     });
 
     useEffect(() => {
@@ -126,8 +161,9 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
         onCameraAltChange,
         onBBoxChange,
         onTileError,
+        onActiveSourceChange,
       };
-    }, [onCameraAltChange, onBBoxChange, onTileError]);
+    }, [onCameraAltChange, onBBoxChange, onTileError, onActiveSourceChange]);
 
     // Expose viewer and imagery layer count to parent / tests.
     useImperativeHandle(
@@ -160,11 +196,19 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
 
       const Cesium = await getCesium();
 
-      // Camera altitude.
-      const carto = Cesium.Cartographic.fromCartesian(
-        viewer.camera.positionWC,
-      );
-      const altM = carto.height;
+      // Camera altitude (works in 2D, Columbus View, and 3D).
+      const carto = viewer.camera.positionCartographic;
+      const altM = carto ? carto.height : 2e7;
+      // Check if altitude crossed a hysteresis threshold and trigger hi-res re-evaluation
+      const prevAlt = currentAltRef.current;
+      currentAltRef.current = altM;
+      const crossedDown =
+        prevAlt > HIRES_SWITCH_DOWN_ALT && altM <= HIRES_SWITCH_DOWN_ALT;
+      const crossedUp =
+        prevAlt < HIRES_SWITCH_UP_ALT && altM >= HIRES_SWITCH_UP_ALT;
+      if (crossedDown || crossedUp) {
+        setHiResTrigger((c) => c + 1);
+      }
       callbackRefs.current.onCameraAltChange?.(altM);
 
       // Compute bbox from the camera's view rectangle.
@@ -248,6 +292,8 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
         globalViewerConstructionCount++;
         const viewer = new Cesium.Viewer(container, {
           ...opts,
+          sceneMode: Cesium.SceneMode.SCENE2D,
+          mapMode2D: Cesium.MapMode2D.INFINITE_SCROLL,
           baseLayer,
           ...(creditContainer ? { creditContainer } : {}),
         });
@@ -255,14 +301,28 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
         viewerRef.current = viewer;
         setViewer(viewer);
         onViewerReady?.(viewer);
+        if (typeof window !== 'undefined') {
+          const debugWin = window as Window & {
+            __cesiumViewer?: CesiumTypes.Viewer;
+            __Cesium?: typeof CesiumTypes;
+          };
+          debugWin.__cesiumViewer = viewer;
+          debugWin.__Cesium = Cesium;
+        }
 
         // Dark globe atmosphere.
         viewer.scene.globe.enableLighting = true;
 
-        // Ensure canvas buffer fits container on next frame
+        // Canvas sharpness: use device pixel ratio for crisp rendering
+        viewer.useBrowserRecommendedResolution = false;
+        // Tighter tile screen-space error for sharper base imagery
+        viewer.scene.globe.maximumScreenSpaceError = 1.5;
+
+        // Ensure canvas buffer fits container on next frame, then re-compute accurate bbox/alt
         requestAnimationFrame(() => {
           if (!isMounted || !viewer || viewer.isDestroyed()) return;
           viewer.resize();
+          handleCameraMove();
           if (viewer.scene?.requestRenderMode) {
             viewer.scene.requestRender();
           }
@@ -270,14 +330,14 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
 
         // Listen for camera moves — throttled by Cesium's requestRenderMode.
         viewer.camera.moveEnd.addEventListener(handleCameraMove);
-        // Fire once initially.
-        handleCameraMove();
 
-        // Fly to default position (whole globe view).
-        viewer.camera.flyTo({
-          destination: Cesium.Cartesian3.fromDegrees(110, -2, 2e7),
-          duration: 0,
+        // Set initial camera to Jakarta at 180 km (detail mode immediately).
+        viewer.camera.setView({
+          destination: Cesium.Cartesian3.fromDegrees(106.85, -6.21, 180_000),
         });
+
+        // Fire camera handler AFTER setView so bbox/alt reflects Jakarta.
+        handleCameraMove();
 
         viewer.scene.requestRender();
       })().catch((err) => {
@@ -300,11 +360,82 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
         setViewer(null);
         viewerRef.current = null;
         gibsBaseLayerRef.current = null;
+        hiResLayerRef.current = null;
         gibsOverlaysRef.current.clear();
         currentBaseIdRef.current = null;
         currentDateRef.current = null;
       };
     }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // ── Auto-switch hi-res / GIBS basemap based on altitude hysteresis ─────
+
+    useEffect(() => {
+      if (!viewer || viewer.isDestroyed()) return;
+      if (!imageryEnabled) return;
+
+      const ionLayerDef = getCesiumIonLayer();
+      if (!ionLayerDef) return; // No Ion layer in catalog
+
+      let isMounted = true;
+
+      const resolveDesiredSource = (): 'gibs' | 'hires' => {
+        if (hiResMode === 'always-gibs') return 'gibs';
+        if (hiResMode === 'always-hires') return 'hires';
+        // auto mode: hysteresis
+        const alt = currentAltRef.current;
+        const current = activeBaseSourceRef.current;
+        if (current === 'gibs' && alt <= HIRES_SWITCH_DOWN_ALT) return 'hires';
+        if (current === 'hires' && alt >= HIRES_SWITCH_UP_ALT) return 'gibs';
+        return current;
+      };
+
+      const desired = resolveDesiredSource();
+
+      if (desired === activeBaseSourceRef.current) return;
+
+      (async () => {
+        const Cesium = await getCesium();
+        if (!isMounted || !viewer || viewer.isDestroyed()) return;
+
+        if (desired === 'hires') {
+          // Load Ion hi-res FIRST before removing GIBS so the globe never falls back to blurry NaturalEarthII
+          if (!hiResLayerRef.current) {
+            const ionLayer = await createCesiumIonImageryLayer(Cesium, { opacity: 1.0 });
+            if (!isMounted || !viewer || viewer.isDestroyed()) return;
+            viewer.imageryLayers.add(ionLayer, 1);
+            hiResLayerRef.current = ionLayer;
+          }
+          if (gibsBaseLayerRef.current) {
+            viewer.imageryLayers.remove(gibsBaseLayerRef.current, true);
+            gibsBaseLayerRef.current = null;
+            currentBaseIdRef.current = null;
+            currentDateRef.current = null;
+          }
+          activeBaseSourceRef.current = 'hires';
+          setActiveBaseSource('hires');
+          callbackRefs.current.onActiveSourceChange?.(ionLayerDef.label);
+        } else {
+          // Remove hi-res layer and trigger GIBS effect via activeBaseSource state
+          if (hiResLayerRef.current) {
+            viewer.imageryLayers.remove(hiResLayerRef.current, true);
+            hiResLayerRef.current = null;
+          }
+          activeBaseSourceRef.current = 'gibs';
+          currentBaseIdRef.current = null;
+          currentDateRef.current = null;
+          setActiveBaseSource('gibs');
+          const gibsBase = GIBS_LAYERS.find(
+            (l) => l.id === activeBaseLayerId && l.type === 'base' && !l.isCesiumIon,
+          ) ?? getDefaultBaseLayer();
+          callbackRefs.current.onActiveSourceChange?.(gibsBase.label);
+        }
+        viewer.scene.requestRender();
+      })().catch((err) => {
+        console.error('[OsintGlobe] hi-res switch error:', err);
+      });
+
+      return () => { isMounted = false; };
+    }, [viewer, imageryEnabled, hiResMode, activeBaseLayerId, hiResTrigger]); // re-evaluate on mode or altitude threshold crossing
 
     // ── Dynamically toggle requestRenderMode for moving layers (air, sea) ────
     useEffect(() => {
@@ -322,17 +453,26 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
     useEffect(() => {
       if (!viewer || viewer.isDestroyed()) return;
 
+      // When hi-res is active, skip GIBS base management (overlays still managed)
+      const isHiResActive = activeBaseSource === 'hires';
+
       let isMounted = true;
 
       (async () => {
         const Cesium = await getCesium();
         if (!isMounted || !viewer || viewer.isDestroyed()) return;
 
-        // 1. If imagery is disabled: remove GIBS base and overlays.
+        // 1. If imagery is disabled: remove GIBS base, hi-res base, and overlays.
         if (!imageryEnabled) {
           if (gibsBaseLayerRef.current) {
             viewer.imageryLayers.remove(gibsBaseLayerRef.current, true);
             gibsBaseLayerRef.current = null;
+          }
+          if (hiResLayerRef.current) {
+            viewer.imageryLayers.remove(hiResLayerRef.current, true);
+            hiResLayerRef.current = null;
+            activeBaseSourceRef.current = 'gibs';
+            setActiveBaseSource('gibs');
           }
           for (const [, layer] of gibsOverlaysRef.current) {
             viewer.imageryLayers.remove(layer, true);
@@ -344,9 +484,9 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
           return;
         }
 
-        // 2. Identify target base layer and resolved date.
+        // 2. Identify target base layer and resolved date (skip CesiumIon entries).
         const baseLayerDef: GibsLayer =
-          GIBS_LAYERS.find((l) => l.id === activeBaseLayerId && l.type === 'base') ??
+          GIBS_LAYERS.find((l) => l.id === activeBaseLayerId && l.type === 'base' && !l.isCesiumIon) ??
           getDefaultBaseLayer();
 
         const safeDate = resolveImageryDate(baseLayerDef, imageryDate);
@@ -357,7 +497,7 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
           currentDateRef.current !== safeDate ||
           !gibsBaseLayerRef.current;
 
-        if (baseChanged) {
+        if (baseChanged && !isHiResActive) {
           // Remove old GIBS base layer if it exists (destroy = true to prevent leak).
           if (gibsBaseLayerRef.current) {
             viewer.imageryLayers.remove(gibsBaseLayerRef.current, true);
@@ -434,7 +574,7 @@ const OsintGlobe = forwardRef<OsintGlobeHandle, OsintGlobeProps>(
       return () => {
         isMounted = false;
       };
-    }, [viewer, imageryEnabled, activeBaseLayerId, imageryDate, overlaySettings]);
+    }, [viewer, imageryEnabled, activeBaseLayerId, imageryDate, overlaySettings, activeBaseSource]);
 
     return (
       <div className="osint-cesium-root relative w-full h-full" aria-label="OSINT 3D globe">

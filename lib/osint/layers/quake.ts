@@ -19,6 +19,61 @@ import { wrapAdapter } from '../adapter';
 const UPSTREAM_URL =
   'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson';
 
+const BMKG_UPSTREAM_URL =
+  'https://data.bmkg.go.id/DataMKG/TEWS/gempaterkini.json';
+
+interface BMKGGempaItem {
+  Tanggal?: string;
+  Jam?: string;
+  DateTime?: string;
+  Coordinates?: string;
+  Magnitude?: string;
+  Kedalaman?: string;
+  Wilayah?: string;
+  Potensi?: string;
+}
+
+interface BMKGResponse {
+  Infogempa?: {
+    gempa?: BMKGGempaItem[];
+  };
+}
+
+function normaliseBmkgQuake(item: BMKGGempaItem): OsintEntity | null {
+  if (!item.Coordinates) return null;
+  const parts = item.Coordinates.split(',').map((v) => Number(v.trim()));
+  if (parts.length !== 2 || isNaN(parts[0]) || isNaN(parts[1])) return null;
+  const [lat, lon] = parts;
+  const mag = Number(item.Magnitude ?? 0);
+  const depthKm = parseFloat(String(item.Kedalaman ?? '10').replace(/[^\d.]/g, '')) || 10;
+  const observedAt =
+    item.DateTime && !isNaN(new Date(item.DateTime).getTime())
+      ? new Date(item.DateTime).toISOString()
+      : new Date().toISOString();
+
+  // Only include events from the last 48 hours to stay consistent with live seismic feeds
+  if (Date.now() - new Date(observedAt).getTime() > 48 * 3600 * 1000) {
+    return null;
+  }
+
+  return {
+    id: `bmkg:${observedAt}:${lat.toFixed(2)}:${lon.toFixed(2)}`,
+    layer: 'quake',
+    kind: 'event',
+    label: item.Wilayah || 'Indonesia Region',
+    position: { lat, lon, altM: -(depthKm * 1000) },
+    severity: clamp((isNaN(mag) ? 0 : mag) / 9, 0, 1),
+    observedAt,
+    source: 'BMKG Indonesia',
+    raw: {
+      mag: isNaN(mag) ? null : mag,
+      place: item.Wilayah,
+      potensi: item.Potensi,
+      depthKm,
+    },
+  };
+}
+
 // ── Normaliser ──────────────────────────────────────────────────────────────
 
 /** Clamp a number to [min, max]. */
@@ -105,22 +160,52 @@ function isWithinBBox(lat: number, lon: number, bbox: BBox): boolean {
 const rawQuakeFetcher: LayerFetcher = async (
   params: FetchLayerParams,
 ): Promise<LayerPayload> => {
-  const response = await fetch(UPSTREAM_URL, { signal: params.signal });
+  const [usgsResult, bmkgResult] = await Promise.allSettled([
+    fetch(UPSTREAM_URL, { signal: params.signal }).then(async (res) => {
+      if (!res.ok) throw new Error(`USGS responded with HTTP ${res.status}`);
+      return (await res.json()) as USGSGeoJSON;
+    }),
+    fetch(BMKG_UPSTREAM_URL, { signal: params.signal }).then(async (res) => {
+      if (!res.ok) throw new Error(`BMKG responded with HTTP ${res.status}`);
+      return (await res.json()) as BMKGResponse;
+    }),
+  ]);
 
-  if (!response.ok) {
-    throw new Error(`USGS responded with HTTP ${response.status}`);
+  if (usgsResult.status === 'rejected' && bmkgResult.status === 'rejected') {
+    throw usgsResult.reason instanceof Error
+      ? usgsResult.reason
+      : new Error('Both USGS and BMKG earthquake feeds failed');
   }
 
-  const data: USGSGeoJSON = await response.json();
   const fetchedAt = new Date().toISOString();
+  const usgsData = usgsResult.status === 'fulfilled' ? usgsResult.value : null;
+  const bmkgData = bmkgResult.status === 'fulfilled' ? bmkgResult.value : null;
 
-  // Upstream "generated" timestamp if available.
   const upstreamAt =
-    typeof data.metadata?.generated === 'number'
-      ? new Date(data.metadata.generated).toISOString()
-      : null;
+    typeof usgsData?.metadata?.generated === 'number'
+      ? new Date(usgsData.metadata.generated).toISOString()
+      : fetchedAt;
 
-  let entities: OsintEntity[] = data.features.map(normaliseQuakeFeature);
+  let entities: OsintEntity[] = usgsData
+    ? usgsData.features.map(normaliseQuakeFeature)
+    : [];
+
+  // Merge official BMKG Indonesia quakes that are not already reported by USGS
+  const bmkgItems = bmkgData?.Infogempa?.gempa ?? [];
+  for (const item of bmkgItems) {
+    const bmkgEnt = normaliseBmkgQuake(item);
+    if (!bmkgEnt) continue;
+    const bmkgTime = new Date(bmkgEnt.observedAt).getTime();
+    const isDuplicate = entities.some((e) => {
+      const dLat = Math.abs(e.position.lat - bmkgEnt.position.lat);
+      const dLon = Math.abs(e.position.lon - bmkgEnt.position.lon);
+      const dTime = Math.abs(new Date(e.observedAt).getTime() - bmkgTime);
+      return dLat < 1.0 && dLon < 1.0 && dTime < 180_000;
+    });
+    if (!isDuplicate) {
+      entities.push(bmkgEnt);
+    }
+  }
 
   // Server-side bbox filter.
   if (params.bbox) {

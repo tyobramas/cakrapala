@@ -12,6 +12,7 @@
  */
 
 import starCatalogData from "@/public/data/stars-bsc5.json";
+import constellationCatalogData from "@/public/data/constellations.json";
 import * as Astronomy from "astronomy-engine";
 
 export interface ObserverLocation {
@@ -20,6 +21,10 @@ export interface ObserverLocation {
   latitude: number;
   longitude: number;
   timezoneOffsetHours: number;
+  /** Real IANA timezone identifier (e.g. "Asia/Jakarta", "Europe/London") for exact DST-aware local time */
+  timeZone?: string;
+  /** Observer altitude above sea level in meters */
+  elevationMeters?: number;
 }
 
 export interface SolarState {
@@ -43,6 +48,8 @@ export interface TopocentricStar {
   constellation: string;
   mag: number;
   colorIndex: number; // Johnson B-V
+  raDeg: number;      // J2000 Right Ascension (degrees)
+  decDeg: number;     // J2000 Declination (degrees)
   altitudeDeg: number;
   azimuthDeg: number;
   isVisibleAboveHorizon: boolean;
@@ -55,6 +62,8 @@ export interface TopocentricBody {
   name: string;
   mag: number;
   colorHex: string;
+  raDeg?: number;
+  decDeg?: number;
   altitudeDeg: number;
   azimuthDeg: number;
   isVisibleAboveHorizon: boolean;
@@ -65,12 +74,24 @@ export interface TopocentricBody {
   illuminationFraction?: number;
 }
 
+export interface ConstellationSegmentHorizontal {
+  az1: number;
+  alt1: number;
+  az2: number;
+  alt2: number;
+}
+
 export interface Constellation3D {
   name: string;
   abbreviation: string;
+  centerRaDeg: number;
+  centerDecDeg: number;
+  centerAzDeg: number;
+  centerAltDeg: number;
   centerPos3D: { x: number; y: number; z: number };
   isVisible: boolean;
   segments: [{ x: number; y: number; z: number }, { x: number; y: number; z: number }][];
+  horizontalSegments: ConstellationSegmentHorizontal[];
 }
 
 export interface MilkyWayStreamPoint {
@@ -80,17 +101,260 @@ export interface MilkyWayStreamPoint {
 }
 
 export const PRESET_CITIES: ObserverLocation[] = [
-  { name: "Bogor", country: "Indonesia (Default)", latitude: -6.595, longitude: 106.8166, timezoneOffsetHours: 7 },
-  { name: "Special Capital Region of Jakarta", country: "Indonesia", latitude: -6.2088, longitude: 106.8456, timezoneOffsetHours: 7 },
-  { name: "New York", country: "United States", latitude: 40.7128, longitude: -74.006, timezoneOffsetHours: -4 },
-  { name: "London", country: "United Kingdom", latitude: 51.5074, longitude: -0.1278, timezoneOffsetHours: 1 },
-  { name: "Tokyo", country: "Japan", latitude: 35.6762, longitude: 139.6503, timezoneOffsetHours: 9 },
-  { name: "Sydney", country: "Australia", latitude: -33.8688, longitude: 151.2093, timezoneOffsetHours: 10 },
-  { name: "Cairo", country: "Egypt", latitude: 30.0444, longitude: 31.2357, timezoneOffsetHours: 3 },
-  { name: "Reykjavik", country: "Iceland (Aurora Hub)", latitude: 64.1466, longitude: -21.9426, timezoneOffsetHours: 0 },
-  { name: "Rio de Janeiro", country: "Brazil", latitude: -22.9068, longitude: -43.1729, timezoneOffsetHours: -3 },
-  { name: "Mauna Kea Observatory", country: "Hawaii, USA", latitude: 19.8206, longitude: -155.4681, timezoneOffsetHours: -10 },
+  { name: "Jakarta", country: "Indonesia", latitude: -6.2088, longitude: 106.8456, timezoneOffsetHours: 7, timeZone: "Asia/Jakarta", elevationMeters: 10 },
+  { name: "Bogor (Bosscha Sector)", country: "Indonesia", latitude: -6.595, longitude: 106.8166, timezoneOffsetHours: 7, timeZone: "Asia/Jakarta", elevationMeters: 265 },
+  { name: "Bandung (Bosscha Lembang)", country: "Indonesia", latitude: -6.8246, longitude: 107.6159, timezoneOffsetHours: 7, timeZone: "Asia/Jakarta", elevationMeters: 1310 },
+  { name: "Bali (Denpasar)", country: "Indonesia", latitude: -8.6705, longitude: 115.2126, timezoneOffsetHours: 8, timeZone: "Asia/Makassar", elevationMeters: 20 },
+  { name: "Tokyo", country: "Japan", latitude: 35.6762, longitude: 139.6503, timezoneOffsetHours: 9, timeZone: "Asia/Tokyo", elevationMeters: 40 },
+  { name: "Mauna Kea Observatory", country: "Hawaii, USA", latitude: 19.8206, longitude: -155.4681, timezoneOffsetHours: -10, timeZone: "Pacific/Honolulu", elevationMeters: 4205 },
+  { name: "Paranal Observatory (VLT)", country: "Atacama, Chile", latitude: -24.6272, longitude: -70.4042, timezoneOffsetHours: -4, timeZone: "America/Santiago", elevationMeters: 2635 },
+  { name: "Roque de los Muchachos", country: "La Palma, Spain", latitude: 28.7567, longitude: -17.8819, timezoneOffsetHours: 0, timeZone: "Atlantic/Canary", elevationMeters: 2396 },
+  { name: "London (Greenwich)", country: "United Kingdom", latitude: 51.4769, longitude: -0.0005, timezoneOffsetHours: 0, timeZone: "Europe/London", elevationMeters: 45 },
+  { name: "New York", country: "United States", latitude: 40.7128, longitude: -74.006, timezoneOffsetHours: -5, timeZone: "America/New_York", elevationMeters: 10 },
+  { name: "Sydney", country: "Australia", latitude: -33.8688, longitude: 151.2093, timezoneOffsetHours: 10, timeZone: "Australia/Sydney", elevationMeters: 40 },
+  { name: "Reykjavik", country: "Iceland", latitude: 64.1466, longitude: -21.9426, timezoneOffsetHours: 0, timeZone: "Atlantic/Reykjavik", elevationMeters: 15 },
+  { name: "Cairo", country: "Egypt", latitude: 30.0444, longitude: 31.2357, timezoneOffsetHours: 2, timeZone: "Africa/Cairo", elevationMeters: 23 },
+  { name: "Rio de Janeiro", country: "Brazil", latitude: -22.9068, longitude: -43.1729, timezoneOffsetHours: -3, timeZone: "America/Sao_Paulo", elevationMeters: 15 },
 ];
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT IANA TIMEZONE & OBSERVER LOCAL TIME UTILITIES
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * Formats an instant `date` in the selected observer's true IANA timezone
+ * (falling back to numeric UTC offset if no IANA timeZone is provided).
+ */
+export function formatObserverClock(
+  date: Date,
+  loc: ObserverLocation,
+  includeSeconds: boolean = true,
+): { time: string; dateStr: string; tzLabel: string; isoLocalInput: string } {
+  if (loc.timeZone) {
+    try {
+      const timeFmt = new Intl.DateTimeFormat("en-GB", {
+        timeZone: loc.timeZone,
+        hour: "2-digit",
+        minute: "2-digit",
+        ...(includeSeconds ? { second: "2-digit" } : {}),
+        hour12: false,
+      });
+      const dateFmt = new Intl.DateTimeFormat("en-GB", {
+        timeZone: loc.timeZone,
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      });
+      const parts = new Intl.DateTimeFormat("en-CA", {
+        timeZone: loc.timeZone,
+        year: "numeric",
+        month: "2-digit",
+        day: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: false,
+      }).formatToParts(date);
+      const get = (t: string) => parts.find((p) => p.type === t)?.value ?? "00";
+      const hourRaw = get("hour") === "24" ? "00" : get("hour");
+      const isoLocalInput = `${get("year")}-${get("month")}-${get("day")}T${hourRaw}:${get("minute")}`;
+
+      const tzParts = new Intl.DateTimeFormat("en-US", {
+        timeZone: loc.timeZone,
+        timeZoneName: "shortOffset",
+      }).formatToParts(date);
+      const tzLabel = tzParts.find((p) => p.type === "timeZoneName")?.value ?? loc.timeZone;
+
+      return {
+        time: timeFmt.format(date).replace(/^24:/, "00:"),
+        dateStr: dateFmt.format(date),
+        tzLabel,
+        isoLocalInput,
+      };
+    } catch {
+      // Fall through to fixed-offset formatting
+    }
+  }
+
+  const offsetMs = loc.timezoneOffsetHours * 3600000;
+  const shifted = new Date(date.getTime() + offsetMs);
+  const hh = String(shifted.getUTCHours()).padStart(2, "0");
+  const mm = String(shifted.getUTCMinutes()).padStart(2, "0");
+  const ss = String(shifted.getUTCSeconds()).padStart(2, "0");
+  const yyyy = shifted.getUTCFullYear();
+  const mon = String(shifted.getUTCMonth() + 1).padStart(2, "0");
+  const dd = String(shifted.getUTCDate()).padStart(2, "0");
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const tzSign = loc.timezoneOffsetHours >= 0 ? "+" : "";
+  return {
+    time: includeSeconds ? `${hh}:${mm}:${ss}` : `${hh}:${mm}`,
+    dateStr: `${dd} ${months[shifted.getUTCMonth()]} ${yyyy}`,
+    tzLabel: `GMT${tzSign}${loc.timezoneOffsetHours}`,
+    isoLocalInput: `${yyyy}-${mon}-${dd}T${hh}:${mm}`,
+  };
+}
+
+/**
+ * Parses a `YYYY-MM-DDTHH:MM` wall-clock string interpreted in the selected observer's
+ * timezone (IANA or fixed UTC offset) into a true UTC `Date`.
+ */
+export function parseObserverLocalInput(value: string, loc: ObserverLocation): Date | null {
+  const m = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (!m) return null;
+  const [, ys, ms, ds, hs, mins] = m;
+  const targetUtcGuess = Date.UTC(Number(ys), Number(ms) - 1, Number(ds), Number(hs), Number(mins), 0);
+
+  if (loc.timeZone) {
+    try {
+      // Iterative 2-pass exact offset inversion (handles DST transitions accurately)
+      let guess = targetUtcGuess;
+      for (let i = 0; i < 2; i++) {
+        const parts = new Intl.DateTimeFormat("en-CA", {
+          timeZone: loc.timeZone,
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }).formatToParts(new Date(guess));
+        const get = (t: string) => Number(parts.find((p) => p.type === t)?.value ?? 0);
+        const hVal = get("hour") === 24 ? 0 : get("hour");
+        const renderedAsUtc = Date.UTC(get("year"), get("month") - 1, get("day"), hVal, get("minute"), 0);
+        guess += targetUtcGuess - renderedAsUtc;
+      }
+      return new Date(guess);
+    } catch {
+      // Fallback below
+    }
+  }
+  return new Date(targetUtcGuess - loc.timezoneOffsetHours * 3600000);
+}
+
+/**
+ * Returns the exact UTC instant for local evening (e.g., 21:00) on the observer's current date.
+ */
+export function getObserverLocalHourDate(baseDate: Date, loc: ObserverLocation, targetHour: number): Date {
+  const clock = formatObserverClock(baseDate, loc, false);
+  const datePrefix = clock.isoLocalInput.slice(0, 10);
+  const hh = String(Math.max(0, Math.min(23, Math.floor(targetHour)))).padStart(2, "0");
+  return parseObserverLocalInput(`${datePrefix}T${hh}:00`, loc) ?? baseDate;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// EXACT IAU J2000 -> TOPOCENTRIC HORIZONTAL ENGINE (PRECESSION + NUTATION + REFRACTION)
+// ═══════════════════════════════════════════════════════════════════════════════
+
+const DEG2RAD = Math.PI / 180;
+const RAD2DEG = 180 / Math.PI;
+
+/**
+ * Computes the exact 3x3 IAU J2000 -> Topocentric Horizontal rotation matrix
+ * (including IAU precession, nutation, GAST, and observer lat/lon) via astronomy-engine.
+ */
+export function createEqjToHorMatrix(
+  date: Date,
+  latDeg: number,
+  lngDeg: number,
+  elevationMeters: number = 0,
+): number[][] {
+  const time = Astronomy.MakeTime(date);
+  const obs = new Astronomy.Observer(latDeg, lngDeg, elevationMeters);
+  return Astronomy.Rotation_EQJ_HOR(time, obs).rot;
+}
+
+/**
+ * Computes the exact 3x3 Topocentric Horizontal -> IAU J2000 Galactic rotation matrix
+ * for zero-error Milky Way shader alignment at any observer location & epoch.
+ */
+export function createHorToGalMatrix(
+  date: Date,
+  latDeg: number,
+  lngDeg: number,
+  elevationMeters: number = 0,
+): number[][] {
+  const time = Astronomy.MakeTime(date);
+  const obs = new Astronomy.Observer(latDeg, lngDeg, elevationMeters);
+  const horToEqj = Astronomy.Rotation_HOR_EQJ(time, obs);
+  const eqjToGal = Astronomy.Rotation_EQJ_GAL();
+  return Astronomy.CombineRotation(horToEqj, eqjToGal).rot;
+}
+
+/**
+ * Transforms J2000 Equatorial (RA°, Dec°) to apparent Topocentric Horizontal (Az°, Alt°)
+ * using the precomputed `Rotation_EQJ_HOR` matrix + standard atmospheric refraction.
+ *
+ * Also returns right-handed Three.js interior dome coordinates:
+ *   North (Az=0°) = +Z, East (Az=90°) = -X (right of viewer facing North), Zenith = +Y.
+ */
+export function projectJ2000ToHorizontal(
+  raDeg: number,
+  decDeg: number,
+  rot: number[][],
+  domeRadius: number = 500,
+  applyRefraction: boolean = true,
+): { azDeg: number; altDeg: number; x: number; y: number; z: number } {
+  const raRad = raDeg * DEG2RAD;
+  const decRad = decDeg * DEG2RAD;
+  const cosDec = Math.cos(decRad);
+  const vx = cosDec * Math.cos(raRad);
+  const vy = cosDec * Math.sin(raRad);
+  const vz = Math.sin(decRad);
+
+  // astronomy-engine RotationMatrix applies rot^T * v (see Astronomy.RotateVector):
+  // hx = North, hy = West, hz = Up (Zenith)
+  const r0 = rot[0];
+  const r1 = rot[1];
+  const r2 = rot[2];
+  const hx = r0[0] * vx + r1[0] * vy + r2[0] * vz;
+  const hy = r0[1] * vx + r1[1] * vy + r2[1] * vz;
+  const hz = r0[2] * vx + r1[2] * vy + r2[2] * vz;
+
+  const altGeomDeg = Math.asin(Math.max(-1, Math.min(1, hz))) * RAD2DEG;
+  let altDeg = altGeomDeg;
+  if (applyRefraction && altGeomDeg > -2.0) {
+    const refDeg = Astronomy.Refraction("normal", Math.max(-1.0, altGeomDeg));
+    const fade = altGeomDeg >= -1.0 ? 1.0 : Math.max(0, altGeomDeg + 2.0);
+    altDeg = Math.min(90, altGeomDeg + refDeg * fade);
+  }
+
+  let azDeg = Math.atan2(-hy, hx) * RAD2DEG;
+  if (azDeg < 0) azDeg += 360;
+
+  const altRad = altDeg * DEG2RAD;
+  const azRad = azDeg * DEG2RAD;
+  const cosAlt = Math.cos(altRad);
+
+  return {
+    azDeg,
+    altDeg,
+    x: -domeRadius * cosAlt * Math.sin(azRad),
+    y: domeRadius * Math.sin(altRad),
+    z: domeRadius * cosAlt * Math.cos(azRad),
+  };
+}
+
+/**
+ * Formats Right Ascension (degrees) as `HHh MMm SSs` and Declination as `±DD° MM'`.
+ */
+export function formatRaDec(raDeg: number, decDeg: number): { raStr: string; decStr: string } {
+  const normRa = ((raDeg % 360) + 360) % 360;
+  const totalSec = Math.round((normRa / 15) * 3600);
+  const h = Math.floor(totalSec / 3600) % 24;
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+
+  const sign = decDeg >= 0 ? "+" : "−";
+  const absDec = Math.abs(decDeg);
+  const d = Math.floor(absDec);
+  const dm = Math.round((absDec - d) * 60);
+  const adjD = dm === 60 ? d + 1 : d;
+  const adjM = dm === 60 ? 0 : dm;
+
+  return {
+    raStr: `${String(h).padStart(2, "0")}h ${String(m).padStart(2, "0")}m ${String(s).padStart(2, "0")}s`,
+    decStr: `${sign}${String(adjD).padStart(2, "0")}° ${String(adjM).padStart(2, "0")}′`,
+  };
+}
 
 /**
  * Maps Johnson B-V color index to accurate RGB hex color.
@@ -160,33 +424,24 @@ export function computeSunPosition(date: Date, latDeg: number, lngDeg: number): 
 }
 
 export function computeTerminatorCurve(date: Date): { lng: number; lat: number }[] {
-  const jd = getJulianDate(date);
-  const n = jd - 2451545.0;
-  const L = (280.460 + 0.9856474 * n) % 360;
-  const g = (357.528 + 0.9856003 * n) * (Math.PI / 180);
-  const lambda = (L + 1.915 * Math.sin(g) + 0.020 * Math.sin(2 * g)) * (Math.PI / 180);
-  const epsilon = (23.439 - 0.0000004 * n) * (Math.PI / 180);
-  const decRad = Math.asin(Math.sin(epsilon) * Math.sin(lambda));
-
+  const time = Astronomy.MakeTime(date);
+  const eq = Astronomy.Equator(Astronomy.Body.Sun, time, new Astronomy.Observer(0, 0, 0), true, true);
+  const decRad = eq.dec * DEG2RAD;
+  const raDeg = eq.ra * 15;
   const gmst = getGMST(date);
-  const y = Math.cos(epsilon) * Math.sin(lambda);
-  const x = Math.cos(lambda);
-  let raDeg = Math.atan2(y, x) * (180 / Math.PI);
-  if (raDeg < 0) raDeg += 360;
-
-  const sunLng = (-(gmst - raDeg) % 360 + 540) % 360 - 180;
+  const sunLng = (((-(gmst - raDeg) + 180) % 360) + 360) % 360 - 180;
 
   const points: { lng: number; lat: number }[] = [];
-  const steps = 90;
+  const steps = 120;
 
   for (let i = 0; i <= steps; i++) {
     const lng = -180 + (i / steps) * 360;
-    const haRad = (lng - sunLng) * (Math.PI / 180);
+    const haRad = (lng - sunLng) * DEG2RAD;
     const tanSunLat = Math.tan(decRad);
     let termLatDeg = 0;
     if (Math.abs(tanSunLat) > 0.0001) {
       const termLatRad = Math.atan(-Math.cos(haRad) / tanSunLat);
-      termLatDeg = termLatRad * (180 / Math.PI);
+      termLatDeg = termLatRad * RAD2DEG;
     }
     points.push({ lng, lat: termLatDeg });
   }
@@ -272,38 +527,24 @@ export function computeTopocentricStars(
   date: Date,
   latDeg: number,
   lngDeg: number,
-  domeRadius: number = 500
+  domeRadius: number = 500,
+  elevationMeters: number = 0,
 ): TopocentricStar[] {
-  const gmst = getGMST(date);
-  const lstDeg = ((gmst + lngDeg) % 360 + 360) % 360;
-  const latRad = latDeg * (Math.PI / 180);
-
+  const rot = createEqjToHorMatrix(date, latDeg, lngDeg, elevationMeters);
   const result: TopocentricStar[] = [];
-  const rawStars = (starCatalogData as any).stars || [];
+  const rawStars = (starCatalogData as { stars?: Array<{
+    id: string;
+    rightAscensionDegrees: number;
+    declinationDegrees: number;
+    magnitude: number;
+    colorIndex?: number;
+    name?: string;
+  }> }).stars || [];
 
   for (const star of rawStars) {
     const raDeg = star.rightAscensionDegrees;
     const decDeg = star.declinationDegrees;
-    const decRad = decDeg * (Math.PI / 180);
-
-    const H = ((lstDeg - raDeg) % 360 + 360) % 360;
-    const HRad = H * (Math.PI / 180);
-
-    const sinAlt = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(HRad);
-    const altRad = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
-    const altDeg = altRad * (180 / Math.PI);
-
-    const cosAlt = Math.cos(altRad);
-    const cosAz = (Math.sin(decRad) - Math.sin(latRad) * Math.sin(altRad)) / (cosAlt * Math.cos(latRad) || 0.0001);
-    let azRad = Math.acos(Math.max(-1, Math.min(1, cosAz)));
-    if (Math.sin(HRad) > 0) {
-      azRad = 2 * Math.PI - azRad;
-    }
-    const azDeg = azRad * (180 / Math.PI);
-
-    const x = domeRadius * Math.cos(altRad) * Math.sin(azRad);
-    const y = domeRadius * Math.sin(altRad);
-    const z = domeRadius * Math.cos(altRad) * Math.cos(azRad);
+    const proj = projectJ2000ToHorizontal(raDeg, decDeg, rot, domeRadius, true);
 
     const hrNum = parseInt(star.id.replace("HR", ""), 10) || 0;
     const commonInfo = COMMON_STAR_NAMES[hrNum];
@@ -318,11 +559,13 @@ export function computeTopocentricStars(
       constellation: commonInfo?.constellation || "",
       mag: star.magnitude,
       colorIndex,
-      altitudeDeg: altDeg,
-      azimuthDeg: azDeg,
-      isVisibleAboveHorizon: altDeg >= 0,
+      raDeg,
+      decDeg,
+      altitudeDeg: proj.altDeg,
+      azimuthDeg: proj.azDeg,
+      isVisibleAboveHorizon: proj.altDeg >= 0,
       colorHex,
-      pos3D: { x, y, z },
+      pos3D: { x: proj.x, y: proj.y, z: proj.z },
     });
   }
 
@@ -333,28 +576,28 @@ export function computeTopocentricBodies(
   date: Date,
   latDeg: number,
   lngDeg: number,
-  domeRadius: number = 500
+  domeRadius: number = 500,
+  elevationMeters: number = 0,
 ): { moon: TopocentricBody; planets: TopocentricBody[] } {
   const time = Astronomy.MakeTime(date);
-  const obs = new Astronomy.Observer(latDeg, lngDeg, 0);
+  const obs = new Astronomy.Observer(latDeg, lngDeg, elevationMeters);
 
-  // Helper: astronomy-engine body -> topocentric (Az, Alt, pos3D)
-  function bodyToHorizontal(body: Astronomy.Body): { altDeg: number; azDeg: number; altRad: number; azRad: number } {
+  // Helper: astronomy-engine body -> topocentric (Az, Alt, RA, Dec, pos3D)
+  function bodyToHorizontal(body: Astronomy.Body) {
     const eq = Astronomy.Equator(body, time, obs, true, true);
-    const hor = Astronomy.Horizon(time, obs, eq.ra, eq.dec, 'normal');
+    const hor = Astronomy.Horizon(time, obs, eq.ra, eq.dec, "normal");
+    const altRad = hor.altitude * DEG2RAD;
+    const azRad = hor.azimuth * DEG2RAD;
     return {
+      raDeg: eq.ra * 15,
+      decDeg: eq.dec,
       altDeg: hor.altitude,
       azDeg: hor.azimuth,
-      altRad: hor.altitude * (Math.PI / 180),
-      azRad: hor.azimuth * (Math.PI / 180),
-    };
-  }
-
-  function makePos3D(altRad: number, azRad: number): { x: number; y: number; z: number } {
-    return {
-      x: domeRadius * Math.cos(altRad) * Math.sin(azRad),
-      y: domeRadius * Math.sin(altRad),
-      z: domeRadius * Math.cos(altRad) * Math.cos(azRad),
+      pos3D: {
+        x: -domeRadius * Math.cos(altRad) * Math.sin(azRad),
+        y: domeRadius * Math.sin(altRad),
+        z: domeRadius * Math.cos(altRad) * Math.cos(azRad),
+      },
     };
   }
 
@@ -366,12 +609,14 @@ export function computeTopocentricBodies(
   const moonBody: TopocentricBody = {
     id: "moon",
     name: "Moon",
-    mag: -12.5,
+    mag: moonIllum.mag,
     colorHex: "#f8fafc",
+    raDeg: moonPos.raDeg,
+    decDeg: moonPos.decDeg,
     altitudeDeg: moonPos.altDeg,
     azimuthDeg: moonPos.azDeg,
     isVisibleAboveHorizon: moonPos.altDeg >= 0,
-    pos3D: makePos3D(moonPos.altRad, moonPos.azRad),
+    pos3D: moonPos.pos3D,
     phaseDeg: moonPhaseDeg,
     illuminationFraction: moonIllum.phase_fraction,
   };
@@ -383,14 +628,13 @@ export function computeTopocentricBodies(
     { id: "mars",    name: "Mars",    body: Astronomy.Body.Mars,    color: "#f87171" },
     { id: "jupiter", name: "Jupiter", body: Astronomy.Body.Jupiter, color: "#fcd34d" },
     { id: "saturn",  name: "Saturn",  body: Astronomy.Body.Saturn,  color: "#fed7aa" },
-    { id: "uranus",  name: "Uranus",  body: Astronomy.Body.Uranus,  color: "#7dd3fc" }, // Ice-blue
-    { id: "neptune", name: "Neptune", body: Astronomy.Body.Neptune, color: "#818cf8" }, // Deep blue-violet
+    { id: "uranus",  name: "Uranus",  body: Astronomy.Body.Uranus,  color: "#7dd3fc" },
+    { id: "neptune", name: "Neptune", body: Astronomy.Body.Neptune, color: "#818cf8" },
   ];
 
   const planets: TopocentricBody[] = [];
   for (const p of planetDefs) {
     const pos = bodyToHorizontal(p.body);
-    // Get visual magnitude from astronomy-engine
     let mag = 0;
     try {
       const illum = Astronomy.Illumination(p.body, time);
@@ -404,10 +648,12 @@ export function computeTopocentricBodies(
       name: p.name,
       mag,
       colorHex: p.color,
+      raDeg: pos.raDeg,
+      decDeg: pos.decDeg,
       altitudeDeg: pos.altDeg,
       azimuthDeg: pos.azDeg,
       isVisibleAboveHorizon: pos.altDeg >= 0,
-      pos3D: makePos3D(pos.altRad, pos.azRad),
+      pos3D: pos.pos3D,
     });
   }
 
@@ -430,99 +676,83 @@ let cachedConstellationData: ConstellationData[] | null = null;
 
 function getConstellationData(): ConstellationData[] {
   if (cachedConstellationData) return cachedConstellationData;
-  try {
-    // Dynamic import for constellation data
-    const data = require("@/public/data/constellations.json");
-    cachedConstellationData = data.constellations || [];
-    return cachedConstellationData!;
-  } catch {
-    return [];
-  }
-}
-
-function raDecToPos3D(
-  raDeg: number,
-  decDeg: number,
-  lstDeg: number,
-  latRad: number,
-  radius: number
-): { x: number; y: number; z: number; altDeg: number } {
-  const decRad = decDeg * (Math.PI / 180);
-
-  const H = ((lstDeg - raDeg) % 360 + 360) % 360;
-  const HRad = H * (Math.PI / 180);
-
-  const sinAlt = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(HRad);
-  const altRad = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
-  const altDeg = altRad * (180 / Math.PI);
-
-  const cosAlt = Math.cos(altRad);
-  const cosAz = (Math.sin(decRad) - Math.sin(latRad) * Math.sin(altRad)) / (cosAlt * Math.cos(latRad) || 0.0001);
-  let azRad = Math.acos(Math.max(-1, Math.min(1, cosAz)));
-  if (Math.sin(HRad) > 0) azRad = 2 * Math.PI - azRad;
-
-  return {
-    x: radius * cosAlt * Math.sin(azRad),
-    y: radius * Math.sin(altRad),
-    z: radius * cosAlt * Math.cos(azRad),
-    altDeg,
-  };
+  const raw = constellationCatalogData as { constellations?: ConstellationData[] };
+  cachedConstellationData = raw.constellations || [];
+  return cachedConstellationData;
 }
 
 export function computeIAUConstellations(
   date: Date,
   latDeg: number,
   lngDeg: number,
-  domeRadius: number = 500
+  domeRadius: number = 500,
+  elevationMeters: number = 0,
 ): Constellation3D[] {
-  const gmst = getGMST(date);
-  const lstDeg = ((gmst + lngDeg) % 360 + 360) % 360;
-  const latRad = latDeg * (Math.PI / 180);
-
+  const rot = createEqjToHorMatrix(date, latDeg, lngDeg, elevationMeters);
   const constData = getConstellationData();
   const result: Constellation3D[] = [];
 
   for (const c of constData) {
     const segments: [{ x: number; y: number; z: number }, { x: number; y: number; z: number }][] = [];
-    const points: { x: number; y: number; z: number }[] = [];
-    let totalAlt = 0;
-    let count = 0;
+    const horizontalSegments: ConstellationSegmentHorizontal[] = [];
+
+    // Deduplicated unit-vector spherical centroid in J2000 for exact label anchoring
+    const seenVerts = new Set<string>();
+    let sumEqX = 0;
+    let sumEqY = 0;
+    let sumEqZ = 0;
+    let maxAlt = -90;
+
+    const addCentroidVert = (raDeg: number, decDeg: number) => {
+      const key = `${raDeg.toFixed(2)},${decDeg.toFixed(2)}`;
+      if (seenVerts.has(key)) return;
+      seenVerts.add(key);
+      const r = raDeg * DEG2RAD;
+      const d = decDeg * DEG2RAD;
+      sumEqX += Math.cos(d) * Math.cos(r);
+      sumEqY += Math.cos(d) * Math.sin(r);
+      sumEqZ += Math.sin(d);
+    };
 
     for (const seg of c.segments) {
-      const p1 = raDecToPos3D(seg.ra1, seg.dec1, lstDeg, latRad, domeRadius);
-      const p2 = raDecToPos3D(seg.ra2, seg.dec2, lstDeg, latRad, domeRadius);
+      const p1 = projectJ2000ToHorizontal(seg.ra1, seg.dec1, rot, domeRadius, true);
+      const p2 = projectJ2000ToHorizontal(seg.ra2, seg.dec2, rot, domeRadius, true);
 
       segments.push([
         { x: p1.x, y: p1.y, z: p1.z },
         { x: p2.x, y: p2.y, z: p2.z },
       ]);
-      points.push({ x: p1.x, y: p1.y, z: p1.z }, { x: p2.x, y: p2.y, z: p2.z });
-      totalAlt += p1.altDeg + p2.altDeg;
-      count += 2;
+      horizontalSegments.push({
+        az1: p1.azDeg,
+        alt1: p1.altDeg,
+        az2: p2.azDeg,
+        alt2: p2.altDeg,
+      });
+
+      addCentroidVert(seg.ra1, seg.dec1);
+      addCentroidVert(seg.ra2, seg.dec2);
+      if (p1.altDeg > maxAlt) maxAlt = p1.altDeg;
+      if (p2.altDeg > maxAlt) maxAlt = p2.altDeg;
     }
 
     if (segments.length === 0) continue;
 
-    let avgX = 0, avgY = 0, avgZ = 0;
-    for (const p of points) {
-      avgX += p.x;
-      avgY += p.y;
-      avgZ += p.z;
-    }
-    const len = points.length || 1;
-    avgX /= len;
-    avgY /= len;
-    avgZ /= len;
-
-    const avgAlt = totalAlt / (count || 1);
-    const isVisible = avgAlt > -15;
+    const norm = Math.hypot(sumEqX, sumEqY, sumEqZ) || 1;
+    const centerRaDeg = (((Math.atan2(sumEqY / norm, sumEqX / norm) * RAD2DEG) % 360) + 360) % 360;
+    const centerDecDeg = Math.asin(Math.max(-1, Math.min(1, sumEqZ / norm))) * RAD2DEG;
+    const centerProj = projectJ2000ToHorizontal(centerRaDeg, centerDecDeg, rot, domeRadius, true);
 
     result.push({
       name: c.name,
       abbreviation: c.abbreviation,
-      centerPos3D: { x: avgX, y: avgY, z: avgZ },
-      isVisible,
+      centerRaDeg,
+      centerDecDeg,
+      centerAzDeg: centerProj.azDeg,
+      centerAltDeg: centerProj.altDeg,
+      centerPos3D: { x: centerProj.x, y: centerProj.y, z: centerProj.z },
+      isVisible: maxAlt > -10,
       segments,
+      horizontalSegments,
     });
   }
 
@@ -867,48 +1097,196 @@ export const FAMOUS_NEBULAE: RawNebula[] = [
   },
 ];
 
+export interface RiseTransitSetResult {
+  riseTime: string;
+  transitTime: string;
+  setTime: string;
+  maxAltitudeDeg: number | null;
+  hoursUntilRise: number | null;
+  status: "normal" | "circumpolar" | "never_rises";
+}
+
+/**
+ * Computes exact Rise, Upper Transit (Culmination), and Set times in the
+ * selected observer location's true IANA timezone (never browser timezone).
+ */
+export function computeRiseTransitSet(
+  target: {
+    type: "sun" | "moon" | "planet" | "star" | "constellation" | "nebula" | "satellite";
+    id: string;
+    raDeg?: number;
+    decDeg?: number;
+    azimuthDeg: number;
+    altitudeDeg: number;
+  },
+  location: ObserverLocation,
+  date: Date,
+): RiseTransitSetResult {
+  const fmt = (d: Date | null) =>
+    d ? formatObserverClock(d, location, false).time : "--:--";
+
+  try {
+    const obs = new Astronomy.Observer(
+      location.latitude,
+      location.longitude,
+      location.elevationMeters ?? 0,
+    );
+    const time = Astronomy.MakeTime(date);
+
+    // 1. Solar System Bodies (exact VSOP87 / ELP + refraction via astronomy-engine)
+    const bodyMap: Record<string, Astronomy.Body> = {
+      sun: Astronomy.Body.Sun,
+      moon: Astronomy.Body.Moon,
+      mercury: Astronomy.Body.Mercury,
+      venus: Astronomy.Body.Venus,
+      mars: Astronomy.Body.Mars,
+      jupiter: Astronomy.Body.Jupiter,
+      saturn: Astronomy.Body.Saturn,
+      uranus: Astronomy.Body.Uranus,
+      neptune: Astronomy.Body.Neptune,
+    };
+    const astroBody =
+      target.type === "sun"
+        ? Astronomy.Body.Sun
+        : target.type === "moon"
+          ? Astronomy.Body.Moon
+          : target.type === "planet"
+            ? bodyMap[target.id.toLowerCase()]
+            : undefined;
+
+    if (astroBody) {
+      const rise = Astronomy.SearchRiseSet(astroBody, obs, +1, time, 1);
+      const set = Astronomy.SearchRiseSet(astroBody, obs, -1, time, 1);
+      const transit = Astronomy.SearchHourAngle(astroBody, obs, 0, time, +1);
+      const hoursUntilRise = rise
+        ? Math.max(0.05, (rise.date.getTime() - date.getTime()) / 3600000)
+        : null;
+      return {
+        riseTime: fmt(rise?.date ?? null),
+        transitTime: fmt(transit?.time.date ?? null),
+        setTime: fmt(set?.date ?? null),
+        maxAltitudeDeg: transit ? transit.hor.altitude : null,
+        hoursUntilRise,
+        status: !rise && !set ? (target.altitudeDeg >= 0 ? "circumpolar" : "never_rises") : "normal",
+      };
+    }
+
+    // 2. Fixed Deep Sky Objects, Stars & Constellations — exact precessed RA/Dec of date
+    const latRad = location.latitude * DEG2RAD;
+    let raOfDateDeg: number;
+    let decOfDateDeg: number;
+
+    if (typeof target.raDeg === "number" && typeof target.decDeg === "number") {
+      // Precess J2000 -> Equatorial of Date (EQD) for exact rise/transit/set
+      const rotEqd = Astronomy.Rotation_EQJ_EQD(time);
+      const r0 = target.raDeg * DEG2RAD;
+      const d0 = target.decDeg * DEG2RAD;
+      const vEqd = Astronomy.RotateVector(
+        rotEqd,
+        new Astronomy.Vector(Math.cos(d0) * Math.cos(r0), Math.cos(d0) * Math.sin(r0), Math.sin(d0), time),
+      );
+      const sph = Astronomy.SphereFromVector(vEqd);
+      raOfDateDeg = sph.lon;
+      decOfDateDeg = sph.lat;
+    } else {
+      // Fallback inverse from Az/Alt
+      const altRad = target.altitudeDeg * DEG2RAD;
+      const azRad = target.azimuthDeg * DEG2RAD;
+      const sinDec = Math.sin(latRad) * Math.sin(altRad) + Math.cos(latRad) * Math.cos(altRad) * Math.cos(azRad);
+      const decRad = Math.asin(Math.max(-1, Math.min(1, sinDec)));
+      const sinH = -Math.cos(altRad) * Math.sin(azRad);
+      const cosH = Math.cos(latRad) * Math.sin(altRad) - Math.sin(latRad) * Math.cos(altRad) * Math.cos(azRad);
+      const hDeg = (((Math.atan2(sinH, cosH) * RAD2DEG) % 360) + 360) % 360;
+      const lstDeg = (((getGMST(date) + location.longitude) % 360) + 360) % 360;
+      raOfDateDeg = (((lstDeg - hDeg) % 360) + 360) % 360;
+      decOfDateDeg = decRad * RAD2DEG;
+    }
+
+    const decRad = decOfDateDeg * DEG2RAD;
+    const maxAltitudeDeg = 90 - Math.abs(location.latitude - decOfDateDeg);
+
+    // Current local hour angle H (0..360°, 0=transit, 0..180=setting West, 180..360=rising East)
+    const lstDeg = (((getGMST(date) + location.longitude) % 360) + 360) % 360;
+    const currentH = (((lstDeg - raOfDateDeg) % 360) + 360) % 360;
+
+    // Sidereal rate: 15.04106864 deg / solar hour
+    const SIDEREAL_DEG_PER_HR = 15.04106864;
+    const hoursToTransit = ((360 - currentH) % 360) / SIDEREAL_DEG_PER_HR;
+    const transitDate = new Date(date.getTime() + hoursToTransit * 3600000);
+
+    // Standard astronomical horizon refraction h0 = -0.5667° (-34 arcmin)
+    const h0Rad = -0.5667 * DEG2RAD;
+    const cosH0 =
+      (Math.sin(h0Rad) - Math.sin(latRad) * Math.sin(decRad)) /
+      (Math.cos(latRad) * Math.cos(decRad) || 1e-9);
+
+    if (cosH0 > 1) {
+      return {
+        riseTime: "Never Rises",
+        transitTime: fmt(transitDate),
+        setTime: "Never Rises",
+        maxAltitudeDeg,
+        hoursUntilRise: null,
+        status: "never_rises",
+      };
+    }
+    if (cosH0 < -1) {
+      return {
+        riseTime: "Circumpolar",
+        transitTime: fmt(transitDate),
+        setTime: "Circumpolar",
+        maxAltitudeDeg,
+        hoursUntilRise: 0,
+        status: "circumpolar",
+      };
+    }
+
+    const H0Deg = Math.acos(cosH0) * RAD2DEG;
+    const riseH = (360 - H0Deg) % 360;
+    const setH = H0Deg;
+
+    const hoursToRise = (((riseH - currentH) % 360) + 360) % 360 / SIDEREAL_DEG_PER_HR;
+    const hoursToSet = (((setH - currentH) % 360) + 360) % 360 / SIDEREAL_DEG_PER_HR;
+
+    return {
+      riseTime: fmt(new Date(date.getTime() + hoursToRise * 3600000)),
+      transitTime: fmt(transitDate),
+      setTime: fmt(new Date(date.getTime() + hoursToSet * 3600000)),
+      maxAltitudeDeg,
+      hoursUntilRise: Math.max(0.05, Math.round(hoursToRise * 10) / 10),
+      status: "normal",
+    };
+  } catch {
+    return {
+      riseTime: "--:--",
+      transitTime: "--:--",
+      setTime: "--:--",
+      maxAltitudeDeg: null,
+      hoursUntilRise: null,
+      status: "normal",
+    };
+  }
+}
+
 export function computeTopocentricNebulae(
   date: Date,
   latDeg: number,
   lngDeg: number,
-  domeRadius: number = 480
+  domeRadius: number = 480,
+  elevationMeters: number = 0,
 ): TopocentricNebula[] {
-  const gmst = getGMST(date);
-  const lstDeg = ((gmst + lngDeg) % 360 + 360) % 360;
-  const latRad = latDeg * (Math.PI / 180);
-
+  const rot = createEqjToHorMatrix(date, latDeg, lngDeg, elevationMeters);
   const result: TopocentricNebula[] = [];
 
   for (const neb of FAMOUS_NEBULAE) {
-    const raDeg = neb.raDeg;
-    const decDeg = neb.decDeg;
-    const decRad = decDeg * (Math.PI / 180);
-
-    const H = ((lstDeg - raDeg) % 360 + 360) % 360;
-    const HRad = H * (Math.PI / 180);
-
-    const sinAlt = Math.sin(latRad) * Math.sin(decRad) + Math.cos(latRad) * Math.cos(decRad) * Math.cos(HRad);
-    const altRad = Math.asin(Math.max(-1, Math.min(1, sinAlt)));
-    const altDeg = altRad * (180 / Math.PI);
-
-    const cosAlt = Math.cos(altRad);
-    const cosAz = (Math.sin(decRad) - Math.sin(latRad) * Math.sin(altRad)) / (cosAlt * Math.cos(latRad) || 0.0001);
-    let azRad = Math.acos(Math.max(-1, Math.min(1, cosAz)));
-    if (Math.sin(HRad) > 0) {
-      azRad = 2 * Math.PI - azRad;
-    }
-    const azDeg = azRad * (180 / Math.PI);
-
-    const x = domeRadius * Math.cos(altRad) * Math.sin(azRad);
-    const y = domeRadius * Math.sin(altRad);
-    const z = domeRadius * Math.cos(altRad) * Math.cos(azRad);
+    const proj = projectJ2000ToHorizontal(neb.raDeg, neb.decDeg, rot, domeRadius, true);
 
     result.push({
       ...neb,
-      altitudeDeg: altDeg,
-      azimuthDeg: azDeg,
-      isVisibleAboveHorizon: altDeg >= 0,
-      pos3D: { x, y, z },
+      altitudeDeg: proj.altDeg,
+      azimuthDeg: proj.azDeg,
+      isVisibleAboveHorizon: proj.altDeg >= 0,
+      pos3D: { x: proj.x, y: proj.y, z: proj.z },
     });
   }
 

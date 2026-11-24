@@ -2,18 +2,20 @@
 
 import React, { useState, useMemo } from "react";
 import { AsteroidNeoObject, AsteroidSortOption } from "@/lib/asteroid/types";
-import { OPS, OPS_TYPE } from "@/lib/ui/opsTheme";
-import { useOpsMode } from "@/lib/ui/opsMode";
+import { formatApproachCountdown } from "@/lib/asteroid/asteroidMath";
+import type { ScanRangeDays } from "./AsteroidTrackerLayout";
 import {
   Search,
   Calendar,
   ChevronLeft,
   ChevronRight,
-  ArrowUpDown,
-  ExternalLink,
-  Info,
   Maximize2,
+  X,
+  Info,
+  Zap,
 } from "lucide-react";
+
+type ExtendedSortOption = AsteroidSortOption | "energy";
 
 interface AsteroidFeedPanelProps {
   asteroids: AsteroidNeoObject[];
@@ -22,6 +24,8 @@ interface AsteroidFeedPanelProps {
   onOpenInspector: (asteroid: AsteroidNeoObject) => void;
   selectedDate: string;
   onChangeDate: (newDate: string) => void;
+  scanRange: ScanRangeDays;
+  onChangeScanRange: (days: ScanRangeDays) => void;
   isLoading?: boolean;
 }
 
@@ -32,431 +36,364 @@ export default function AsteroidFeedPanel({
   onOpenInspector,
   selectedDate,
   onChangeDate,
+  scanRange,
+  onChangeScanRange,
   isLoading,
 }: AsteroidFeedPanelProps) {
-  const { isOps } = useOpsMode();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "pha" | "close" | "large">("all");
-  const [sortBy, setSortBy] = useState<AsteroidSortOption>("distance");
+  const [sortBy, setSortBy] = useState<ExtendedSortOption>("distance");
   const [sortOrder, setSortOrder] = useState<"asc" | "desc">("asc");
 
-  // Date manipulation helpers
+  const todayIso = useMemo(() => new Date().toISOString().split("T")[0], []);
+
   const handleShiftDay = (offsetDays: number) => {
-    const current = new Date(selectedDate);
-    current.setDate(current.getDate() + offsetDays);
+    const current = new Date(`${selectedDate}T00:00:00Z`);
+    current.setUTCDate(current.getUTCDate() + offsetDays);
     onChangeDate(current.toISOString().split("T")[0]);
   };
 
-  // Filtered & Sorted list
+  const counts = useMemo(() => {
+    let pha = 0;
+    let close = 0;
+    let large = 0;
+    for (const neo of asteroids) {
+      if (neo.is_potentially_hazardous_asteroid) pha++;
+      if ((neo.closest_miss_distance_ld ?? 99) < 5) close++;
+      if ((neo.avg_diameter_meters ?? 0) >= 100) large++;
+    }
+    return { pha, close, large };
+  }, [asteroids]);
+
   const filteredAsteroids = useMemo(() => {
     return asteroids
       .filter((neo) => {
-        // Search query
         if (searchQuery.trim()) {
           const q = searchQuery.toLowerCase();
-          const matchName = neo.name.toLowerCase().includes(q);
-          const matchId = neo.id.includes(q);
-          if (!matchName && !matchId) return false;
+          if (!neo.name.toLowerCase().includes(q) && !neo.id.includes(q)) return false;
         }
-
-        // Quick filter mode
-        if (filterMode === "pha" && !neo.is_potentially_hazardous_asteroid) {
-          return false;
-        }
-        if (filterMode === "close" && (neo.closest_miss_distance_ld || 99) > 5) {
-          return false;
-        }
-        if (filterMode === "large" && (neo.avg_diameter_meters || 0) < 100) {
-          return false;
-        }
-
+        if (filterMode === "pha" && !neo.is_potentially_hazardous_asteroid) return false;
+        if (filterMode === "close" && (neo.closest_miss_distance_ld ?? 99) >= 5) return false;
+        if (filterMode === "large" && (neo.avg_diameter_meters ?? 0) < 100) return false;
         return true;
       })
       .sort((a, b) => {
         let valA = 0;
         let valB = 0;
-
         switch (sortBy) {
           case "distance":
-            valA = a.closest_miss_distance_ld || 0;
-            valB = b.closest_miss_distance_ld || 0;
+            valA = a.closest_miss_distance_ld ?? 999;
+            valB = b.closest_miss_distance_ld ?? 999;
             break;
           case "velocity":
-            valA = a.velocity_kmh || 0;
-            valB = b.velocity_kmh || 0;
+            valA = a.velocity_kms ?? 0;
+            valB = b.velocity_kms ?? 0;
             break;
           case "diameter":
-            valA = a.avg_diameter_meters || 0;
-            valB = b.avg_diameter_meters || 0;
+            valA = a.avg_diameter_meters ?? 0;
+            valB = b.avg_diameter_meters ?? 0;
+            break;
+          case "energy":
+            valA = a.kinetic_energy_megatons ?? 0;
+            valB = b.kinetic_energy_megatons ?? 0;
             break;
           case "name":
             return sortOrder === "asc"
               ? a.name.localeCompare(b.name)
               : b.name.localeCompare(a.name);
           default:
-            valA = a.closest_miss_distance_ld || 0;
-            valB = b.closest_miss_distance_ld || 0;
+            valA = a.closest_miss_distance_ld ?? 999;
+            valB = b.closest_miss_distance_ld ?? 999;
         }
-
         return sortOrder === "asc" ? valA - valB : valB - valA;
       });
   }, [asteroids, searchQuery, filterMode, sortBy, sortOrder]);
 
   return (
-    <div
-      className="w-full lg:w-[420px] xl:w-[460px] h-full flex flex-col font-mono select-none z-20 border-l"
-      style={{
-        background: OPS.panel,
-        borderColor: OPS.line,
-        color: OPS.text,
-      }}
-    >
-      {/* ── Panel Header & Date Navigator ───────────────────────────────────── */}
-      <div className="p-3 border-b space-y-2" style={{ background: OPS.panel, borderColor: OPS.line }}>
+    <div className="flex h-full w-full flex-col overflow-hidden rounded-2xl border border-white/[0.10] bg-[#030714]/78 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.65)]">
+      {/* ── Compact Header + Date & Range Controls ───────────────────────── */}
+      <div className="space-y-2 border-b border-white/[0.08] p-3">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full" style={{ background: OPS.accent }} />
-            <span className={OPS_TYPE.label} style={{ color: OPS.text }}>
-              {isOps ? "NEO EPHEMERIS DECK" : "Tracked Asteroids Feed"}
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-300 shadow-[0_0_8px_rgba(125,211,252,0.85)]" />
+            <span className="font-mono text-[10px] font-semibold tracking-[0.2em] text-white/90 uppercase">
+              NEO Ephemeris
             </span>
           </div>
-          <span className={OPS_TYPE.meta} style={{ color: OPS.textFaint }}>
-            NASA JPL NeoWs
-          </span>
+
+          <div className="flex items-center gap-1 font-mono text-[9.5px]">
+            {selectedDate !== todayIso && (
+              <button
+                type="button"
+                onClick={() => onChangeDate(todayIso)}
+                className="cursor-pointer rounded-full border border-white/15 bg-white/[0.06] px-2 py-0.5 text-[9px] tracking-wider text-sky-200 uppercase transition-colors hover:bg-white/[0.14]"
+              >
+                Today
+              </button>
+            )}
+            <div className="flex items-center rounded-full border border-white/[0.08] bg-white/[0.03] p-0.5 sm:hidden">
+              {([1, 3, 7] as ScanRangeDays[]).map((d) => (
+                <button
+                  key={d}
+                  type="button"
+                  onClick={() => onChangeScanRange(d)}
+                  className={`cursor-pointer rounded-full px-1.5 py-0.5 text-[9px] ${
+                    scanRange === d ? "bg-white/15 text-white" : "text-slate-400"
+                  }`}
+                >
+                  {d}D
+                </button>
+              ))}
+            </div>
+          </div>
         </div>
 
-        {/* Date Selector Timeline Navigation */}
-        <div
-          className="flex items-center justify-between px-2 py-1 border text-xs"
-          style={{ background: OPS.panelAlt, borderColor: OPS.line }}
-        >
+        {/* Sleek Date Stepper */}
+        <div className="flex h-8 items-center justify-between rounded-xl border border-white/[0.08] bg-white/[0.03] px-1.5 font-mono text-xs">
           <button
+            type="button"
             onClick={() => handleShiftDay(-1)}
-            title="Previous Day"
-            className="p-1 transition-colors duration-[120ms] cursor-pointer"
-            style={{ color: OPS.textDim }}
+            title="Previous day"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-white"
           >
-            <ChevronLeft className="w-3.5 h-3.5" />
+            <ChevronLeft className="h-3.5 w-3.5" />
           </button>
 
-          <div className="flex items-center gap-2">
-            <Calendar className="w-3 h-3" style={{ color: OPS.textDim }} />
+          <div className="flex items-center gap-1.5">
+            <Calendar className="h-3 w-3 text-slate-400" />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => e.target.value && onChangeDate(e.target.value)}
-              className="bg-transparent font-mono font-medium text-xs focus:outline-none cursor-pointer"
-              style={{ color: OPS.text }}
+              className="cursor-pointer bg-transparent font-mono text-[11px] font-medium text-white/95 focus:outline-none"
             />
+            {scanRange > 1 && (
+              <span className="rounded bg-sky-400/15 px-1.5 py-0.5 text-[9px] text-sky-300">
+                +{scanRange - 1}d
+              </span>
+            )}
           </div>
 
           <button
+            type="button"
             onClick={() => handleShiftDay(1)}
-            title="Next Day"
-            className="p-1 transition-colors duration-[120ms] cursor-pointer"
-            style={{ color: OPS.textDim }}
+            title="Next day"
+            className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-lg text-slate-400 transition-colors hover:bg-white/[0.08] hover:text-white"
           >
-            <ChevronRight className="w-3.5 h-3.5" />
+            <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
 
-        {/* Search Bar */}
+        {/* Compact Search Input */}
         <div className="relative">
-          <Search className="absolute left-2.5 top-2 w-3 h-3" style={{ color: OPS.textFaint }} />
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
           <input
             type="text"
-            placeholder={isOps ? "FILTER BY NAME / ID..." : "Search asteroid by name..."}
+            placeholder="Search designation or NASA ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-7 pr-2.5 py-1 border text-[11px] focus:outline-none"
-            style={{
-              background: OPS.bg,
-              borderColor: OPS.line,
-              color: OPS.text,
-            }}
+            className="h-8 w-full rounded-xl border border-white/[0.08] bg-white/[0.03] pr-7 pl-8 font-mono text-[11px] text-white placeholder:text-slate-500 focus:border-sky-400/45 focus:outline-none"
           />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer text-slate-500 hover:text-white"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
         </div>
 
-        {/* Quick Filter Chips */}
-        <div className="flex items-center gap-1 overflow-x-auto pb-0.5 text-[10px]">
-          <button
-            onClick={() => setFilterMode("all")}
-            className="px-2 py-0.5 border transition-colors duration-[120ms] whitespace-nowrap cursor-pointer"
-            style={{
-              background: filterMode === "all" ? OPS.grid : OPS.panelAlt,
-              borderColor: filterMode === "all" ? OPS.accent : OPS.line,
-              color: filterMode === "all" ? OPS.text : OPS.textDim,
-              fontWeight: filterMode === "all" ? 600 : 400,
-            }}
-          >
-            ALL ({asteroids.length})
-          </button>
-
-          <button
-            onClick={() => setFilterMode("pha")}
-            className="px-2 py-0.5 border transition-colors duration-[120ms] whitespace-nowrap cursor-pointer"
-            style={{
-              background: filterMode === "pha" ? OPS.grid : OPS.panelAlt,
-              borderColor: filterMode === "pha" ? OPS.hazard : OPS.line,
-              color: filterMode === "pha" ? OPS.hazard : OPS.textDim,
-              fontWeight: filterMode === "pha" ? 600 : 400,
-            }}
-          >
-            {isOps ? "PHA" : "Hazard Alert"}
-          </button>
-
-          <button
-            onClick={() => setFilterMode("close")}
-            className="px-2 py-0.5 border transition-colors duration-[120ms] whitespace-nowrap cursor-pointer"
-            style={{
-              background: filterMode === "close" ? OPS.grid : OPS.panelAlt,
-              borderColor: filterMode === "close" ? OPS.caution : OPS.line,
-              color: filterMode === "close" ? OPS.caution : OPS.textDim,
-              fontWeight: filterMode === "close" ? 600 : 400,
-            }}
-          >
-            &lt; 5 LD
-          </button>
-
-          <button
-            onClick={() => setFilterMode("large")}
-            className="px-2 py-0.5 border transition-colors duration-[120ms] whitespace-nowrap cursor-pointer"
-            style={{
-              background: filterMode === "large" ? OPS.grid : OPS.panelAlt,
-              borderColor: filterMode === "large" ? OPS.accent : OPS.line,
-              color: filterMode === "large" ? OPS.text : OPS.textDim,
-              fontWeight: filterMode === "large" ? 600 : 400,
-            }}
-          >
-            &gt; 100m
-          </button>
-        </div>
-
-        {/* Sort Bar */}
-        <div className="flex items-center justify-between text-[10px] pt-0.5 border-t" style={{ borderColor: OPS.line, color: OPS.textDim }}>
-          <div className="flex items-center gap-1">
-            <ArrowUpDown className="w-3 h-3" style={{ color: OPS.textFaint }} />
-            <span className={OPS_TYPE.label}>SORT:</span>
-          </div>
-          <div className="flex items-center gap-2">
-            {(["distance", "velocity", "diameter", "name"] as AsteroidSortOption[]).map((option) => (
+        {/* Filter Chips */}
+        <div className="flex items-center gap-1 font-mono text-[9.5px]">
+          {[
+            { id: "all", label: `All ${asteroids.length}`, activeClass: "border-white/25 bg-white/[0.12] text-white" },
+            { id: "pha", label: `PHA ${counts.pha}`, activeClass: "border-rose-400/45 bg-rose-500/18 text-rose-200" },
+            { id: "close", label: `<5 LD ${counts.close}`, activeClass: "border-amber-400/45 bg-amber-500/18 text-amber-200" },
+            { id: "large", label: `>100m ${counts.large}`, activeClass: "border-sky-400/45 bg-sky-500/18 text-sky-200" },
+          ].map((chip) => {
+            const active = filterMode === chip.id;
+            return (
               <button
-                key={option}
-                onClick={() => {
-                  if (sortBy === option) {
-                    setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-                  } else {
-                    setSortBy(option);
-                    setSortOrder(option === "velocity" || option === "diameter" ? "desc" : "asc");
-                  }
-                }}
-                className="uppercase tracking-wider transition-colors duration-[120ms] cursor-pointer"
-                style={{
-                  color: sortBy === option ? OPS.text : OPS.textFaint,
-                  fontWeight: sortBy === option ? 600 : 400,
-                  textDecoration: sortBy === option ? "underline" : "none",
-                  textDecorationColor: OPS.accent,
-                }}
+                key={chip.id}
+                type="button"
+                onClick={() => setFilterMode(chip.id as typeof filterMode)}
+                className={`flex-1 cursor-pointer rounded-lg border py-1 text-center font-medium transition-all ${
+                  active
+                    ? chip.activeClass
+                    : "border-white/[0.07] bg-white/[0.02] text-slate-400 hover:border-white/[0.15] hover:text-slate-200"
+                }`}
               >
-                {option} {sortBy === option && (sortOrder === "asc" ? "↑" : "↓")}
+                {chip.label}
               </button>
-            ))}
+            );
+          })}
+        </div>
+
+        {/* Compact Sort Pills */}
+        <div className="flex items-center justify-between pt-0.5 font-mono text-[9.5px] text-slate-500">
+          <span className="tracking-[0.14em] uppercase">Sort</span>
+          <div className="flex items-center gap-1.5">
+            {(
+              [
+                { id: "distance", label: "Dist" },
+                { id: "diameter", label: "Size" },
+                { id: "velocity", label: "Vel" },
+                { id: "energy", label: "Mt" },
+              ] as { id: ExtendedSortOption; label: string }[]
+            ).map((opt) => {
+              const active = sortBy === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => {
+                    if (sortBy === opt.id) {
+                      setSortOrder((o) => (o === "asc" ? "desc" : "asc"));
+                    } else {
+                      setSortBy(opt.id);
+                      setSortOrder(opt.id === "distance" ? "asc" : "desc");
+                    }
+                  }}
+                  className={`cursor-pointer rounded-md px-1.5 py-0.5 uppercase transition-colors ${
+                    active
+                      ? "bg-white/[0.10] font-semibold text-white"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  {opt.label}
+                  {active ? (sortOrder === "asc" ? "↑" : "↓") : ""}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      {/* ── Table Column Headers (OPS Mode) ─────────────────────────────────── */}
-      {isOps ? (
-        <div
-          className="grid grid-cols-12 gap-1 px-3 py-1.5 border-b text-[10px] tracking-wider uppercase font-medium"
-          style={{ background: OPS.panelAlt, borderColor: OPS.line, color: OPS.textDim }}
-        >
-          <div className="col-span-3">OBJECT</div>
-          <div className="col-span-2 text-right">DIST</div>
-          <div className="col-span-2 text-right">EST DIA</div>
-          <div className="col-span-2 text-right">VEL</div>
-          <div className="col-span-3 text-right">ACTION</div>
-        </div>
-      ) : (
-        <div
-          className="flex items-center justify-between px-3 py-1.5 border-b text-[10px] tracking-wider uppercase font-medium"
-          style={{ background: OPS.panelAlt, borderColor: OPS.line, color: OPS.textDim }}
-        >
-          <span>ASTEROID &amp; PHYSICAL ESTIMATE</span>
-          <span>FLYBY &amp; ACTION</span>
-        </div>
-      )}
-
-      {/* ── Telemetry Rows ─────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto divide-y" style={{ borderColor: OPS.line }}>
+      {/* ── Scrollable Compact NEO List ──────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
         {isLoading ? (
-          <div className="flex flex-col items-center justify-center h-48 text-xs gap-2" style={{ color: OPS.textDim }}>
-            <div className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin" style={{ borderColor: OPS.accent, borderTopColor: "transparent" }} />
-            <span className={OPS_TYPE.meta}>FETCHING NASA JPL TELEMETRY...</span>
+          <div className="flex h-48 flex-col items-center justify-center gap-2.5 font-mono text-[10px] tracking-[0.18em] text-slate-400 uppercase">
+            <div className="h-5 w-5 animate-spin rounded-full border border-white/15 border-t-sky-300" />
+            <span>Syncing JPL NeoWs...</span>
           </div>
         ) : filteredAsteroids.length === 0 ? (
-          <div className="text-center py-12 text-xs" style={{ color: OPS.textDim }}>
-            <Info className="w-5 h-5 mx-auto mb-2" style={{ color: OPS.textFaint }} />
-            <span>NO OBJECTS MATCH FILTER</span>
+          <div className="flex flex-col items-center justify-center py-12 font-mono text-[11px] text-slate-500">
+            <Info className="mb-2 h-4 w-4 text-slate-600" />
+            <span>No objects match filter</span>
           </div>
         ) : (
-          filteredAsteroids.map((neo, idx) => {
+          filteredAsteroids.map((neo) => {
             const isSelected = selectedAsteroid?.id === neo.id;
             const isHazard = neo.is_potentially_hazardous_asteroid;
-            const distanceLd = neo.closest_miss_distance_ld || 0;
-            const isClose = distanceLd < 5;
+            const distLd = neo.closest_miss_distance_ld ?? 0;
+            const isClose = distLd < 5;
+            const epoch = neo.close_approach_data?.[0]?.epoch_date_close_approach;
+            const countdown = formatApproachCountdown(epoch);
+            const orbitType = neo.orbital_data?.orbit_class?.orbit_class_type;
+            const energyMt = neo.kinetic_energy_megatons ?? 0;
 
-            if (isOps) {
-              /* ── OPS Row (Dense 44px, 4 right-aligned columns) ──────────── */
-              return (
-                <div
-                  key={neo.id}
-                  onClick={() => onSelectAsteroid(neo)}
-                  className="min-h-[44px] grid grid-cols-12 gap-1 items-center px-3 py-1 cursor-pointer transition-colors duration-[120ms]"
-                  style={{
-                    background: isSelected ? OPS.grid : idx % 2 === 0 ? OPS.panel : OPS.panelAlt,
-                    borderLeft: isSelected ? `2px solid ${OPS.accent}` : "2px solid transparent",
-                  }}
-                >
-                  {/* Designation & ID */}
-                  <div className="col-span-3 min-w-0">
-                    <div className="text-[12px] font-mono font-medium truncate" style={{ color: OPS.text }}>
-                      {neo.name}
-                    </div>
-                    <div className="text-[9px] font-mono truncate" style={{ color: OPS.textFaint }}>
-                      ID {neo.id}
-                    </div>
-                  </div>
-
-                  {/* Distance (LD) */}
-                  <div className="col-span-2 text-right">
-                    <div className="text-[12px] font-mono tabular-nums" style={{ color: OPS.text }}>
-                      {distanceLd.toFixed(2)}
-                    </div>
-                    <div className="text-[9px] font-mono" style={{ color: OPS.textFaint }}>LD</div>
-                  </div>
-
-                  {/* Diameter (m) */}
-                  <div className="col-span-2 text-right">
-                    <div className="text-[12px] font-mono tabular-nums" style={{ color: OPS.text }}>
-                      {neo.avg_diameter_meters}
-                    </div>
-                    <div className="text-[9px] font-mono" style={{ color: OPS.textFaint }}>m</div>
-                  </div>
-
-                  {/* Velocity (km/h) */}
-                  <div className="col-span-2 text-right">
-                    <div className="text-[12px] font-mono tabular-nums" style={{ color: OPS.text }}>
-                      {Math.round(neo.velocity_kmh || 0).toLocaleString()}
-                    </div>
-                    <div className="text-[9px] font-mono" style={{ color: OPS.textFaint }}>km/h</div>
-                  </div>
-
-                  {/* Status & Clear Action Button */}
-                  <div className="col-span-3 text-right flex items-center justify-end gap-1.5">
-                    <span
-                      className="text-[10px] font-mono font-medium"
-                      style={{
-                        color: isHazard ? OPS.hazard : isClose ? OPS.caution : OPS.safe,
-                      }}
-                    >
-                      {isHazard ? "PHA" : isClose ? "CLOSE" : "SAFE"}
-                    </span>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenInspector(neo);
-                      }}
-                      title="Open Deep-Dive 3D Inspector"
-                      className="px-1.5 py-0.5 border text-[9px] font-mono font-semibold flex items-center gap-1 transition-all duration-[120ms] cursor-pointer"
-                      style={{
-                        borderColor: isSelected ? OPS.accent : OPS.line,
-                        background: isSelected ? "rgba(90, 143, 184, 0.25)" : OPS.panelAlt,
-                        color: isSelected ? OPS.text : OPS.textDim,
-                      }}
-                    >
-                      <Maximize2 className="w-2.5 h-2.5" />
-                      <span>DETAIL</span>
-                    </button>
-                  </div>
-                </div>
-              );
-            }
-
-            /* ── PUBLIC Row (68px with Size Comparison & Phrasing) ────────── */
             return (
               <div
                 key={neo.id}
                 onClick={() => onSelectAsteroid(neo)}
-                className="min-h-[66px] flex flex-col justify-center px-3 py-2 cursor-pointer transition-colors duration-[120ms]"
-                style={{
-                  background: isSelected ? OPS.grid : idx % 2 === 0 ? OPS.panel : OPS.panelAlt,
-                  borderLeft: isSelected ? `2px solid ${OPS.accent}` : "2px solid transparent",
-                }}
+                className={`group relative flex cursor-pointer items-center justify-between gap-2 px-3 py-2.5 transition-colors ${
+                  isSelected
+                    ? "bg-sky-400/[0.11]"
+                    : "hover:bg-white/[0.04]"
+                }`}
               >
-                {/* Top Row: Name, Status, and Inspect Action */}
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 truncate">
-                    <span className="text-xs font-semibold" style={{ color: OPS.text }}>
+                {/* Left Threat Accent Bar */}
+                <span
+                  className={`absolute top-1.5 bottom-1.5 left-0 w-[2.5px] rounded-r-full transition-opacity ${
+                    isHazard
+                      ? "bg-rose-400"
+                      : isClose
+                        ? "bg-amber-400"
+                        : isSelected
+                          ? "bg-sky-300"
+                          : "bg-emerald-400/50 opacity-50 group-hover:opacity-100"
+                  }`}
+                />
+
+                {/* Left: Name + Badges + Countdown */}
+                <div className="min-w-0 flex-1 pl-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate font-mono text-[12px] font-semibold text-white">
                       {neo.name}
                     </span>
-                    <span className="text-[10px]" style={{ color: OPS.textDim }}>
-                      ({neo.avg_diameter_meters} m across)
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span
-                      className="text-[10px] font-medium tracking-wide"
-                      style={{
-                        color: isHazard ? OPS.hazard : isClose ? OPS.caution : OPS.safe,
-                      }}
-                    >
-                      {isHazard ? "Hazard alert" : isClose ? "Close approach" : "Safe pass"}
-                    </span>
-
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenInspector(neo);
-                      }}
-                      title="View 3D Model & Scientific Details"
-                      className="px-2 py-1 border text-[10px] font-medium flex items-center gap-1.5 transition-all duration-[120ms] cursor-pointer shadow-sm"
-                      style={{
-                        borderColor: isSelected ? OPS.accent : OPS.line,
-                        background: isSelected ? "rgba(90, 143, 184, 0.25)" : OPS.panelAlt,
-                        color: isSelected ? OPS.text : OPS.accent,
-                      }}
-                    >
-                      <Maximize2 className="w-3 h-3" />
-                      <span>3D Detail</span>
-                    </button>
-                  </div>
-                </div>
-
-                {/* Bottom Row: Landmark Reference & Human Distance */}
-                <div className="flex items-center justify-between text-[11px] mt-1" style={{ color: OPS.textDim }}>
-                  <div className="truncate">
-                    {neo.size_reference_name ? (
-                      <span>≈ {neo.size_reference_name}</span>
-                    ) : (
-                      <span>Diameter {neo.avg_diameter_meters}m</span>
+                    {isHazard && (
+                      <span className="shrink-0 rounded bg-rose-500/20 px-1 py-0.5 font-mono text-[8.5px] font-bold tracking-wider text-rose-300 uppercase">
+                        PHA
+                      </span>
+                    )}
+                    {orbitType && (
+                      <span className="hidden shrink-0 rounded bg-white/[0.06] px-1 py-0.5 font-mono text-[8.5px] text-slate-400 sm:inline">
+                        {orbitType}
+                      </span>
                     )}
                   </div>
 
-                  <div className="text-right shrink-0">
-                    <span>
-                      {distanceLd < 1
-                        ? "Inside Moon's orbit"
-                        : `${distanceLd.toFixed(1)}× farther than Moon`}
-                    </span>
+                  <div className="mt-0.5 flex items-center gap-2 font-mono text-[10px] text-slate-400 tabular-nums">
+                    <span>{neo.avg_diameter_meters ?? 0}m</span>
+                    <span className="text-white/20">·</span>
+                    <span>{(neo.velocity_kms ?? 0).toFixed(1)} km/s</span>
+                    {energyMt >= 1 && (
+                      <>
+                        <span className="text-white/20">·</span>
+                        <span className="inline-flex items-center gap-0.5 text-amber-300/85">
+                          <Zap className="h-2.5 w-2.5" />
+                          {energyMt >= 100 ? Math.round(energyMt) : energyMt.toFixed(1)} Mt
+                        </span>
+                      </>
+                    )}
                   </div>
+                </div>
+
+                {/* Right: Miss Distance + Countdown + Quick Inspect */}
+                <div className="flex shrink-0 items-center gap-2">
+                  <div className="text-right font-mono tabular-nums">
+                    <div
+                      className={`text-[12px] font-semibold leading-tight ${
+                        isHazard
+                          ? "text-rose-300"
+                          : isClose
+                            ? "text-amber-300"
+                            : "text-slate-100"
+                      }`}
+                    >
+                      {distLd.toFixed(2)} <span className="text-[9px] font-normal text-slate-400">LD</span>
+                    </div>
+                    <div className="mt-0.5 text-[9px] text-slate-500">{countdown}</div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenInspector(neo);
+                    }}
+                    title="Open 3D Inspector & Impact Physics Lab"
+                    className={`flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg border transition-all ${
+                      isSelected
+                        ? "border-sky-400/40 bg-sky-400/15 text-sky-200 hover:bg-sky-400/25"
+                        : "border-white/[0.08] bg-white/[0.03] text-slate-400 hover:border-white/25 hover:bg-white/[0.08] hover:text-white"
+                    }`}
+                  >
+                    <Maximize2 className="h-3 w-3" />
+                  </button>
                 </div>
               </div>
             );
           })
         )}
+      </div>
+
+      {/* Subtle Footer Keyboard Hint */}
+      <div className="flex items-center justify-between border-t border-white/[0.07] bg-white/[0.02] px-3 py-1.5 font-mono text-[9px] text-slate-500">
+        <span>↑/↓ Cycle target · I Inspect</span>
+        <span className="tabular-nums">{filteredAsteroids.length} shown</span>
       </div>
     </div>
   );

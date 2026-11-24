@@ -1,13 +1,13 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'GEOSINT — Cakrapala Earth Intelligence',
+  title: 'GeoINT — Cakrapala Earth Intelligence',
   description:
-    'Cakrapala Global Situational Awareness & Earth Intelligence (OSINT). Monitor real-time earthquakes, active wildfires, tropical cyclones, ADS-B air traffic, AIS vessels, public webcams, and NASA GIBS satellite imagery in interactive 3D.',
+    'Global real-time Earth Intelligence in 3D: NASA GIBS daily satellite imagery, USGS earthquakes, NASA FIRMS active wildfires, NOAA/GDACS tropical cyclones, and live ADS-B air traffic.',
   openGraph: {
-    title: 'GEOSINT — Cakrapala Earth Intelligence',
+    title: 'GeoINT — Cakrapala Earth Intelligence',
     description:
-      'Cakrapala Global Situational Awareness & Earth Intelligence (OSINT). Interactive 3D CesiumJS globe.',
+      'Global real-time Earth Intelligence in interactive 3D powered by NASA, USGS, NOAA, and open aviation telemetry.',
     url: 'https://cakrapala.com/osint',
     siteName: 'Cakrapala Aerospace',
     images: [
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
         url: '/banner.png',
         width: 1200,
         height: 630,
-        alt: 'Cakrapala GEOSINT Earth Intelligence',
+        alt: 'Cakrapala GeoINT Earth Intelligence',
       },
     ],
     locale: 'en_US',
@@ -23,9 +23,8 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'GEOSINT — Cakrapala Earth Intelligence',
-    description:
-      'Cakrapala Global Situational Awareness & Earth Intelligence (OSINT). Interactive 3D globe.',
+    title: 'GeoINT — Cakrapala Earth Intelligence',
+    description: 'Global real-time Earth Intelligence in interactive 3D.',
     images: ['/banner.png'],
   },
 };

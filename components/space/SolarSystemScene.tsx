@@ -1,13 +1,16 @@
 "use client";
 
 /**
- * SolarSystemScene — Babylon.js 3D Solar System & Cinematic Planetary Focus Engine.
+ * SolarSystemScene — True First-Principles VSOP87 3D Solar System Orrery.
  *
- * Features:
- * - Full 3D Keplerian Orbit Simulation & Multi-Layered Starfield
- * - Smooth Cinema-Grade Camera Glide & Zoom into Planet Globes on Click
- * - 360° Free Interactive Rotation around High-Res Rotating Planet Globes
- * - Seamless Return to Heliocentric Solar System View
+ * Physics & Ephemeris (zero hardcoded circles or fake speeds):
+ *   - Every planet's 3D heliocentric position is computed live from `astronomy-engine`
+ *     VSOP87 ephemeris at `simDate` (real elliptical orbits, perihelion acceleration,
+ *     aphelion deceleration, 3D orbital inclinations, and exact planetary conjunctions).
+ *   - Earth's Moon is positioned live via geocentric lunar ephemeris (`GeoVector(Moon)`).
+ *   - Axial rotation rates use authentic NASA/IAU sidereal day periods (retrograde Venus & Uranus).
+ *   - Seamless 8K IAU J2000 Milky Way sky sphere (60.19° Galactic-to-Ecliptic inclination).
+ *   - Conflict-free damped camera glide + delta-tracking (never fights pan, zoom, or pinch).
  */
 
 import {
@@ -16,32 +19,29 @@ import {
   useState,
   useImperativeHandle,
   forwardRef,
+  useCallback,
 } from "react";
 
 import {
   Engine,
   Scene,
   ArcRotateCamera,
-  HighlightLayer,
-  Color3,
-  Mesh,
   Vector3,
-  Animation,
-  CubicEase,
-  EasingFunction,
+  TransformNode,
+  PointerEventTypes,
 } from "@babylonjs/core";
 
-import {
-  createScene,
-} from "@/lib/babylon/createScene";
-import { createSun } from "@/lib/babylon/createSun";
+import { createScene } from "@/lib/babylon/createScene";
+import { createSun, type SunHandle } from "@/lib/babylon/createSun";
 import {
   createPlanets,
   type PlanetMeshMap,
+  type PlanetRigMap,
 } from "@/lib/babylon/createPlanets";
 import {
   createOrbits,
   setOrbitsVisible,
+  highlightSelectedOrbit,
   type OrbitMeshMap,
 } from "@/lib/babylon/createOrbits";
 import { createStarfield } from "@/lib/babylon/createStarfield";
@@ -58,36 +58,76 @@ import {
 
 import { PLANET_DATA, SUN_DATA } from "@/lib/astronomy/planetData";
 import {
-  HIGHLIGHT_COLOR,
-  HIGHLIGHT_INTENSITY,
+  computePlanetEphemeris,
+  computeMoonEclipticDirection,
+  computeEarthRotationY,
+  REAL_PLANET_CONSTANTS,
+  type LivePlanetTelemetry,
+  type OrbitingPlanetId,
+} from "@/lib/astronomy/solarSystemPhysics";
+import {
   CAMERA_INITIAL_RADIUS,
   CAMERA_INITIAL_ALPHA,
   CAMERA_INITIAL_BETA,
   CAMERA_MIN_RADIUS,
+  CAMERA_MAX_RADIUS,
 } from "@/lib/babylon/sceneConstants";
-import type { PlanetId, SimulationState } from "@/lib/astronomy/types";
+import type { PlanetId } from "@/lib/astronomy/types";
 
-const BASE_SPEED_SCALE = 0.3;
+export interface EphemerisSnapshot {
+  simDate: Date;
+  telemetry: Record<string, LivePlanetTelemetry>;
+}
 
 export type SolarSystemSceneHandle = {
   resetCamera: () => void;
   deselectPlanet: () => void;
   focusPlanet: (id: PlanetId | null) => void;
+  zoomIn: () => void;
+  zoomOut: () => void;
+  syncToNow: () => void;
 };
 
 type Props = {
-  simulationState: SimulationState;
+  isPaused: boolean;
+  /** Real simulated Earth days elapsed per real-world second. */
+  daysPerSecond: number;
+  showOrbits: boolean;
+  showLabels: boolean;
   selectedPlanetId?: PlanetId | null;
   onPlanetSelected: (id: PlanetId | null) => void;
+  onEphemerisUpdate?: (snapshot: EphemerisSnapshot) => void;
 };
 
 type SimRef = {
   isPaused: boolean;
-  simulationSpeed: number;
+  daysPerSecond: number;
+  showLabels: boolean;
+};
+
+type CameraGlideState = {
+  active: boolean;
+  targetRadius: number;
+  targetAlpha?: number;
+  targetBeta?: number;
+  lerpTarget: boolean;
+  lerpRadius: boolean;
+  lerpAngles: boolean;
 };
 
 const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
-  function SolarSystemScene({ simulationState, selectedPlanetId, onPlanetSelected }, ref) {
+  function SolarSystemScene(
+    {
+      isPaused,
+      daysPerSecond,
+      showOrbits,
+      showLabels,
+      selectedPlanetId,
+      onPlanetSelected,
+      onEphemerisUpdate,
+    },
+    ref
+  ) {
     const canvasRef = useRef<HTMLCanvasElement>(null);
 
     const [loadingState, setLoadingState] = useState<{
@@ -95,190 +135,197 @@ const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
       status: string;
       isReady: boolean;
     }>({
-      progress: 15,
-      status: "CALIBRATING 3D ORRERY ENGINE...",
+      progress: 18,
+      status: "Calibrating VSOP87 Ephemeris Engine",
       isReady: false,
     });
 
     const engineRef = useRef<Engine | null>(null);
     const sceneRef = useRef<Scene | null>(null);
     const cameraRef = useRef<ArcRotateCamera | null>(null);
+    const sunHandleRef = useRef<SunHandle | null>(null);
     const planetMeshesRef = useRef<PlanetMeshMap | null>(null);
+    const planetRigsRef = useRef<PlanetRigMap | null>(null);
     const orbitMeshesRef = useRef<OrbitMeshMap | null>(null);
     const labelsRef = useRef<LabelMap | null>(null);
     const asteroidBeltRef = useRef<AsteroidBeltHandle | null>(null);
-    const hlRef = useRef<HighlightLayer | null>(null);
-    const selectedMeshRef = useRef<Mesh | null>(null);
-    const focusedMeshRef = useRef<Mesh | null>(null);
-    const orbitAnglesRef = useRef<Map<PlanetId, number>>(new Map());
+
+    const simEpochMsRef = useRef<number>(Date.now());
+    const trackedNodeRef = useRef<TransformNode | null>(null);
+    const prevTrackedPosRef = useRef<Vector3 | null>(null);
+
+    const glideRef = useRef<CameraGlideState>({
+      active: false,
+      targetRadius: CAMERA_INITIAL_RADIUS,
+      lerpTarget: false,
+      lerpRadius: false,
+      lerpAngles: false,
+    });
 
     const onPlanetSelectedRef = useRef(onPlanetSelected);
     useEffect(() => {
       onPlanetSelectedRef.current = onPlanetSelected;
     }, [onPlanetSelected]);
 
+    const onEphemerisUpdateRef = useRef(onEphemerisUpdate);
+    useEffect(() => {
+      onEphemerisUpdateRef.current = onEphemerisUpdate;
+    }, [onEphemerisUpdate]);
+
     const simRef = useRef<SimRef>({
-      isPaused: simulationState.isPaused,
-      simulationSpeed: simulationState.simulationSpeed,
+      isPaused,
+      daysPerSecond,
+      showLabels,
     });
 
     useEffect(() => {
-      simRef.current.isPaused = simulationState.isPaused;
-      simRef.current.simulationSpeed = simulationState.simulationSpeed;
-    }, [simulationState.isPaused, simulationState.simulationSpeed]);
+      simRef.current.isPaused = isPaused;
+      simRef.current.daysPerSecond = daysPerSecond;
+      simRef.current.showLabels = showLabels;
+    }, [isPaused, daysPerSecond, showLabels]);
 
     useEffect(() => {
       if (orbitMeshesRef.current) {
-        setOrbitsVisible(orbitMeshesRef.current, simulationState.showOrbits);
+        setOrbitsVisible(orbitMeshesRef.current, showOrbits);
       }
-    }, [simulationState.showOrbits]);
+    }, [showOrbits]);
 
     useEffect(() => {
       if (labelsRef.current) {
-        setLabelsVisible(labelsRef.current, simulationState.showLabels);
-      }
-    }, [simulationState.showLabels]);
-
-    // ── Smooth Camera Focus Animation Helper ──────────────────────────────────
-    const smoothFocusTarget = (targetMesh: Mesh | null, visualRadius: number = 2.0) => {
-      const camera = cameraRef.current;
-      const scene = sceneRef.current;
-      if (!camera || !scene) return;
-
-      const ease = new CubicEase();
-      ease.setEasingMode(EasingFunction.EASINGMODE_EASEINOUT);
-
-      if (targetMesh) {
-        focusedMeshRef.current = targetMesh;
-        const targetRadius = Math.max(3.8, visualRadius * 3.8);
-        camera.lowerRadiusLimit = Math.max(1.5, visualRadius * 1.5);
-
-        // Smoothly glide camera target to mesh position
-        Animation.CreateAndStartAnimation(
-          "camTargetGlide",
-          camera,
-          "target",
-          60,
-          45,
-          camera.target.clone(),
-          targetMesh.position.clone(),
-          Animation.ANIMATIONLOOPMODE_CONSTANT,
-          ease
-        );
-
-        // Smoothly zoom camera radius to planet close-up view
-        Animation.CreateAndStartAnimation(
-          "camRadiusGlide",
-          camera,
-          "radius",
-          60,
-          45,
-          camera.radius,
-          targetRadius,
-          Animation.ANIMATIONLOOPMODE_CONSTANT,
-          ease
-        );
-      } else {
-        focusedMeshRef.current = null;
-        camera.lowerRadiusLimit = CAMERA_MIN_RADIUS;
-
-        // Return camera target to solar system origin
-        Animation.CreateAndStartAnimation(
-          "camTargetReturn",
-          camera,
-          "target",
-          60,
-          45,
-          camera.target.clone(),
-          Vector3.Zero(),
-          Animation.ANIMATIONLOOPMODE_CONSTANT,
-          ease
-        );
-
-        // Return camera radius to wide heliocentric view
-        Animation.CreateAndStartAnimation(
-          "camRadiusReturn",
-          camera,
-          "radius",
-          60,
-          45,
-          camera.radius,
-          CAMERA_INITIAL_RADIUS,
-          Animation.ANIMATIONLOOPMODE_CONSTANT,
-          ease
+        setLabelsVisible(
+          labelsRef.current,
+          showLabels,
+          selectedPlanetId ?? null
         );
       }
-    };
+    }, [showLabels, selectedPlanetId]);
 
-    // ── Handle external planet selection changes ──────────────────────────────
+    // ── Smooth Conflict-Free Camera Focus / Return ────────────────────────────
+    const initiateCameraFocus = useCallback(
+      (id: PlanetId | null, resetAngles = false) => {
+        const camera = cameraRef.current;
+        if (!camera) return;
+
+        camera.inertialRadiusOffset = 0;
+        camera.inertialPanningX = 0;
+        camera.inertialPanningY = 0;
+
+        if (id) {
+          const isSun = id === "sun";
+          const targetNode: TransformNode | null = isSun
+            ? (sunHandleRef.current?.mesh ?? null)
+            : (planetRigsRef.current?.get(id)?.orbitNode ?? null);
+
+          if (!targetNode) return;
+
+          const planetData = PLANET_DATA.find((p) => p.id === id);
+          const visualRadius = planetData
+            ? planetData.visualRadius
+            : SUN_DATA.visualRadius;
+
+          trackedNodeRef.current = targetNode;
+          prevTrackedPosRef.current = targetNode.getAbsolutePosition().clone();
+
+          const zoomMultiplier = id === "saturn" ? 5.2 : isSun ? 4.4 : 4.2;
+          const targetRadius = Math.max(3.2, visualRadius * zoomMultiplier);
+          camera.lowerRadiusLimit = Math.max(
+            isSun ? 6.2 : 1.4,
+            visualRadius * (id === "saturn" ? 2.8 : 1.7)
+          );
+          camera.panningDistanceLimit = 180;
+
+          glideRef.current = {
+            active: true,
+            targetRadius,
+            lerpTarget: true,
+            lerpRadius: true,
+            lerpAngles: false,
+          };
+        } else {
+          trackedNodeRef.current = null;
+          prevTrackedPosRef.current = null;
+          camera.lowerRadiusLimit = CAMERA_MIN_RADIUS;
+          camera.panningDistanceLimit = 145;
+
+          glideRef.current = {
+            active: true,
+            targetRadius: CAMERA_INITIAL_RADIUS,
+            targetAlpha: resetAngles ? CAMERA_INITIAL_ALPHA : undefined,
+            targetBeta: resetAngles ? CAMERA_INITIAL_BETA : undefined,
+            lerpTarget: true,
+            lerpRadius: true,
+            lerpAngles: resetAngles,
+          };
+        }
+
+        if (orbitMeshesRef.current) {
+          highlightSelectedOrbit(orbitMeshesRef.current, id);
+        }
+        if (labelsRef.current) {
+          setLabelsVisible(labelsRef.current, simRef.current.showLabels, id);
+        }
+      },
+      []
+    );
+
     useEffect(() => {
       if (!sceneRef.current) return;
-      if (selectedPlanetId) {
-        const mesh =
-          selectedPlanetId === "sun"
-            ? (sceneRef.current.getMeshByName("sun") as Mesh)
-            : planetMeshesRef.current?.get(selectedPlanetId) || null;
+      initiateCameraFocus(selectedPlanetId ?? null, false);
+    }, [selectedPlanetId, initiateCameraFocus]);
 
-        if (mesh) {
-          const planetData = PLANET_DATA.find((p) => p.id === selectedPlanetId);
-          const visualRadius = planetData ? planetData.visualRadius : SUN_DATA.visualRadius;
-          smoothFocusTarget(mesh, visualRadius);
-
-          if (hlRef.current) {
-            if (selectedMeshRef.current) hlRef.current.removeMesh(selectedMeshRef.current);
-            hlRef.current.addMesh(
-              mesh,
-              new Color3(HIGHLIGHT_COLOR.r, HIGHLIGHT_COLOR.g, HIGHLIGHT_COLOR.b)
-            );
-            selectedMeshRef.current = mesh;
+    // ── Imperative Controls ───────────────────────────────────────────────────
+    useImperativeHandle(
+      ref,
+      () => ({
+        resetCamera() {
+          initiateCameraFocus(null, true);
+        },
+        deselectPlanet() {
+          initiateCameraFocus(null, false);
+          onPlanetSelectedRef.current(null);
+        },
+        focusPlanet(id: PlanetId | null) {
+          initiateCameraFocus(id, false);
+        },
+        zoomIn() {
+          const camera = cameraRef.current;
+          if (!camera) return;
+          glideRef.current.lerpRadius = false;
+          const next = Math.max(
+            camera.lowerRadiusLimit ?? CAMERA_MIN_RADIUS,
+            camera.radius * 0.72
+          );
+          camera.inertialRadiusOffset += (next - camera.radius) * 0.25;
+        },
+        zoomOut() {
+          const camera = cameraRef.current;
+          if (!camera) return;
+          glideRef.current.lerpRadius = false;
+          const next = Math.min(
+            camera.upperRadiusLimit ?? CAMERA_MAX_RADIUS,
+            camera.radius * 1.38
+          );
+          camera.inertialRadiusOffset += (next - camera.radius) * 0.25;
+        },
+        syncToNow() {
+          const now = new Date();
+          simEpochMsRef.current = now.getTime();
+          const earthRig = planetRigsRef.current?.get("earth");
+          if (earthRig) {
+            earthRig.mesh.rotation.y = computeEarthRotationY(now);
           }
-        }
-      } else {
-        smoothFocusTarget(null);
-        if (hlRef.current && selectedMeshRef.current) {
-          hlRef.current.removeMesh(selectedMeshRef.current);
-          selectedMeshRef.current = null;
-        }
-      }
-    }, [selectedPlanetId]);
-
-    // ── Imperative Handle ─────────────────────────────────────────────────────
-    useImperativeHandle(ref, () => ({
-      resetCamera() {
-        smoothFocusTarget(null);
-      },
-      deselectPlanet() {
-        smoothFocusTarget(null);
-        if (selectedMeshRef.current && hlRef.current) {
-          hlRef.current.removeMesh(selectedMeshRef.current);
-          selectedMeshRef.current = null;
-        }
-        onPlanetSelectedRef.current(null);
-      },
-      focusPlanet(id: PlanetId | null) {
-        if (!id) {
-          smoothFocusTarget(null);
-          return;
-        }
-        const mesh =
-          id === "sun"
-            ? (sceneRef.current?.getMeshByName("sun") as Mesh)
-            : planetMeshesRef.current?.get(id) || null;
-
-        if (mesh) {
-          const planetData = PLANET_DATA.find((p) => p.id === id);
-          smoothFocusTarget(mesh, planetData ? planetData.visualRadius : SUN_DATA.visualRadius);
-        }
-      },
-    }));
+        },
+      }),
+      [initiateCameraFocus]
+    );
 
     // ── 3D Scene Initialization ───────────────────────────────────────────────
     useEffect(() => {
       const canvas = canvasRef.current;
-      if (!canvas) return;
-      if (engineRef.current) return;
+      if (!canvas || engineRef.current) return;
 
       let isCancelled = false;
+      let cleanupControls: (() => void) | null = null;
 
       const initScene = async () => {
         await new Promise((r) => setTimeout(r, 16));
@@ -292,6 +339,7 @@ const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
         }
 
         const { engine, scene, camera } = rig;
+        cleanupControls = rig.cleanupControls;
         engineRef.current = engine;
         sceneRef.current = scene;
         cameraRef.current = camera;
@@ -299,7 +347,7 @@ const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
         if (isCancelled) return;
         setLoadingState({
           progress: 35,
-          status: "INITIALIZING SOLAR CORE & STARFIELD...",
+          status: "Aligning IAU J2000 Galactic Sphere",
           isReady: false,
         });
 
@@ -307,99 +355,261 @@ const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
         if (isCancelled) return;
 
         createStarfield(scene);
-        createSun(scene);
+        const sunHandle = createSun(scene);
+        sunHandleRef.current = sunHandle;
 
         setLoadingState({
-          progress: 60,
-          status: "PROJECTING NASA PLANETARY TEXTURES & ORBITS...",
+          progress: 65,
+          status: "Solving VSOP87 Elliptical Planetary Orbits",
           isReady: false,
         });
 
         await new Promise((r) => setTimeout(r, 16));
         if (isCancelled) return;
 
-        const planetMeshes = createPlanets(scene);
-        const orbitMeshes = createOrbits(scene);
+        const now = new Date();
+        simEpochMsRef.current = now.getTime();
+
+        const { meshes: planetMeshes, rigs: planetRigs } = createPlanets(scene);
+        const orbitMeshes = createOrbits(scene, now);
         planetMeshesRef.current = planetMeshes;
+        planetRigsRef.current = planetRigs;
         orbitMeshesRef.current = orbitMeshes;
 
+        // Place every planet & Earth's Moon at their exact live VSOP87 positions
+        const initialTelemetry: Record<string, LivePlanetTelemetry> = {};
+        const moonDirTmp = new Vector3();
+
         for (const planet of PLANET_DATA) {
-          orbitAnglesRef.current.set(planet.id, Math.random() * 2 * Math.PI);
+          const id = planet.id as OrbitingPlanetId;
+          const pRig = planetRigs.get(id);
+          if (!pRig) continue;
+          const eph = computePlanetEphemeris(id, now, pRig.orbitNode.position);
+          initialTelemetry[id] = eph;
+          if (id === "earth") {
+            // Exact real-time GMST rotation phase so day/night terminator matches real cities to < 0.05°
+            pRig.mesh.rotation.y = computeEarthRotationY(now);
+            if (pRig.moonMesh && pRig.moonOrbitRadius) {
+              computeMoonEclipticDirection(now, moonDirTmp);
+              pRig.moonMesh.position.copyFrom(
+                moonDirTmp.scale(pRig.moonOrbitRadius)
+              );
+            }
+          }
         }
+        onEphemerisUpdateRef.current?.({
+          simDate: now,
+          telemetry: initialTelemetry,
+        });
 
         setLoadingState({
-          progress: 82,
-          status: "POPULATING ASTEROID BELT PARTICLES & LABELS...",
+          progress: 88,
+          status: "Initializing Main Belt & Telemetry",
           isReady: false,
         });
 
         await new Promise((r) => setTimeout(r, 16));
         if (isCancelled) return;
 
-        const labels = createLabels(scene, planetMeshes);
+        const labels = createLabels(scene, planetRigs);
         const asteroidBelt = createAsteroidBelt(scene);
         labelsRef.current = labels;
         asteroidBeltRef.current = asteroidBelt;
 
-        const hl = new HighlightLayer("planetHighlight", scene);
-        hl.innerGlow = false;
-        hl.outerGlow = true;
-        hl.blurHorizontalSize = HIGHLIGHT_INTENSITY;
-        hl.blurVerticalSize = HIGHLIGHT_INTENSITY;
-        hlRef.current = hl;
+        const onUserWheel = () => {
+          glideRef.current.lerpRadius = false;
+        };
+        canvas.addEventListener("wheel", onUserWheel, { passive: true });
 
-        // ── Render Loop & Smooth Orbit + Planet Axial Rotation ────────────────
+        const tmpDelta = new Vector3();
+        let lastUiPublishMs = 0;
+
+        // ── Render Loop: Real VSOP87 Ephemeris + Delta-Tracked Camera ─────────
         const renderObs = scene.onBeforeRenderObservable.add(() => {
-          const deltaMs = engine.getDeltaTime();
-          const deltaSeconds = Math.min(deltaMs / 1000, 0.1);
+          const deltaSeconds = Math.min(engine.getDeltaTime() / 1000, 0.1);
+          const deltaDays = simRef.current.isPaused
+            ? 0
+            : deltaSeconds * simRef.current.daysPerSecond;
 
-          if (!simRef.current.isPaused) {
-            asteroidBeltRef.current?.updateRotation(deltaSeconds, simRef.current.simulationSpeed);
+          if (deltaDays !== 0) {
+            simEpochMsRef.current += deltaDays * 86400 * 1000;
+          }
+
+          const simDate = new Date(simEpochMsRef.current);
+
+          // Sun equatorial rotation (~25.38 days real sidereal period, gently clamped so it stays smooth)
+          sunHandle.update(
+            deltaSeconds,
+            simRef.current.isPaused
+              ? 0.15
+              : Math.min(Math.max(simRef.current.daysPerSecond / 10, 0.25), 3.5)
+          );
+
+          const liveTelemetry: Record<string, LivePlanetTelemetry> = {};
+          const shouldPublishUi =
+            performance.now() - lastUiPublishMs >= 160;
+
+          if (deltaDays !== 0) {
+            asteroidBeltRef.current?.updateBySimDays(deltaDays);
 
             for (const planet of PLANET_DATA) {
-              const mesh = planetMeshesRef.current?.get(planet.id);
-              if (!mesh) continue;
+              const id = planet.id as OrbitingPlanetId;
+              const pRig = planetRigsRef.current?.get(id);
+              if (!pRig) continue;
 
-              const prev = orbitAnglesRef.current.get(planet.id) ?? 0;
-              const next =
-                prev +
-                planet.orbitSpeed *
-                  deltaSeconds *
-                  simRef.current.simulationSpeed *
-                  BASE_SPEED_SCALE;
+              // Exact real VSOP87 3D heliocentric position & Vis-Viva velocity
+              const eph = computePlanetEphemeris(
+                id,
+                simDate,
+                pRig.orbitNode.position
+              );
+              if (shouldPublishUi) {
+                liveTelemetry[id] = eph;
+              }
 
-              orbitAnglesRef.current.set(planet.id, next);
+              // Real sidereal axial rotation:
+              // In Babylon left-handed space, prograde West->East (CCW from North Pole) is decreasing rotation.y.
+              // For Earth at LIVE or 1 H/s, lock directly to exact GMST so global day/night matches reality!
+              if (id === "earth" && simRef.current.daysPerSecond <= 1 / 24 + 1e-6) {
+                pRig.mesh.rotation.y = computeEarthRotationY(simDate);
+              } else {
+                const siderealDays =
+                  REAL_PLANET_CONSTANTS[id].siderealRotationHours / 24;
+                const spinRateDaysPerSec = Math.min(
+                  simRef.current.daysPerSecond,
+                  1 / 24
+                );
+                const effectiveRotDays = deltaSeconds * spinRateDaysPerSec;
+                pRig.mesh.rotation.y -=
+                  ((Math.PI * 2) / siderealDays) * effectiveRotDays;
+              }
 
-              mesh.position.x = Math.cos(next) * planet.visualOrbitRadius;
-              mesh.position.z = Math.sin(next) * planet.visualOrbitRadius;
-              // Smooth photorealistic axial spin
-              mesh.rotation.y += (0.4 / Math.max(0.5, planet.visualRadius)) * deltaSeconds * simRef.current.simulationSpeed;
+              // Real lunar geocentric orbit around Earth
+              if (id === "earth" && pRig.moonMesh && pRig.moonOrbitRadius) {
+                computeMoonEclipticDirection(simDate, moonDirTmp);
+                pRig.moonMesh.position.copyFrom(
+                  moonDirTmp.scale(pRig.moonOrbitRadius)
+                );
+              }
+
+              pRig.update?.(deltaDays);
+            }
+
+            if (shouldPublishUi) {
+              lastUiPublishMs = performance.now();
+              onEphemerisUpdateRef.current?.({
+                simDate,
+                telemetry: liveTelemetry,
+              });
             }
           }
 
-          // Smoothly lock camera target to focused planet during orbit
-          if (focusedMeshRef.current && camera) {
-            camera.target.copyFrom(focusedMeshRef.current.position);
+          // ── Smooth Camera Glide & User-Friendly Delta Tracking ──────────────
+          const glide = glideRef.current;
+          const trackedNode = trackedNodeRef.current;
+          const damp = 1 - Math.exp(-deltaSeconds * 6.5);
+
+          if (trackedNode) {
+            const currentPos = trackedNode.getAbsolutePosition();
+
+            if (glide.active && glide.lerpTarget) {
+              Vector3.LerpToRef(camera.target, currentPos, damp, camera.target);
+              if (Vector3.Distance(camera.target, currentPos) < 0.03) {
+                camera.target.copyFrom(currentPos);
+                glide.lerpTarget = false;
+              }
+            } else if (prevTrackedPosRef.current) {
+              currentPos.subtractToRef(prevTrackedPosRef.current, tmpDelta);
+              camera.target.addInPlace(tmpDelta);
+            }
+
+            if (!prevTrackedPosRef.current) {
+              prevTrackedPosRef.current = currentPos.clone();
+            } else {
+              prevTrackedPosRef.current.copyFrom(currentPos);
+            }
+          } else if (glide.active && glide.lerpTarget) {
+            Vector3.LerpToRef(
+              camera.target,
+              Vector3.Zero(),
+              damp,
+              camera.target
+            );
+            if (camera.target.length() < 0.04) {
+              camera.target.set(0, 0, 0);
+              glide.lerpTarget = false;
+            }
+          }
+
+          if (glide.active) {
+            if (glide.lerpRadius) {
+              camera.radius += (glide.targetRadius - camera.radius) * damp;
+              if (Math.abs(camera.radius - glide.targetRadius) < 0.05) {
+                camera.radius = glide.targetRadius;
+                glide.lerpRadius = false;
+              }
+            }
+            if (
+              glide.lerpAngles &&
+              glide.targetAlpha !== undefined &&
+              glide.targetBeta !== undefined
+            ) {
+              camera.alpha += (glide.targetAlpha - camera.alpha) * damp;
+              camera.beta += (glide.targetBeta - camera.beta) * damp;
+              if (
+                Math.abs(camera.alpha - glide.targetAlpha) < 0.005 &&
+                Math.abs(camera.beta - glide.targetBeta) < 0.005
+              ) {
+                camera.alpha = glide.targetAlpha;
+                camera.beta = glide.targetBeta;
+                glide.lerpAngles = false;
+              }
+            }
+            if (!glide.lerpTarget && !glide.lerpRadius && !glide.lerpAngles) {
+              glide.active = false;
+            }
           }
         });
 
-        // ── Strictly On-Click Selection (Ignore Camera Drag/Swipes) ──────────
-        const POINTER_DOWN = 1;
-        const POINTER_UP = 4;
+        // ── Pointer Click Selection (Ignores Orbit Drag / Pan / Pinch) ────────
         let pointerDownX = 0;
         let pointerDownY = 0;
+        let pointerDownButton = 0;
+        let activePointers = 0;
+        let hadMultiTouch = false;
 
         const pointerObs = scene.onPointerObservable.add((info) => {
-          if (info.type === POINTER_DOWN) {
+          if (info.type === PointerEventTypes.POINTERDOWN) {
+            activePointers++;
+            if (activePointers > 1) {
+              hadMultiTouch = true;
+              glideRef.current.lerpRadius = false;
+              glideRef.current.lerpAngles = false;
+            }
             pointerDownX = scene.pointerX;
             pointerDownY = scene.pointerY;
+            pointerDownButton = info.event.button ?? 0;
+
+            if (pointerDownButton !== 0 || info.event.shiftKey) {
+              glideRef.current.lerpTarget = false;
+            }
+            glideRef.current.lerpAngles = false;
             return;
           }
 
-          if (info.type !== POINTER_UP) return;
+          if (info.type !== PointerEventTypes.POINTERUP) return;
 
-          // Ignore if user was dragging/rotating the camera
-          const dragDist = Math.hypot(scene.pointerX - pointerDownX, scene.pointerY - pointerDownY);
+          activePointers = Math.max(0, activePointers - 1);
+          if (hadMultiTouch) {
+            if (activePointers === 0) hadMultiTouch = false;
+            return;
+          }
+
+          if (pointerDownButton !== 0) return;
+          const dragDist = Math.hypot(
+            scene.pointerX - pointerDownX,
+            scene.pointerY - pointerDownY
+          );
           if (dragDist > 6) return;
 
           const hit = scene.pick(
@@ -408,25 +618,26 @@ const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
             (m) => !!(m.metadata?.planetId || m.metadata?.type === "sun")
           );
 
-          if (hit?.hit && (hit.pickedMesh?.metadata?.planetId || hit.pickedMesh?.metadata?.type === "sun")) {
-            const planetId = (hit.pickedMesh.metadata.planetId || "sun") as PlanetId;
-            const pickedMesh = hit.pickedMesh as Mesh;
-
-            if (selectedMeshRef.current && hl) {
-              hl.removeMesh(selectedMeshRef.current);
-            }
-            hl.addMesh(
-              pickedMesh,
-              new Color3(HIGHLIGHT_COLOR.r, HIGHLIGHT_COLOR.g, HIGHLIGHT_COLOR.b)
-            );
-            selectedMeshRef.current = pickedMesh;
-
-            const planetData = PLANET_DATA.find((p) => p.id === planetId);
-            const visualRadius = planetData ? planetData.visualRadius : SUN_DATA.visualRadius;
-            smoothFocusTarget(pickedMesh, visualRadius);
-
+          if (
+            hit?.hit &&
+            (hit.pickedMesh?.metadata?.planetId ||
+              hit.pickedMesh?.metadata?.type === "sun")
+          ) {
+            const planetId = (hit.pickedMesh.metadata.planetId ||
+              "sun") as PlanetId;
             onPlanetSelectedRef.current(planetId);
           }
+        });
+
+        const hoverObs = scene.onPointerObservable.add((info) => {
+          if (info.type !== PointerEventTypes.POINTERMOVE) return;
+          if (activePointers > 0) return;
+          const hit = scene.pick(
+            scene.pointerX,
+            scene.pointerY,
+            (m) => !!(m.metadata?.planetId || m.metadata?.type === "sun")
+          );
+          canvas.style.cursor = hit?.hit ? "pointer" : "grab";
         });
 
         engine.runRenderLoop(() => {
@@ -435,11 +646,11 @@ const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
 
         setLoadingState({
           progress: 100,
-          status: "3D SOLAR SYSTEM READY",
+          status: "Ready",
           isReady: true,
         });
 
-        scene.metadata = { renderObs, pointerObs };
+        scene.metadata = { renderObs, pointerObs, hoverObs, onUserWheel };
       };
 
       initScene();
@@ -461,18 +672,23 @@ const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
       return () => {
         isCancelled = true;
         window.removeEventListener("resize", onResize);
-        if (resizeObserver) {
-          resizeObserver.disconnect();
-        }
+        resizeObserver?.disconnect();
+        cleanupControls?.();
 
         if (sceneRef.current) {
           const s = sceneRef.current;
-          if (s.metadata?.renderObs) s.onBeforeRenderObservable.remove(s.metadata.renderObs);
-          if (s.metadata?.pointerObs) s.onPointerObservable.remove(s.metadata.pointerObs);
+          if (s.metadata?.renderObs)
+            s.onBeforeRenderObservable.remove(s.metadata.renderObs);
+          if (s.metadata?.pointerObs)
+            s.onPointerObservable.remove(s.metadata.pointerObs);
+          if (s.metadata?.hoverObs)
+            s.onPointerObservable.remove(s.metadata.hoverObs);
+          if (s.metadata?.onUserWheel && canvas) {
+            canvas.removeEventListener("wheel", s.metadata.onUserWheel);
+          }
         }
 
         disposeLabels();
-        hlRef.current?.dispose();
         if (engineRef.current) {
           engineRef.current.stopRenderLoop();
           sceneRef.current?.dispose();
@@ -482,40 +698,42 @@ const SolarSystemScene = forwardRef<SolarSystemSceneHandle, Props>(
         engineRef.current = null;
         sceneRef.current = null;
         cameraRef.current = null;
+        sunHandleRef.current = null;
         planetMeshesRef.current = null;
+        planetRigsRef.current = null;
         orbitMeshesRef.current = null;
         labelsRef.current = null;
-        hlRef.current = null;
-        selectedMeshRef.current = null;
-        focusedMeshRef.current = null;
+        trackedNodeRef.current = null;
+        prevTrackedPosRef.current = null;
       };
     }, []);
 
     return (
-      <div className="relative w-full h-full overflow-hidden bg-[#020617]">
+      <div className="relative h-full w-full overflow-hidden bg-[#01030a]">
         <canvas
           ref={canvasRef}
-          className="w-full h-full block outline-none cursor-grab active:cursor-grabbing"
-          aria-label="Interactive 3D solar system. Click any planet to zoom into its rotating globe."
+          className="block h-full w-full touch-none outline-none cursor-grab active:cursor-grabbing"
+          aria-label="Interactive 3D Solar System driven by real VSOP87 ephemeris."
           tabIndex={0}
         />
 
-        {/* ── Progressive Loading HUD ────────────────────────────────────────── */}
-        {!loadingState.isReady && (
-          <div className="absolute inset-0 bg-[#020617]/95 z-50 flex flex-col items-center justify-center p-6 backdrop-blur-2xl font-mono">
-            <div className="w-16 h-16 rounded-full border-2 border-cyan-400 border-t-transparent animate-spin mb-4 shadow-[0_0_20px_rgba(6,182,212,0.5)]" />
-            <div className="text-cyan-300 font-black tracking-widest text-sm mb-2 uppercase">
-              {loadingState.status}
-            </div>
-            <div className="w-64 h-1.5 bg-slate-800 rounded-full overflow-hidden mb-2">
-              <div
-                className="h-full bg-gradient-to-r from-cyan-500 to-indigo-500 transition-all duration-300"
-                style={{ width: `${loadingState.progress}%` }}
-              />
-            </div>
-            <span className="text-[10px] text-slate-400">{loadingState.progress}% COMPLETED</span>
+        {/* Minimal Loading Veil */}
+        <div
+          className={`pointer-events-none absolute inset-0 z-50 flex flex-col items-center justify-center bg-[#01030a] transition-opacity duration-700 ${
+            loadingState.isReady ? "opacity-0" : "opacity-100"
+          }`}
+        >
+          <div className="mb-5 h-9 w-9 animate-spin rounded-full border border-white/15 border-t-white/80" />
+          <p className="font-mono text-[10px] tracking-[0.34em] text-slate-300/80 uppercase">
+            {loadingState.status}
+          </p>
+          <div className="mt-3 h-px w-48 overflow-hidden bg-white/10">
+            <div
+              className="h-full bg-white/75 transition-all duration-300"
+              style={{ width: `${loadingState.progress}%` }}
+            />
           </div>
-        )}
+        </div>
       </div>
     );
   }

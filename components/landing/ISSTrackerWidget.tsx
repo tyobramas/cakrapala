@@ -66,7 +66,7 @@ export default function ISSTrackerWidget() {
           </div>
 
           <Link
-            href="/iss"
+            href="/satellites"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-300 text-xs font-mono transition-all group"
           >
             <span>FULL MISSION CONSOLE</span>

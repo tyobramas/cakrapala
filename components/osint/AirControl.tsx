@@ -1,21 +1,11 @@
 'use client';
-// components/osint/AirControl.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Control panel popover for ADS-B Flight Tracking layer.
-//
-// Settings:
-//   - Altitude range filter (feet)
-//   - Hide grounded aircraft toggle (default: true)
-//   - Military-only filter toggle (dbFlags bit 0)
-//   - Show 60s flight trails toggle (default: true)
-//   - Search callsign/registration/hex with fly-to
-//
-// PRIVACY SAFEGUARD:
-//   - No persistent tail tracking / notifications.
-//   - Position history is strictly in-memory per session (never written to disk).
-// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * AirControl — Refined Glassmorphic ADS-B Flight Traffic Settings.
+ */
 
 import { useState } from 'react';
+import { Plane, X, Search, Shield } from 'lucide-react';
 import type { AirFilterSettings } from './layers/AirLayer';
 import type { OsintEntity } from '@/lib/osint/types';
 
@@ -40,97 +30,99 @@ export default function AirControl({
 
   if (!isOpen) return null;
 
-  const filteredSearchResults = searchQuery.trim().length >= 2
-    ? entities.filter((e) => {
-        const q = searchQuery.trim().toUpperCase();
-        const callsign = String(e.raw?.callsign || '').toUpperCase();
-        const reg = String(e.raw?.registration || '').toUpperCase();
-        const hex = String(e.raw?.hex || '').toUpperCase();
-        return callsign.includes(q) || reg.includes(q) || hex.includes(q);
-      }).slice(0, 5)
-    : [];
+  const filteredSearchResults =
+    searchQuery.trim().length >= 2
+      ? entities
+          .filter((e) => {
+            const q = searchQuery.trim().toUpperCase();
+            const callsign = String(e.raw?.callsign || '').toUpperCase();
+            const reg = String(e.raw?.registration || '').toUpperCase();
+            const hex = String(e.raw?.hex || '').toUpperCase();
+            return callsign.includes(q) || reg.includes(q) || hex.includes(q);
+          })
+          .slice(0, 5)
+      : [];
 
   return (
     <div
       role="dialog"
       aria-label="Air Traffic Settings"
       className="
-        absolute z-20 top-16 left-20 max-md:left-4 max-md:top-24 max-md:right-4
-        w-84 max-w-[calc(100vw-2rem)]
-        bg-slate-900/95 backdrop-blur-md border border-slate-700/60
-        rounded-2xl p-4 shadow-2xl text-slate-200
-        animate-in fade-in duration-150
+        fixed z-30 top-20 left-60 max-md:inset-x-4 max-md:top-28
+        w-[330px] max-w-[calc(100vw-2rem)]
+        rounded-2xl border border-white/[0.10] bg-[#030714]/78 p-4 text-slate-200
+        backdrop-blur-2xl shadow-[0_24px_64px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.1)]
       "
     >
-      {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <span className="text-base" aria-hidden="true">✈️</span>
-          <h2 className="text-sm font-semibold text-slate-100">
-            Air Traffic (ADS-B)
-          </h2>
+      <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-sky-400/25 bg-sky-400/10 text-sky-300">
+            <Plane className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <h2 className="font-[family-name:var(--font-orbitron)] text-xs font-medium tracking-[0.14em] text-white uppercase">
+              Air Traffic
+            </h2>
+            <p className="text-[10px] text-slate-400">Live ADS-B · adsb.lol ODbL</p>
+          </div>
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-200 rounded-lg p-1 hover:bg-slate-800 transition-colors"
-          aria-label="Close panel"
+          aria-label="Close air settings"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition-colors hover:bg-white/12 hover:text-white"
         >
-          ✕
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* Search Bar */}
-      <div className="mt-3">
-        <label className="text-[11px] text-slate-400 block mb-1">
-          Search Callsign / Registration / Hex:
+      {/* Search */}
+      <div className="mt-3.5">
+        <label className="mb-1.5 block font-mono text-[9.5px] tracking-[0.2em] text-slate-400 uppercase">
+          Find Callsign / Reg / Hex
         </label>
         <div className="relative">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
           <input
             type="text"
-            placeholder="e.g. CTV918, PK-GQD, 8a04a7…"
+            placeholder="e.g. GIA404, PK-G..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="
-              w-full px-3 py-1.5 rounded-lg bg-slate-950/70 border border-slate-700
-              text-slate-100 text-xs placeholder:text-slate-500 font-mono
-              focus:outline-none focus:border-cyan-400 transition-colors
-            "
+            className="w-full rounded-xl border border-white/10 bg-white/[0.04] py-1.5 pr-7 pl-8 font-mono text-[11px] text-white placeholder:text-slate-500 focus:border-white/30 focus:outline-none"
           />
           {searchQuery && (
             <button
+              type="button"
               onClick={() => setSearchQuery('')}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 text-xs"
+              className="absolute top-1/2 right-2 -translate-y-1/2 cursor-pointer text-slate-400 hover:text-white"
             >
-              ✕
+              <X className="h-3 w-3" />
             </button>
           )}
         </div>
 
-        {/* Search Results Dropdown */}
         {filteredSearchResults.length > 0 && (
-          <div className="mt-1.5 p-1 bg-slate-950 border border-slate-800 rounded-lg space-y-1">
+          <div className="mt-1.5 space-y-1 rounded-xl border border-white/10 bg-[#020510]/90 p-1">
             {filteredSearchResults.map((e) => (
               <button
                 key={e.id}
+                type="button"
                 onClick={() => {
-                  if (onFlyTo) onFlyTo(e);
+                  onFlyTo?.(e);
                   setSearchQuery('');
                 }}
-                className="
-                  w-full text-left px-2.5 py-1.5 rounded text-xs hover:bg-slate-800/80
-                  flex items-center justify-between transition-colors
-                "
+                className="flex w-full cursor-pointer items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[11px] transition-colors hover:bg-white/[0.08]"
               >
                 <div className="font-mono">
-                  <span className="font-semibold text-cyan-300">{e.label}</span>
+                  <span className="font-medium text-sky-200">{e.label}</span>
                   {Boolean(e.raw?.acType) && (
-                    <span className="text-[10px] text-slate-400 ml-1.5">
-                      ({String(e.raw?.acType)})
+                    <span className="ml-1.5 text-[10px] text-slate-400">
+                      {String(e.raw?.acType)}
                     </span>
                   )}
                 </div>
-                <span className="text-[10px] text-slate-500">
-                  {Math.round(e.position.altM * 3.28084)} ft
+                <span className="font-mono text-[10px] text-slate-400">
+                  {Math.round(e.position.altM * 3.28084).toLocaleString()} ft
                 </span>
               </button>
             ))}
@@ -138,55 +130,51 @@ export default function AirControl({
         )}
       </div>
 
-      {/* Controls and Toggles */}
-      <div className="mt-4 space-y-3.5 text-xs">
-        {/* Hide on ground toggle */}
-        <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-slate-300">Hide aircraft on ground</span>
+      {/* Filters */}
+      <div className="mt-4 space-y-3 text-xs">
+        <label className="flex cursor-pointer items-center justify-between">
+          <span className="text-[11px] text-slate-200">Hide grounded aircraft</span>
           <input
             type="checkbox"
             checked={settings.hideOnGround ?? true}
             onChange={(e) =>
               onChange({ ...settings, hideOnGround: e.target.checked })
             }
-            className="accent-cyan-400 rounded w-4 h-4 cursor-pointer"
+            className="h-3.5 w-3.5 cursor-pointer rounded border-white/20 bg-white/5 accent-sky-400"
           />
         </label>
 
-        {/* Military only toggle */}
-        <label className="flex items-center justify-between cursor-pointer">
-          <div className="flex items-center gap-1.5">
-            <span className="w-2 h-2 rounded-full bg-amber-400" />
-            <span className="text-slate-300">Military aircraft only</span>
-          </div>
+        <label className="flex cursor-pointer items-center justify-between">
+          <span className="flex items-center gap-2 text-[11px] text-slate-200">
+            <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+            Military aircraft only
+          </span>
           <input
             type="checkbox"
             checked={settings.militaryOnly ?? false}
             onChange={(e) =>
               onChange({ ...settings, militaryOnly: e.target.checked })
             }
-            className="accent-amber-500 rounded w-4 h-4 cursor-pointer"
+            className="h-3.5 w-3.5 cursor-pointer rounded border-white/20 bg-white/5 accent-amber-400"
           />
         </label>
 
-        {/* Show trails toggle */}
-        <label className="flex items-center justify-between cursor-pointer">
-          <span className="text-slate-300">Show flight trails</span>
+        <label className="flex cursor-pointer items-center justify-between">
+          <span className="text-[11px] text-slate-200">Show 60s flight trails</span>
           <input
             type="checkbox"
             checked={settings.showTrails ?? true}
             onChange={(e) =>
               onChange({ ...settings, showTrails: e.target.checked })
             }
-            className="accent-cyan-400 rounded w-4 h-4 cursor-pointer"
+            className="h-3.5 w-3.5 cursor-pointer rounded border-white/20 bg-white/5 accent-sky-400"
           />
         </label>
 
-        {/* Altitude Range Filter */}
-        <div className="pt-2 border-t border-slate-800">
-          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
-            <span>Max Altitude Filter:</span>
-            <span className="font-mono text-cyan-300">
+        <div className="border-t border-white/[0.08] pt-3">
+          <div className="mb-1.5 flex items-center justify-between text-[10.5px]">
+            <span className="text-slate-400">Max Altitude</span>
+            <span className="font-mono text-white/90">
               {(settings.maxAltFt ?? 45000) >= 45000
                 ? 'All Altitudes'
                 : `${(settings.maxAltFt ?? 45000).toLocaleString()} ft`}
@@ -201,16 +189,21 @@ export default function AirControl({
             onChange={(e) =>
               onChange({
                 ...settings,
-                maxAltFt: Number(e.target.value) >= 45000 ? undefined : Number(e.target.value),
+                maxAltFt:
+                  Number(e.target.value) >= 45000
+                    ? undefined
+                    : Number(e.target.value),
               })
             }
-            className="w-full accent-cyan-400 cursor-pointer"
+            className="h-1 w-full cursor-pointer rounded-lg bg-white/15 accent-sky-300"
           />
         </div>
 
-        {/* Privacy Note */}
-        <div className="pt-3 border-t border-slate-800 text-[10px] text-slate-500 leading-relaxed">
-          🔒 <strong>Privacy & Data Safeguards:</strong> Tracking is session-based in temporary memory only. No persistent history tracking or aircraft-level alerting.
+        <div className="flex items-start gap-2 rounded-xl border border-white/[0.07] bg-white/[0.025] p-2.5 text-[10px] leading-relaxed text-slate-400">
+          <Shield className="mt-0.5 h-3.5 w-3.5 shrink-0 text-sky-300/80" />
+          <span>
+            Ephemeral session memory only — zero persistent tail history or tracking stored on disk.
+          </span>
         </div>
       </div>
     </div>

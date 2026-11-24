@@ -1,109 +1,166 @@
 "use client";
 
 /**
- * SceneToolbar — Cockpit Flight Simulation Controls Dock.
+ * SceneToolbar — Floating Physical-Time Simulation & Camera Control Dock.
  */
 
-import { Play, Pause, Eye, EyeOff, Tag, RotateCcw, Orbit, Layers } from "lucide-react";
-import { SIMULATION_SPEEDS, type SimulationSpeed, type SimulationState } from "@/lib/astronomy/types";
+import {
+  Play,
+  Pause,
+  Tag,
+  RotateCcw,
+  Orbit,
+  ZoomIn,
+  ZoomOut,
+} from "lucide-react";
+import {
+  SOLAR_TIME_PRESETS,
+  type SolarTimePresetId,
+} from "@/lib/astronomy/solarSystemPhysics";
 
 type Props = {
-  simulationState: SimulationState;
+  isPaused: boolean;
+  timePresetId: SolarTimePresetId;
+  showOrbits: boolean;
+  showLabels: boolean;
   onTogglePause: () => void;
-  onSpeedChange: (speed: SimulationSpeed) => void;
+  onTimePresetChange: (presetId: SolarTimePresetId) => void;
   onToggleOrbits: () => void;
   onToggleLabels: () => void;
   onResetCamera: () => void;
+  onZoomIn?: () => void;
+  onZoomOut?: () => void;
 };
 
 export default function SceneToolbar({
-  simulationState,
+  isPaused,
+  timePresetId,
+  showOrbits,
+  showLabels,
   onTogglePause,
-  onSpeedChange,
+  onTimePresetChange,
   onToggleOrbits,
   onToggleLabels,
   onResetCamera,
+  onZoomIn,
+  onZoomOut,
 }: Props) {
-  const { isPaused, simulationSpeed, showOrbits, showLabels } = simulationState;
-
   return (
     <div
-      className="flex flex-wrap items-center justify-center gap-2 p-2 rounded-[24px] bg-gradient-to-b from-[#182037]/90 to-[#0d1425]/95 border border-slate-700/60 shadow-[0_12px_40px_rgba(0,0,0,0.8),inset_0_1px_1px_rgba(255,255,255,0.08)] backdrop-blur-2xl font-mono text-xs"
+      className="flex flex-wrap items-center justify-center gap-1.5 rounded-full border border-white/[0.11] bg-[#030714]/58 p-1.5 font-mono text-[11px] backdrop-blur-2xl shadow-[0_14px_44px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.1)]"
       role="toolbar"
-      aria-label="3D Orrery Simulation controls"
+      aria-label="3D Solar System Simulation Controls"
     >
-      {/* ── Play / Pause Button ────────────────────────────────────────────── */}
+      {/* Play / Pause */}
       <button
+        type="button"
         onClick={onTogglePause}
-        className={`flex items-center gap-2 px-4 py-2 rounded-xl font-bold transition-all ${
+        className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[10px] font-semibold tracking-[0.14em] uppercase transition-all ${
           isPaused
-            ? "bg-amber-500 hover:bg-amber-400 text-slate-950 shadow-[0_0_15px_rgba(245,158,11,0.5)]"
-            : "bg-cyan-500 hover:bg-cyan-400 text-slate-950 shadow-[0_0_15px_rgba(6,182,212,0.5)]"
+            ? "bg-amber-400/90 text-slate-950 hover:bg-amber-300"
+            : "bg-white/92 text-slate-950 hover:bg-white"
         }`}
-        title={isPaused ? "Resume Simulation" : "Pause Simulation"}
+        title={isPaused ? "Resume Simulation (Space)" : "Pause Simulation (Space)"}
       >
-        {isPaused ? <Play className="w-3.5 h-3.5 fill-current" /> : <Pause className="w-3.5 h-3.5 fill-current" />}
-        <span>{isPaused ? "RESUME" : "PAUSE"}</span>
+        {isPaused ? (
+          <Play className="h-3 w-3 fill-current" />
+        ) : (
+          <Pause className="h-3 w-3 fill-current" />
+        )}
+        <span className="hidden sm:inline">{isPaused ? "Play" : "Pause"}</span>
       </button>
 
-      {/* ── Simulation Speed Multiplier Selector ────────────────────────────── */}
-      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#060a14]/80 border border-slate-800">
-        <span className="text-[10px] text-slate-400 font-bold uppercase">SPEED:</span>
-        <div className="flex items-center gap-1">
-          {SIMULATION_SPEEDS.map((s) => (
-            <button
-              key={s}
-              onClick={() => onSpeedChange(s)}
-              className={`px-2 py-1 rounded-lg text-[10px] font-bold transition-all ${
-                simulationSpeed === s
-                  ? "bg-cyan-500/20 text-cyan-300 border border-cyan-500/40 shadow-sm"
-                  : "text-slate-400 hover:text-slate-200"
-              }`}
-            >
-              {s}&times;
-            </button>
-          ))}
-        </div>
+      {/* Physical Ephemeris Time Rate Presets */}
+      <div className="flex items-center gap-0.5 rounded-full border border-white/[0.07] bg-white/[0.03] px-1.5 py-0.5">
+        {SOLAR_TIME_PRESETS.map((preset) => (
+          <button
+            key={preset.id}
+            type="button"
+            onClick={() => onTimePresetChange(preset.id)}
+            className={`cursor-pointer rounded-full px-2 py-1 text-[10px] font-medium whitespace-nowrap transition-all ${
+              timePresetId === preset.id
+                ? "bg-white/15 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]"
+                : "text-slate-400 hover:text-white"
+            }`}
+            title={`Simulate at ${preset.label}`}
+          >
+            {preset.label}
+          </button>
+        ))}
       </div>
 
-      <div className="h-5 w-px bg-slate-800 hidden sm:block" />
+      <div className="hidden h-4 w-px bg-white/10 sm:block" />
 
-      {/* ── Toggle Orbit Trajectories ───────────────────────────────────────── */}
+      {/* Toggle Orbits */}
       <button
+        type="button"
         onClick={onToggleOrbits}
-        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${
+        className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium tracking-[0.12em] uppercase transition-all ${
           showOrbits
-            ? "bg-[#25324d] border-cyan-500/40 text-cyan-300 shadow-sm"
-            : "bg-[#060a14]/80 border-slate-800 text-slate-400 hover:text-slate-200"
+            ? "bg-white/12 text-white"
+            : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
         }`}
-        title="Toggle Keplerian Orbit Lines"
+        title="Toggle Elliptical VSOP87 Orbits"
       >
-        <Orbit className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">ORBITS</span>
+        <Orbit className="h-3.5 w-3.5" />
+        <span className="hidden md:inline">Orbits</span>
       </button>
 
-      {/* ── Toggle Planet Labels ────────────────────────────────────────────── */}
+      {/* Toggle Labels */}
       <button
+        type="button"
         onClick={onToggleLabels}
-        className={`flex items-center gap-1.5 px-3 py-2 rounded-xl border transition-all ${
+        className={`flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium tracking-[0.12em] uppercase transition-all ${
           showLabels
-            ? "bg-[#25324d] border-cyan-500/40 text-cyan-300 shadow-sm"
-            : "bg-[#060a14]/80 border-slate-800 text-slate-400 hover:text-slate-200"
+            ? "bg-white/12 text-white"
+            : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200"
         }`}
-        title="Toggle Planetary HUD Labels"
+        title="Toggle Planet Labels"
       >
-        <Tag className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">LABELS</span>
+        <Tag className="h-3.5 w-3.5" />
+        <span className="hidden md:inline">Labels</span>
       </button>
 
-      {/* ── Reset Camera to Heliocentric View ───────────────────────────────── */}
+      {/* Smooth Zoom Out / In */}
+      {(onZoomIn || onZoomOut) && (
+        <>
+          <div className="hidden h-4 w-px bg-white/10 sm:block" />
+          <div className="flex items-center gap-0.5">
+            {onZoomOut && (
+              <button
+                type="button"
+                onClick={onZoomOut}
+                aria-label="Zoom out"
+                title="Zoom Out (-)"
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <ZoomOut className="h-3.5 w-3.5" />
+              </button>
+            )}
+            {onZoomIn && (
+              <button
+                type="button"
+                onClick={onZoomIn}
+                aria-label="Zoom in"
+                title="Zoom In (+)"
+                className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full text-slate-300 transition-colors hover:bg-white/10 hover:text-white"
+              >
+                <ZoomIn className="h-3.5 w-3.5" />
+              </button>
+            )}
+          </div>
+        </>
+      )}
+
+      {/* Reset Camera */}
       <button
+        type="button"
         onClick={onResetCamera}
-        className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#060a14]/80 hover:bg-[#182037] border border-slate-800 hover:border-cyan-500/40 text-slate-300 hover:text-white transition-all"
-        title="Reset Camera to Heliocentric Solar System View"
+        className="flex cursor-pointer items-center gap-1.5 rounded-full px-3 py-1.5 text-[10px] font-medium tracking-[0.12em] text-slate-300 uppercase transition-all hover:bg-white/10 hover:text-white"
+        title="Reset Camera to Heliocentric Overview (R)"
       >
-        <RotateCcw className="w-3.5 h-3.5" />
-        <span className="hidden sm:inline">RESET CAM</span>
+        <RotateCcw className="h-3.5 w-3.5" />
+        <span className="hidden sm:inline">Reset</span>
       </button>
     </div>
   );

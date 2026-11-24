@@ -15,6 +15,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useEffect, useRef } from 'react';
+import type * as CesiumTypes from 'cesium';
 import type { OsintEntity } from '@/lib/osint/types';
 import { resolveDisplayMode, type DisplayMode } from '@/lib/osint/registry';
 import {
@@ -43,7 +44,7 @@ export interface AirLayerProps {
 const CIVIL_COLOR = '#22d3ee';
 const MILITARY_COLOR = '#f59e0b';
 const MAX_TRAIL_POINTS = 20;
-const GRACE_PERIOD_MS = 30_000; // 30 seconds
+const GRACE_PERIOD_MS = 45_000; // 45 seconds (safely covers 20s poll interval)
 
 function generateAirplaneSvg(colorHex: string): string {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="36" height="36" viewBox="0 0 36 36" fill="none">
@@ -95,19 +96,22 @@ export default function AirLayer({
 }: AirLayerProps) {
   const aircraftMapRef = useRef<Map<string, LocalAircraftState>>(new Map());
   const onSelectRef = useRef(onSelect);
-  onSelectRef.current = onSelect;
   const filterRef = useRef(filterSettings);
-  filterRef.current = filterSettings;
 
   const mode: DisplayMode = resolveDisplayMode(cameraAltM);
   const modeRef = useRef(mode);
-  modeRef.current = mode;
+
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+    filterRef.current = filterSettings;
+    modeRef.current = mode;
+  }, [onSelect, filterSettings, mode]);
 
   // ── Click Handler ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!viewer || viewer.isDestroyed()) return;
 
-    let handler: any = null;
+    let handler: CesiumTypes.ScreenSpaceEventHandler | null = null;
     let isMounted = true;
 
     import('cesium').then((Cesium) => {
@@ -115,7 +119,7 @@ export default function AirLayer({
 
       handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 
-      handler.setInputAction((click: any) => {
+      handler.setInputAction((click: CesiumTypes.ScreenSpaceEventHandler.PositionedEvent) => {
         const picked = viewer.scene.pick(click.position);
         if (!picked || !picked.id) return;
 

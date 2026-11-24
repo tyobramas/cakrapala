@@ -31,7 +31,6 @@ import {
   Globe,
   Zap,
   Shield,
-  Eye,
 } from "lucide-react";
 import AstronomyTerminal from "@/components/ai/AstronomyTerminal";
 import { SATELLITE_CATALOG } from "@/lib/satellites/satelliteCatalog";
@@ -211,7 +210,7 @@ export default function HeroSection() {
                 <Radio className="w-3.5 h-3.5 text-cyan-400 animate-pulse" />
                 <span className="hud-title">ORBITAL TELEMETRY</span>
               </div>
-              <Link href="/iss" className="hud-action-btn" title="Launch Satellite Console">
+              <Link href="/satellites" className="hud-action-btn" title="Launch Satellite Console">
                 <ArrowUpRight className="w-3 h-3" />
               </Link>
             </div>
@@ -309,7 +308,7 @@ export default function HeroSection() {
           </Link>
 
           {/* Card: Asteroid Defense */}
-          <Link href="/explore" className="hud-card group hover:border-red-500/30 transition-all">
+          <Link href="/asteroids" className="hud-card group hover:border-red-500/30 transition-all">
             <div className="hud-card-header">
               <div className="flex items-center gap-2">
                 <Crosshair className="w-3.5 h-3.5 text-red-400" />
@@ -364,10 +363,9 @@ export default function HeroSection() {
             <div className="flex items-center gap-2 px-3 py-2 rounded-2xl bg-[#080d1a]/60 border border-slate-800/50 backdrop-blur-2xl">
               {[
                 { icon: Orbit, label: "SOLAR", href: "/solar-system", color: "text-indigo-400 hover:text-indigo-300", glow: "hover:shadow-[0_0_15px_rgba(99,102,241,0.3)]" },
-                { icon: Eye, label: "GEOINT", href: "/osint", color: "text-lime-400 hover:text-lime-300", glow: "hover:shadow-[0_0_15px_rgba(163,230,53,0.3)]" },
                 { icon: Sparkles, label: "SKY", href: "/sky", color: "text-emerald-400 hover:text-emerald-300", glow: "hover:shadow-[0_0_15px_rgba(16,185,129,0.3)]" },
-                { icon: Crosshair, label: "NEO", href: "/explore", color: "text-red-400 hover:text-red-300", glow: "hover:shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
-                { icon: Satellite, label: "SAT", href: "/iss", color: "text-cyan-400 hover:text-cyan-300", glow: "hover:shadow-[0_0_15px_rgba(6,182,212,0.3)]" },
+                { icon: Crosshair, label: "NEO", href: "/asteroids", color: "text-red-400 hover:text-red-300", glow: "hover:shadow-[0_0_15px_rgba(239,68,68,0.3)]" },
+                { icon: Satellite, label: "SAT", href: "/satellites", color: "text-cyan-400 hover:text-cyan-300", glow: "hover:shadow-[0_0_15px_rgba(6,182,212,0.3)]" },
                 { icon: BookOpen, label: "CODEX", href: "/codex", color: "text-blue-400 hover:text-blue-300", glow: "hover:shadow-[0_0_15px_rgba(59,130,246,0.3)]" },
                 { icon: Bot, label: "SYS-AI", href: "#", color: "text-purple-400 hover:text-purple-300", glow: "hover:shadow-[0_0_15px_rgba(168,85,247,0.3)]", onClick: () => setIsAiModalOpen(true) },
               ].map((item) => (
@@ -486,7 +484,7 @@ export default function HeroSection() {
             {/* Quick Actions */}
             <div className="mt-4 space-y-2">
               <Link
-                href="/iss"
+                href="/satellites"
                 className="flex items-center justify-between p-2 rounded-xl bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/25 text-cyan-300 text-[9px] font-bold transition-all group"
               >
                 <span className="flex items-center gap-1.5">

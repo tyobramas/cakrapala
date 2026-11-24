@@ -1,21 +1,20 @@
 "use client";
 
-import { useState } from "react";
-import { ArrowLeft, Box, Sparkles } from "lucide-react";
-import GroundSkyCanvasBackup from "./GroundSkyCanvasBackup";
-import ThreeGroundSkyView from "./ThreeGroundSkyView";
+import SkyDomeView from "./SkyDomeView";
 import type { ObserverLocation } from "@/lib/astronomy/topocentricSky";
 
 interface Props {
   location: ObserverLocation;
-  onBackToMap: () => void;
+  onSelectLocation: (loc: ObserverLocation) => void;
 }
 
-export default function GroundSkyScene({ location, onBackToMap }: Props) {
+export default function GroundSkyScene({ location, onSelectLocation }: Props) {
   return (
-    <div className="relative w-full h-full bg-[#010206] overflow-hidden select-none">
-      {/* Active Sky Observatory Renderer (Three.js WebGL GPU) */}
-      <ThreeGroundSkyView location={location} onBackToMap={onBackToMap} />
+    <div className="relative h-full w-full overflow-hidden bg-[#01030a] select-none">
+      <SkyDomeView
+        location={location}
+        onSelectLocation={onSelectLocation}
+      />
     </div>
   );
 }

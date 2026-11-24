@@ -1,44 +1,37 @@
 "use client";
 
 /**
- * AstronomyTerminal — Retro Sci-Fi Aerospace HUD & AI Flight Director Terminal
- * Powered by Nara Router (qwen-3.8-max-free)
- * Features:
- *   - createPortal mounting directly to document.body (prevents header backdrop-blur clipping)
- *   - Real-time animated typing effect for terminal output
- *   - Multi-turn conversation memory within active session
- *   - Astronomy & Planetary Defense scope-guarded reasoning
- *   - Interactive Quick Telemetry Command Chips
- *   - Speech Synthesis (TTS) & Audio readout
- *   - Terminal CRT scanlines and status reticles
- *   - ESC key and backdrop click to close
+ * AstronomyTerminal — Luxury Minimalist Aerospace AI Co-Pilot (/api/ai/chat).
+ * Domain-locked exclusively to Astronomy, Astrophysics, Satellites, NEOs & Space Science.
  */
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
+import Image from "next/image";
 import {
-  Terminal,
   Send,
   X,
   RotateCcw,
   Volume2,
   VolumeX,
   Sparkles,
-  Cpu,
-  Radio,
   Copy,
   Check,
   Maximize2,
   Minimize2,
+  ShieldCheck,
+  ShieldAlert,
+  Square,
 } from "lucide-react";
 
 export interface TerminalMessage {
   id: string;
-  role: "user" | "assistant" | "system";
+  role: "user" | "assistant";
   content: string;
   timestamp: string;
   latencyMs?: number;
   isStreaming?: boolean;
+  isBlocked?: boolean;
 }
 
 interface AstronomyTerminalProps {
@@ -47,39 +40,48 @@ interface AstronomyTerminalProps {
   initialPrompt?: string;
 }
 
-const QUICK_COMMANDS = [
+const TOPIC_CHIPS = [
   {
-    label: "> /orbital-mechanics",
+    label: "Kepler & Orbits",
     prompt:
-      "Bagaimana Hukum Kepler dan mekanika gravitasi menjelaskan orbit elips planet mengelilingi Matahari?",
+      "Bagaimana Hukum Kepler dan persamaan Vis-Viva menjelaskan kecepatan orbit planet mengelilingi Matahari?",
   },
   {
-    label: "> /asteroid-defense",
+    label: "NEO & Asteroid Defense",
     prompt:
-      "Bagaimana sistem pertahanan planet mendeteksi dan mengantisipasi ancaman asteroid dekat Bumi (NEO)?",
+      "Bagaimana NASA JPL mendeteksi asteroid dekat Bumi (PHA) dan seberapa efektif defleksi kinetik seperti misi DART?",
   },
   {
-    label: "> /iss-telemetry",
+    label: "ISS & SGP4 Telemetry",
     prompt:
-      "Berapa kecepatan, ketinggian orbit, dan periode revolusi International Space Station (ISS) saat ini?",
+      "Jelaskan ketinggian orbit, kecepatan, inklinasi 51.64°, dan cara kerja propagasi SGP4 pada ISS.",
   },
   {
-    label: "> /planetarium-stars",
+    label: "Sky Map & Constellations",
     prompt:
-      "Jelaskan rasi bintang utama yang paling mudah diamati dari Indonesia (seperti Orion dan Salib Selatan).",
+      "Sebutkan rasi bintang utama yang mudah diamati malam ini dari Indonesia dan arti koordinat Azimuth/Altitude.",
   },
   {
-    label: "> /jwst-lagrange",
+    label: "JWST at L2",
     prompt:
-      "Why is the James Webb Space Telescope positioned at Sun-Earth Lagrange Point 2 (L2)?",
+      "Why is the James Webb Space Telescope stationed at the Sun-Earth L2 Lagrange Point?",
+  },
+  {
+    label: "Black Holes & EHT",
+    prompt:
+      "Jelaskan apa itu Event Horizon, Radius Schwarzschild, dan bagaimana Event Horizon Telescope memotret bayangan lubang hitam.",
   },
 ];
 
-/**
- * TerminalMessageContent — Parses markdown tokens (**bold**, ### headers, - lists)
- * into beautiful, clean tactical HUD typography without raw asterisks or hash marks.
- */
-function TerminalMessageContent({
+function nowTimeStr(): string {
+  return new Date().toLocaleTimeString("en-US", {
+    hour12: false,
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function FormattedMessageBody({
   content,
   isStreaming,
 }: {
@@ -88,36 +90,27 @@ function TerminalMessageContent({
 }) {
   if (!content) return null;
 
-  // Function to parse inline bold, code, italic without raw symbols
-  const renderInlineFormatted = (text: string) => {
-    // Regex for inline patterns: **bold**, `code`, *italic*
+  const renderInline = (text: string) => {
     const tokens = text.split(/(\*\*[^*]+\*\*|`[^`]+`|\*[^*]+\*)/g);
-
     return tokens.map((token, idx) => {
       if (!token) return null;
-
-      // Bold: **text**
       if (token.startsWith("**") && token.endsWith("**") && token.length >= 4) {
         return (
-          <strong key={idx} className="font-bold text-cyan-200">
+          <strong key={idx} className="font-semibold text-white">
             {token.slice(2, -2)}
           </strong>
         );
       }
-
-      // Inline Code: `code`
       if (token.startsWith("`") && token.endsWith("`") && token.length >= 2) {
         return (
           <code
             key={idx}
-            className="px-1.5 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/30 text-cyan-300 text-[11px] font-mono mx-0.5"
+            className="mx-0.5 rounded-md border border-white/[0.10] bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11.5px] text-sky-200"
           >
             {token.slice(1, -1)}
           </code>
         );
       }
-
-      // Italic: *text*
       if (token.startsWith("*") && token.endsWith("*") && token.length >= 2) {
         return (
           <em key={idx} className="italic text-slate-300">
@@ -125,141 +118,248 @@ function TerminalMessageContent({
           </em>
         );
       }
-
-      // Clean any stray asterisks or hashes from partial streaming
       const cleaned = token.replace(/\*\*/g, "").replace(/^#{1,6}\s*/g, "");
       return <span key={idx}>{cleaned}</span>;
     });
   };
 
   const lines = content.split("\n");
-  const renderedElements: React.ReactNode[] = [];
+  const elements: React.ReactNode[] = [];
 
   for (let i = 0; i < lines.length; i++) {
-    const rawLine = lines[i];
-    const trimmedLine = rawLine.trim();
-
-    if (!trimmedLine) {
-      renderedElements.push(<div key={`blank-${i}`} className="h-1.5" />);
+    const trimmed = lines[i].trim();
+    if (!trimmed) {
+      elements.push(<div key={`b-${i}`} className="h-1.5" />);
       continue;
     }
 
-    // 1. Heading Check: ### Title, ## Title, # Title
-    const headerMatch = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
+    const headerMatch = trimmed.match(/^(#{1,6})\s+(.+)$/);
     if (headerMatch) {
-      const titleText = headerMatch[2];
-      renderedElements.push(
+      elements.push(
         <div
           key={`h-${i}`}
-          className="mt-3 mb-1.5 pt-1.5 border-t border-cyan-500/20 flex items-center gap-2 text-cyan-300 font-bold text-xs sm:text-sm tracking-wide uppercase"
+          className="mt-3 mb-1 flex items-center gap-2 border-t border-white/[0.08] pt-2 font-mono text-[11px] font-semibold tracking-[0.14em] text-sky-300 uppercase"
         >
-          <span className="w-1.5 h-1.5 rounded-sm bg-emerald-400 shrink-0" />
-          <span>{renderInlineFormatted(titleText)}</span>
-        </div>
+          <span className="h-1.5 w-1.5 rounded-full bg-sky-300" />
+          <span>{renderInline(headerMatch[2])}</span>
+        </div>,
       );
       continue;
     }
 
-    // 2. Bullet list check: - Item, * Item, • Item
-    const bulletMatch = trimmedLine.match(/^[-*•]\s+(.+)$/);
+    const bulletMatch = trimmed.match(/^[-*•]\s+(.+)$/);
     if (bulletMatch) {
-      const itemContent = bulletMatch[1];
-      renderedElements.push(
-        <div key={`b-${i}`} className="flex items-start gap-2.5 my-1 pl-1 text-slate-200">
-          <span className="text-cyan-400 font-bold text-xs select-none shrink-0 mt-0.5">▸</span>
-          <div className="flex-1 leading-relaxed">
-            {renderInlineFormatted(itemContent)}
-          </div>
-        </div>
+      elements.push(
+        <div key={`l-${i}`} className="my-1 flex items-start gap-2.5 pl-1 text-slate-200">
+          <span className="mt-2 h-1 w-1 shrink-0 rounded-full bg-sky-300/80" />
+          <div className="flex-1 leading-relaxed">{renderInline(bulletMatch[1])}</div>
+        </div>,
       );
       continue;
     }
 
-    // 3. Numbered list check: 1. Item, 2. Item
-    const numberedMatch = trimmedLine.match(/^(\d+)\.\s+(.+)$/);
+    const numberedMatch = trimmed.match(/^(\d+)\.\s+(.+)$/);
     if (numberedMatch) {
-      const num = numberedMatch[1];
-      const itemContent = numberedMatch[2];
-      renderedElements.push(
-        <div key={`n-${i}`} className="flex items-start gap-2.5 my-1 pl-1 text-slate-200">
-          <span className="text-cyan-400 font-bold text-xs select-none shrink-0 font-mono mt-0.5">
-            {num}.
+      elements.push(
+        <div key={`n-${i}`} className="my-1 flex items-start gap-2.5 pl-1 text-slate-200">
+          <span className="mt-0.5 shrink-0 font-mono text-xs font-semibold text-sky-300">
+            {numberedMatch[1]}.
           </span>
-          <div className="flex-1 leading-relaxed">
-            {renderInlineFormatted(itemContent)}
-          </div>
-        </div>
+          <div className="flex-1 leading-relaxed">{renderInline(numberedMatch[2])}</div>
+        </div>,
       );
       continue;
     }
 
-    // 4. Regular Paragraph / Telemetry Text
-    renderedElements.push(
+    elements.push(
       <p key={`p-${i}`} className="my-1 leading-relaxed text-slate-200">
-        {renderInlineFormatted(trimmedLine)}
-      </p>
+        {renderInline(trimmed)}
+      </p>,
     );
   }
 
   return (
-    <div className="space-y-0.5">
-      {renderedElements}
+    <div className="space-y-0.5 text-[13px] sm:text-sm">
+      {elements}
       {isStreaming && (
-        <span className="inline-block w-2 h-4 ml-1 bg-cyan-400 animate-pulse align-middle" />
+        <span className="ml-1 inline-block h-4 w-1.5 animate-pulse rounded-full bg-sky-300 align-middle" />
       )}
     </div>
   );
 }
+
+const INITIAL_WELCOME: TerminalMessage = {
+  id: "sys-init",
+  role: "assistant",
+  content:
+    "**Cakrapala Astrophysics Co-Pilot** siap membantu.\n\nAsisten ini dikalibrasi **eksklusif untuk astronomi, astrofisika, mekanika orbit, satelit SGP4, asteroid/NEO, rasi bintang, dan misi antariksa NASA/ESA**. Silakan pilih topik cepat di atas atau ketik pertanyaan Anda.",
+  timestamp: "READY",
+};
 
 export default function AstronomyTerminal({
   isOpen,
   onClose,
   initialPrompt = "",
 }: AstronomyTerminalProps) {
-  const [mounted, setMounted] = useState<boolean>(false);
-  const [input, setInput] = useState<string>("");
-  const [messages, setMessages] = useState<TerminalMessage[]>([
-    {
-      id: "sys-init",
-      role: "assistant",
-      content:
-        "**[CAKRAPALA FLIGHT CONTROL // NODE ONLINE]**\n\nGreetings, Commander. I am **SYS-AI**, your dedicated Deep Space Flight Director & Planetary Defense Intelligence Unit.\n\nTelemetry systems operational. Ask me about **orbital mechanics, asteroid impact risks, satellite tracking, planetarium star catalogs, or deep-space astrophysics**.",
-      timestamp: "SYS.00",
-    },
-  ]);
-  const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [elapsedSeconds, setElapsedSeconds] = useState<number>(0);
-  const [isTyping, setIsTyping] = useState<boolean>(false);
-  const [displayedStreamingText, setDisplayedStreamingText] = useState<string>("");
-  const [streamingTargetText, setStreamingTargetText] = useState<string>("");
-  const [ttsEnabled, setTtsEnabled] = useState<boolean>(false);
+  const [mounted, setMounted] = useState(false);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<TerminalMessage[]>([INITIAL_WELCOME]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [isTyping, setIsTyping] = useState(false);
+  const [displayedStreamingText, setDisplayedStreamingText] = useState("");
+  const [streamingTargetText, setStreamingTargetText] = useState("");
+  const [ttsEnabled, setTtsEnabled] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [isMaximized, setIsMaximized] = useState<boolean>(false);
+  const [isMaximized, setIsMaximized] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const typingTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const typingTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
-  const elapsedTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const elapsedTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const messagesRef = useRef(messages);
+  const ttsEnabledRef = useRef(ttsEnabled);
 
-  // Client-side mount check for createPortal
   useEffect(() => {
-    setMounted(true);
+    messagesRef.current = messages;
+  }, [messages]);
+
+  useEffect(() => {
+    ttsEnabledRef.current = ttsEnabled;
+  }, [ttsEnabled]);
+
+  useEffect(() => {
+    queueMicrotask(() => setMounted(true));
   }, []);
 
-  // Prevent background scrolling & listen for ESC key when open
+  const speakText = useCallback((text: string) => {
+    if (typeof window !== "undefined" && "speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 1.04;
+      utterance.pitch = 1.0;
+      window.speechSynthesis.speak(utterance);
+    }
+  }, []);
+
+  const handleSendMessage = useCallback(
+    async (textToSend?: string) => {
+      const query = (textToSend ?? input).trim();
+      if (!query || isLoading || isTyping) return;
+
+      const userMessage: TerminalMessage = {
+        id: `user-${Date.now()}`,
+        role: "user",
+        content: query,
+        timestamp: nowTimeStr(),
+      };
+
+      const updatedMessages = [...messagesRef.current, userMessage];
+      setMessages(updatedMessages);
+      setInput("");
+      setIsLoading(true);
+      setElapsedSeconds(0);
+
+      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+
+      const abortCtrl = new AbortController();
+      abortControllerRef.current = abortCtrl;
+
+      try {
+        const payloadMessages = updatedMessages.map((m) => ({
+          role: m.role,
+          content: m.content,
+        }));
+
+        const res = await fetch("/api/ai/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ messages: payloadMessages }),
+          signal: abortCtrl.signal,
+        });
+
+        const data = (await res.json()) as {
+          success?: boolean;
+          blocked?: boolean;
+          message?: string;
+          error?: string;
+          latencyMs?: number;
+        };
+
+        if (!res.ok || !data.success || !data.message) {
+          throw new Error(data.error || `HTTP ${res.status}: Failed to fetch response.`);
+        }
+
+        const botReply = data.message;
+        const isBlocked = Boolean(data.blocked);
+
+        // If blocked by scope guard, show crisp scope-guard notice immediately without typing delay
+        if (isBlocked) {
+          setMessages((prev) => [
+            ...prev,
+            {
+              id: `guard-${Date.now()}`,
+              role: "assistant",
+              content: botReply,
+              timestamp: nowTimeStr(),
+              latencyMs: data.latencyMs,
+              isBlocked: true,
+            },
+          ]);
+          return;
+        }
+
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `bot-${Date.now()}`,
+            role: "assistant",
+            content: "",
+            timestamp: nowTimeStr(),
+            latencyMs: data.latencyMs,
+            isStreaming: true,
+          },
+        ]);
+
+        setDisplayedStreamingText("");
+        setStreamingTargetText(botReply);
+        setIsTyping(true);
+      } catch (err: unknown) {
+        if (err instanceof Error && err.name === "AbortError") {
+          return;
+        }
+        const msg = err instanceof Error ? err.message : "Telemetry link error.";
+        setMessages((prev) => [
+          ...prev,
+          {
+            id: `err-${Date.now()}`,
+            role: "assistant",
+            content: `**[CONNECTION NOTICE]**: ${msg}\n\n*Please try again in a moment.*`,
+            timestamp: "ERR",
+          },
+        ]);
+      } finally {
+        if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+        setIsLoading(false);
+        abortControllerRef.current = null;
+      }
+    },
+    [input, isLoading, isTyping],
+  );
+
+  // Lock body scroll & ESC close while open
   useEffect(() => {
     if (!isOpen) return;
-
     const originalOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        onClose();
-      }
+      if (e.key === "Escape") onClose();
     };
-
     window.addEventListener("keydown", handleKeyDown);
     return () => {
       document.body.style.overflow = originalOverflow;
@@ -267,45 +367,45 @@ export default function AstronomyTerminal({
     };
   }, [isOpen, onClose]);
 
-  // Auto-scroll when messages update
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
   useEffect(() => {
     if (isOpen) {
-      scrollToBottom();
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
     }
   }, [messages, displayedStreamingText, isLoading, isOpen]);
 
-  // Focus input when opened
+  const lastAutoPromptRef = useRef<string>("");
   useEffect(() => {
-    if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 150);
-      if (initialPrompt && initialPrompt.trim()) {
-        handleSendMessage(initialPrompt.trim());
-      }
+    if (!isOpen) {
+      lastAutoPromptRef.current = "";
+      return;
     }
-  }, [isOpen]);
+    const timer = setTimeout(() => inputRef.current?.focus(), 140);
+    const trimmedPrompt = initialPrompt.trim();
+    if (trimmedPrompt && lastAutoPromptRef.current !== trimmedPrompt) {
+      lastAutoPromptRef.current = trimmedPrompt;
+      queueMicrotask(() => {
+        void handleSendMessage(trimmedPrompt);
+      });
+    }
+    return () => clearTimeout(timer);
+  }, [isOpen, initialPrompt, handleSendMessage]);
 
-  // Typewriter Animation Logic for AI responses
+  // Smooth typewriter rendering
   useEffect(() => {
     if (!isTyping || !streamingTargetText) return;
 
     let currentIndex = 0;
     const fullText = streamingTargetText;
-    const speed = Math.max(8, Math.min(25, Math.floor(1500 / fullText.length)));
+    const step = Math.max(2, Math.ceil(fullText.length / 95));
 
     if (typingTimerRef.current) clearInterval(typingTimerRef.current);
-
     typingTimerRef.current = setInterval(() => {
-      currentIndex += 2;
+      currentIndex += step;
       if (currentIndex >= fullText.length) {
         setDisplayedStreamingText(fullText);
         setIsTyping(false);
         if (typingTimerRef.current) clearInterval(typingTimerRef.current);
 
-        // Finalize message into state
         setMessages((prev) => {
           const lastIdx = prev.length - 1;
           if (lastIdx >= 0 && prev[lastIdx].isStreaming) {
@@ -320,126 +420,18 @@ export default function AstronomyTerminal({
           return prev;
         });
 
-        // Trigger TTS if enabled
-        if (ttsEnabled) {
+        if (ttsEnabledRef.current) {
           speakText(fullText.replace(/[*_#`]/g, ""));
         }
       } else {
         setDisplayedStreamingText(fullText.slice(0, currentIndex));
       }
-    }, speed);
+    }, 14);
 
     return () => {
       if (typingTimerRef.current) clearInterval(typingTimerRef.current);
     };
-  }, [isTyping, streamingTargetText]);
-
-  const speakText = (text: string) => {
-    if (typeof window !== "undefined" && "speechSynthesis" in window) {
-      window.speechSynthesis.cancel();
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 1.05;
-      utterance.pitch = 1.0;
-      window.speechSynthesis.speak(utterance);
-    }
-  };
-
-  const handleSendMessage = async (textToSend?: string) => {
-    const query = (textToSend || input).trim();
-    if (!query || isLoading || isTyping) return;
-
-    const userMessage: TerminalMessage = {
-      id: `user-${Date.now()}`,
-      role: "user",
-      content: query,
-      timestamp: new Date().toLocaleTimeString("en-US", {
-        hour12: false,
-        hour: "2-digit",
-        minute: "2-digit",
-        second: "2-digit",
-      }),
-    };
-
-    const updatedMessages = [...messages, userMessage];
-    setMessages(updatedMessages);
-    setInput("");
-    setIsLoading(true);
-    setElapsedSeconds(0);
-
-    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
-    elapsedTimerRef.current = setInterval(() => {
-      setElapsedSeconds((prev) => prev + 1);
-    }, 1000);
-
-    const abortCtrl = new AbortController();
-    abortControllerRef.current = abortCtrl;
-
-    try {
-      const payloadMessages = updatedMessages
-        .filter((m) => m.role === "user" || m.role === "assistant")
-        .map((m) => ({
-          role: m.role,
-          content: m.content,
-        }));
-
-      const res = await fetch("/api/ai/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: payloadMessages }),
-        signal: abortCtrl.signal,
-      });
-
-      const data = await res.json();
-
-      if (!res.ok || !data.success) {
-        throw new Error(data.error || `HTTP ${res.status}: Failed to fetch response.`);
-      }
-
-      const botReply = data.message;
-      const latencyMs = data.latencyMs;
-
-      const botMessageId = `bot-${Date.now()}`;
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: botMessageId,
-          role: "assistant",
-          content: "",
-          timestamp: new Date().toLocaleTimeString("en-US", {
-            hour12: false,
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          }),
-          latencyMs,
-          isStreaming: true,
-        },
-      ]);
-
-      setDisplayedStreamingText("");
-      setStreamingTargetText(botReply);
-      setIsTyping(true);
-    } catch (err: any) {
-      if (err.name === "AbortError") {
-        console.log("[Terminal] Request aborted by user.");
-        return;
-      }
-      console.error("[Terminal Error]", err);
-      const errorMessage: TerminalMessage = {
-        id: `err-${Date.now()}`,
-        role: "assistant",
-        content: `**[TELEMETRY LINK ERROR]**: ${
-          err.message || "Failed to establish link with Deep Space Command Center."
-        }\n\n*Telemetry uplink connection interrupted. Please try again in a moment.*`,
-        timestamp: "ERR.01",
-      };
-      setMessages((prev) => [...prev, errorMessage]);
-    } finally {
-      if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
-      setIsLoading(false);
-      abortControllerRef.current = null;
-    }
-  };
+  }, [isTyping, streamingTargetText, speakText]);
 
   const handleClearHistory = () => {
     if (typeof window !== "undefined" && "speechSynthesis" in window) {
@@ -447,19 +439,17 @@ export default function AstronomyTerminal({
     }
     setMessages([
       {
-        id: "sys-reboot",
-        role: "assistant",
-        content:
-          "**[SESSION BUFFER PURGED]**\n\nFlight Control memory cleared. Ready for new astronomical instructions.",
-        timestamp: "SYS.00",
+        ...INITIAL_WELCOME,
+        id: `reset-${Date.now()}`,
+        timestamp: nowTimeStr(),
       },
     ]);
   };
 
   const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
+    navigator.clipboard?.writeText(text);
     setCopiedId(id);
-    setTimeout(() => setCopiedId(null), 2000);
+    setTimeout(() => setCopiedId(null), 1800);
   };
 
   if (!isOpen || !mounted) return null;
@@ -468,56 +458,55 @@ export default function AstronomyTerminal({
     <div
       role="dialog"
       aria-modal="true"
-      aria-labelledby="astro-terminal-title"
-      className="fixed inset-0 z-[99999] flex items-center justify-center p-3 sm:p-5 md:p-6 bg-black/85 backdrop-blur-md animate-in fade-in duration-200"
+      aria-labelledby="astro-copilot-title"
+      className="fixed inset-0 z-[99999] flex items-center justify-center bg-black/80 p-3 backdrop-blur-xl sm:p-5"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* ── Terminal Window Box ── */}
       <div
-        className={`relative w-full transition-all duration-300 flex flex-col font-mono bg-[#030713] border border-cyan-500/50 rounded-2xl shadow-[0_0_60px_rgba(0,0,0,0.95),0_0_35px_rgba(6,182,212,0.25)] overflow-hidden ${
-          isMaximized
-            ? "h-[94vh] max-w-[96vw]"
-            : "h-[620px] max-h-[88vh] max-w-4xl"
-        }`}
         onClick={(e) => e.stopPropagation()}
+        className={`relative flex w-full flex-col overflow-hidden rounded-2xl border border-white/[0.12] bg-[#030714]/94 text-slate-100 shadow-[0_32px_100px_rgba(0,0,0,0.88)] backdrop-blur-2xl transition-all duration-200 ${
+          isMaximized
+            ? "h-[94dvh] max-w-[96vw]"
+            : "h-[640px] max-h-[90dvh] max-w-4xl"
+        }`}
       >
-        {/* ── CRT Scanline Overlay ── */}
-        <div className="absolute inset-0 pointer-events-none bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] opacity-40 z-10" />
-
-        {/* ── Sticky Top Header HUD ── */}
-        <div className="relative z-20 flex flex-wrap items-center justify-between gap-2 px-4 sm:px-6 py-3 border-b border-cyan-500/30 bg-[#050c1e] select-none shrink-0">
-          {/* Left: Identity */}
-          <div className="flex items-center gap-3">
-            <div className="relative flex items-center justify-center w-8 h-8 rounded-lg bg-cyan-950/90 border border-cyan-400/60 shadow-[0_0_12px_rgba(6,182,212,0.5)]">
-              <Terminal className="w-4 h-4 text-cyan-300 animate-pulse" />
-              <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-emerald-400 animate-ping" />
+        {/* ── Top Compact Co-Pilot Header ──────────────────────────────── */}
+        <header className="flex shrink-0 items-center justify-between gap-2 border-b border-white/[0.08] px-4 py-3 sm:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/15 bg-white/[0.05] p-1">
+              <Image
+                src="/cakrapala1.png"
+                alt="Cakrapala"
+                width={22}
+                height={22}
+                className="h-full w-full rounded-full object-contain"
+              />
             </div>
-            <div>
+
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span
-                  id="astro-terminal-title"
-                  className="text-xs sm:text-sm font-black tracking-widest text-cyan-200 uppercase"
+                <h2
+                  id="astro-copilot-title"
+                  className="truncate font-[family-name:var(--font-orbitron)] text-xs font-semibold tracking-[0.18em] text-white sm:text-[13px]"
                 >
-                  CAKRAPALA // ASTRO-AI TERMINAL
-                </span>
-                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 hidden sm:inline-block">
-                  LIVE
+                  CAKRAPALA CO-PILOT
+                </h2>
+                <span className="hidden items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-500/12 px-2 py-0.5 font-mono text-[9px] font-medium text-emerald-300 sm:inline-flex">
+                  <ShieldCheck className="h-2.5 w-2.5" />
+                  <span>Astronomy Only</span>
                 </span>
               </div>
-              <div className="flex items-center gap-2 text-[10px] text-slate-400">
-                <span className="text-cyan-400">NODE:</span> DEEP-SPACE-AI // SYS-05
-                <span className="text-slate-600">&bull;</span>
-                <span className="text-cyan-400">SCOPE:</span> ASTROPHYSICS & DEFENSE
-              </div>
+              <p className="truncate font-mono text-[10px] text-slate-400">
+                Astrophysics, Orbits, Satellites &amp; Planetary Defense Intelligence
+              </p>
             </div>
           </div>
 
-          {/* Right: Actions Controls */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Audio TTS Toggle */}
+          <div className="flex shrink-0 items-center gap-1.5 font-mono text-[10px]">
             <button
+              type="button"
               onClick={() => {
                 const next = !ttsEnabled;
                 setTtsEnabled(next);
@@ -525,128 +514,143 @@ export default function AstronomyTerminal({
                   window.speechSynthesis.cancel();
                 }
               }}
-              title={ttsEnabled ? "Mute TTS Audio" : "Enable TTS Audio Readout"}
-              className={`p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 border cursor-pointer ${
+              title={ttsEnabled ? "Mute Voice Readout" : "Enable Voice Readout"}
+              className={`flex h-8 cursor-pointer items-center gap-1.5 rounded-full border px-2.5 transition-colors ${
                 ttsEnabled
-                  ? "bg-cyan-500/20 text-cyan-300 border-cyan-400 shadow-[0_0_12px_rgba(6,182,212,0.4)]"
-                  : "bg-slate-900/60 text-slate-400 border-slate-700 hover:text-slate-200 hover:border-slate-600"
+                  ? "border-sky-400/40 bg-sky-400/18 text-sky-200"
+                  : "border-white/[0.10] bg-white/[0.04] text-slate-300 hover:border-white/25 hover:text-white"
               }`}
             >
-              {ttsEnabled ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
-              <span className="hidden md:inline text-[10px]">TTS</span>
+              {ttsEnabled ? <Volume2 className="h-3.5 w-3.5" /> : <VolumeX className="h-3.5 w-3.5" />}
+              <span className="hidden md:inline">Voice</span>
             </button>
 
-            {/* Clear Memory */}
             <button
+              type="button"
               onClick={handleClearHistory}
-              title="Purge session memory"
-              className="p-1.5 sm:px-2.5 sm:py-1 rounded-lg text-xs font-bold text-slate-400 bg-slate-900/60 border border-slate-700 hover:text-amber-300 hover:border-amber-500/50 transition-all flex items-center gap-1 cursor-pointer"
+              title="Clear session memory"
+              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full border border-white/[0.10] bg-white/[0.04] px-2.5 text-slate-300 transition-colors hover:border-white/25 hover:text-white"
             >
-              <RotateCcw className="w-3.5 h-3.5" />
-              <span className="hidden md:inline text-[10px]">RESET</span>
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span className="hidden md:inline">Reset</span>
             </button>
 
-            {/* Maximize Toggle */}
             <button
-              onClick={() => setIsMaximized(!isMaximized)}
-              title={isMaximized ? "Restore size" : "Maximize terminal"}
-              className="p-1.5 rounded-lg text-slate-400 bg-slate-900/60 border border-slate-700 hover:text-slate-100 hover:border-slate-600 transition-all hidden sm:flex cursor-pointer"
+              type="button"
+              onClick={() => setIsMaximized((v) => !v)}
+              title={isMaximized ? "Restore size" : "Maximize"}
+              className="hidden h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.04] text-slate-300 transition-colors hover:border-white/25 hover:text-white sm:flex"
             >
-              {isMaximized ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              {isMaximized ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
             </button>
 
-            {/* Close Button */}
             <button
+              type="button"
               onClick={onClose}
-              title="Close terminal (ESC)"
-              className="p-1.5 sm:px-2 sm:py-1 rounded-lg text-slate-300 bg-red-950/60 border border-red-500/60 hover:bg-red-900 hover:text-white transition-all flex items-center gap-1 cursor-pointer shadow-sm"
+              title="Close (Esc)"
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-full border border-white/[0.10] bg-white/[0.04] text-slate-300 transition-colors hover:border-white/25 hover:bg-white/[0.10] hover:text-white"
             >
-              <X className="w-4 h-4 text-red-400 hover:text-white" />
-              <span className="text-[10px] font-bold hidden sm:inline">CLOSE</span>
+              <X className="h-4 w-4" />
             </button>
           </div>
-        </div>
+        </header>
 
-        {/* ── Quick Telemetry Command Chips ── */}
-        <div className="relative z-20 px-4 sm:px-6 py-2 border-b border-cyan-950/80 bg-[#02050f] flex items-center gap-2 overflow-x-auto no-scrollbar select-none text-[11px] shrink-0">
-          <span className="text-slate-500 font-bold shrink-0 flex items-center gap-1 text-[10px]">
-            <Radio className="w-3 h-3 text-cyan-400 animate-pulse" /> QUICK CHIPS:
-          </span>
-          {QUICK_COMMANDS.map((cmd, idx) => (
+        {/* ── Quick Astronomical Topic Chips ───────────────────────────── */}
+        <div className="flex shrink-0 items-center gap-1.5 overflow-x-auto border-b border-white/[0.07] bg-white/[0.015] px-4 py-2 font-mono text-[10px] sm:px-5">
+          <span className="shrink-0 tracking-[0.14em] text-slate-500 uppercase">Topics</span>
+          {TOPIC_CHIPS.map((chip) => (
             <button
-              key={idx}
+              key={chip.label}
+              type="button"
               disabled={isLoading || isTyping}
-              onClick={() => handleSendMessage(cmd.prompt)}
-              className="shrink-0 px-2.5 py-1 rounded-md bg-cyan-950/40 border border-cyan-500/30 text-cyan-300 hover:bg-cyan-900/50 hover:border-cyan-400 hover:shadow-[0_0_10px_rgba(6,182,212,0.3)] transition-all font-mono text-[10.5px] disabled:opacity-50 disabled:pointer-events-none flex items-center gap-1.5 cursor-pointer"
+              onClick={() => void handleSendMessage(chip.prompt)}
+              className="shrink-0 cursor-pointer rounded-full border border-white/[0.09] bg-white/[0.03] px-2.5 py-1 text-slate-300 transition-all hover:border-sky-400/40 hover:bg-sky-400/12 hover:text-white disabled:pointer-events-none disabled:opacity-45"
             >
-              <span>{cmd.label}</span>
+              {chip.label}
             </button>
           ))}
         </div>
 
-        {/* ── Terminal Output Feed ── */}
-        <div className="relative z-20 flex-1 p-4 sm:p-6 overflow-y-auto space-y-4 text-xs sm:text-sm text-slate-200 leading-relaxed font-mono select-text">
-          {messages.map((msg, index) => {
+        {/* ── Conversation Feed ────────────────────────────────────────── */}
+        <div className="flex-1 space-y-3.5 overflow-y-auto px-4 py-4 sm:px-6">
+          {messages.map((msg) => {
             const isUser = msg.role === "user";
-            const isLatestStreaming = msg.isStreaming && isTyping;
+            const isLatestStreaming = Boolean(msg.isStreaming && isTyping);
             const contentToRender = isLatestStreaming ? displayedStreamingText : msg.content;
 
             return (
               <div
-                key={msg.id || index}
-                className={`group flex flex-col gap-1 rounded-xl p-3 sm:p-4 border transition-all ${
-                  isUser
-                    ? "bg-[#0b1733]/70 border-cyan-500/30 ml-4 sm:ml-12 shadow-[0_0_15px_rgba(6,182,212,0.1)]"
-                    : "bg-[#040a18]/90 border-slate-800 mr-4 sm:mr-12 hover:border-cyan-500/30"
-                }`}
+                key={msg.id}
+                className={`flex ${isUser ? "justify-end" : "justify-start"}`}
               >
-                {/* Message Header Status */}
-                <div className="flex items-center justify-between text-[10px] text-slate-400 border-b border-slate-800/80 pb-1.5 mb-1.5">
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`font-black tracking-wider uppercase ${
-                        isUser ? "text-cyan-300" : "text-emerald-400"
-                      }`}
-                    >
-                      {isUser ? "> COMMANDER // USER" : "> CAKRAPALA // SYS-AI"}
-                    </span>
-                    <span className="text-slate-500 font-mono">[{msg.timestamp}]</span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {msg.latencyMs && (
-                      <span className="text-[9px] px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-cyan-400 font-bold">
-                        {msg.latencyMs}ms
+                <div
+                  className={`max-w-[88%] rounded-2xl border px-4 py-3 sm:max-w-[80%] ${
+                    isUser
+                      ? "border-sky-400/25 bg-sky-500/[0.14] text-white"
+                      : msg.isBlocked
+                        ? "border-amber-400/30 bg-amber-500/[0.08] text-amber-100"
+                        : "border-white/[0.08] bg-white/[0.03] text-slate-100"
+                  }`}
+                >
+                  <div className="mb-1.5 flex items-center justify-between gap-4 font-mono text-[9.5px]">
+                    <div className="flex items-center gap-1.5">
+                      {msg.isBlocked ? (
+                        <ShieldAlert className="h-3 w-3 text-amber-300" />
+                      ) : !isUser ? (
+                        <Sparkles className="h-3 w-3 text-sky-300" />
+                      ) : null}
+                      <span
+                        className={`font-semibold tracking-[0.14em] uppercase ${
+                          isUser
+                            ? "text-sky-200"
+                            : msg.isBlocked
+                              ? "text-amber-300"
+                              : "text-slate-300"
+                        }`}
+                      >
+                        {isUser
+                          ? "Explorer"
+                          : msg.isBlocked
+                            ? "Scope Guard · Astronomy Only"
+                            : "Cakrapala Co-Pilot"}
                       </span>
-                    )}
-                    {!isUser && !msg.isStreaming && (
-                      <>
-                        <button
-                          onClick={() => handleCopy(msg.id, msg.content)}
-                          title="Copy response"
-                          className="text-slate-500 hover:text-cyan-300 transition-colors p-0.5 cursor-pointer"
-                        >
-                          {copiedId === msg.id ? (
-                            <Check className="w-3 h-3 text-emerald-400" />
-                          ) : (
-                            <Copy className="w-3 h-3" />
-                          )}
-                        </button>
-                        <button
-                          onClick={() => speakText(msg.content.replace(/[*_#`]/g, ""))}
-                          title="Read out text"
-                          className="text-slate-500 hover:text-cyan-300 transition-colors p-0.5 cursor-pointer"
-                        >
-                          <Volume2 className="w-3 h-3" />
-                        </button>
-                      </>
-                    )}
-                  </div>
-                </div>
+                      <span className="text-slate-500 tabular-nums">{msg.timestamp}</span>
+                    </div>
 
-                {/* Formatted Tactical Message Body */}
-                <div className="text-slate-100 font-mono text-xs sm:text-[13px] leading-relaxed">
-                  <TerminalMessageContent
+                    <div className="flex items-center gap-1.5">
+                      {typeof msg.latencyMs === "number" && !msg.isBlocked && (
+                        <span className="rounded bg-white/[0.06] px-1.5 py-0.5 text-[8.5px] text-slate-400 tabular-nums">
+                          {msg.latencyMs}ms
+                        </span>
+                      )}
+                      {!isUser && !msg.isStreaming && (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleCopy(msg.id, msg.content)}
+                            title="Copy response"
+                            className="cursor-pointer p-0.5 text-slate-400 transition-colors hover:text-white"
+                          >
+                            {copiedId === msg.id ? (
+                              <Check className="h-3 w-3 text-emerald-400" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => speakText(msg.content.replace(/[*_#`]/g, ""))}
+                            title="Read aloud"
+                            className="cursor-pointer p-0.5 text-slate-400 transition-colors hover:text-white"
+                          >
+                            <Volume2 className="h-3 w-3" />
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  </div>
+
+                  <FormattedMessageBody
                     content={contentToRender}
                     isStreaming={isLatestStreaming}
                   />
@@ -655,76 +659,64 @@ export default function AstronomyTerminal({
             );
           })}
 
-          {/* Loading Indicator with Live Timer & Cancel Button */}
           {isLoading && (
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl bg-[#050f24]/90 border border-cyan-500/50 text-cyan-300 shadow-[0_0_20px_rgba(6,182,212,0.2)] mr-4 sm:mr-12 animate-pulse">
-              <div className="flex items-center gap-3">
-                <Cpu className="w-4 h-4 animate-spin text-cyan-400 shrink-0" />
-                <span className="text-xs font-bold tracking-wider">
-                  TRANSMITTING TO DEEP SPACE COMMAND CENTER // SYNTHESIZING TELEMETRY... ({elapsedSeconds}s)
-                </span>
+            <div className="flex justify-start">
+              <div className="flex items-center gap-3 rounded-2xl border border-white/[0.09] bg-white/[0.03] px-4 py-2.5 font-mono text-[11px] text-slate-300">
+                <span className="h-2 w-2 animate-ping rounded-full bg-sky-300" />
+                <span>Synthesizing astronomical telemetry ({elapsedSeconds}s)</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    abortControllerRef.current?.abort();
+                    if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
+                    setIsLoading(false);
+                  }}
+                  className="ml-1 inline-flex cursor-pointer items-center gap-1 rounded-full border border-white/15 bg-white/[0.06] px-2.5 py-0.5 text-[9.5px] text-slate-200 hover:bg-white/[0.14]"
+                >
+                  <Square className="h-2.5 w-2.5 fill-current" />
+                  <span>Stop</span>
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  if (abortControllerRef.current) abortControllerRef.current.abort();
-                  if (elapsedTimerRef.current) clearInterval(elapsedTimerRef.current);
-                  setIsLoading(false);
-                }}
-                className="self-end sm:self-auto px-2.5 py-1 rounded bg-red-950/70 border border-red-500/60 text-red-300 hover:bg-red-900 text-[10.5px] font-bold tracking-wider transition-all cursor-pointer shrink-0"
-              >
-                BATALKAN
-              </button>
             </div>
           )}
 
           <div ref={messagesEndRef} />
         </div>
 
-        {/* ── Terminal Command Input ── */}
-        <div className="relative z-20 p-3 sm:p-4 border-t border-cyan-500/30 bg-[#050b1a] select-none shrink-0">
+        {/* ── Sleek Pill Command Input Dock ────────────────────────────── */}
+        <footer className="shrink-0 border-t border-white/[0.08] bg-[#02050d]/85 px-4 py-3 sm:px-5">
           <form
             onSubmit={(e) => {
               e.preventDefault();
-              handleSendMessage();
+              void handleSendMessage();
             }}
-            className="flex items-center gap-2 bg-[#02050f] border border-cyan-500/50 rounded-xl px-3 sm:px-4 py-2 shadow-[inset_0_2px_4px_rgba(0,0,0,0.8),0_0_15px_rgba(6,182,212,0.15)] focus-within:border-cyan-400 focus-within:shadow-[0_0_25px_rgba(6,182,212,0.35)] transition-all"
+            className="flex items-center gap-2 rounded-full border border-white/[0.12] bg-white/[0.04] py-1.5 pr-1.5 pl-4 transition-colors focus-within:border-sky-400/50 focus-within:bg-white/[0.06]"
           >
-            <span className="text-cyan-400 font-black text-sm select-none shrink-0 flex items-center gap-1">
-              <span className="text-emerald-400">$</span> CAKRAPALA:~$
-            </span>
-
             <input
               ref={inputRef}
               type="text"
               value={input}
               onChange={(e) => setInput(e.target.value)}
-              placeholder="Ask about space, orbit physics, planetary defense, or constellations..."
+              placeholder="Ask strictly about astronomy, planets, satellites, NEOs, or space missions..."
               disabled={isLoading || isTyping}
-              className="flex-1 bg-transparent text-slate-100 placeholder-slate-500 text-xs sm:text-sm font-mono focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 bg-transparent text-xs text-white placeholder:text-slate-500 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50 sm:text-sm"
             />
 
             <button
               type="submit"
               disabled={!input.trim() || isLoading || isTyping}
-              className="px-3.5 py-1.5 rounded-lg bg-cyan-500 hover:bg-cyan-400 text-black font-black text-xs transition-all flex items-center gap-1.5 shadow-[0_0_12px_rgba(6,182,212,0.5)] disabled:opacity-40 disabled:pointer-events-none shrink-0 cursor-pointer"
+              className="flex h-8 cursor-pointer items-center gap-1.5 rounded-full bg-white px-4 font-mono text-[11px] font-semibold text-slate-950 transition-all hover:bg-sky-100 disabled:pointer-events-none disabled:opacity-35"
             >
-              <span>SEND</span>
-              <Send className="w-3 h-3" />
+              <span>Send</span>
+              <Send className="h-3 w-3" />
             </button>
           </form>
 
-          {/* Footer Info */}
-          <div className="mt-2 flex items-center justify-between text-[10px] text-slate-500 px-1">
-            <span className="flex items-center gap-1">
-              <Sparkles className="w-3 h-3 text-cyan-400" />
-              <span>Multi-turn session active &bull; Auto-detects Indonesian & English</span>
-            </span>
-            <span className="hidden sm:inline font-mono">
-              PRESS <kbd className="px-1 py-0.2 rounded bg-slate-800 border border-slate-700 text-slate-300">ENTER</kbd> TO TRANSMIT
-            </span>
+          <div className="mt-1.5 flex items-center justify-between px-2 font-mono text-[9.5px] text-slate-500">
+            <span>Domain Lock Active: Astronomy &amp; Space Science Only</span>
+            <span className="hidden sm:inline">Enter to send · Esc to close</span>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );

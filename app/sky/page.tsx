@@ -2,15 +2,15 @@ import type { Metadata } from "next";
 import SkyObservatoryContainer from "@/components/sky/SkyObservatoryContainer";
 
 export const metadata: Metadata = {
-  title: "Cakrapala — Earth Day/Night Sky Observatory",
+  title: "Cakrapala — Precision Sky Map & Celestial Observatory",
   description:
-    "Interactive Earth Day/Night Terminator map and 360-degree Stellarium-style ground horizon planetarium.",
+    "Interactive 360-degree IAU celestial sphere with J2000 precession, atmospheric refraction, 8K Milky Way, constellations, planets, deep sky objects, and live SGP4 satellites.",
 };
 
 export default function SkyPage() {
   return (
-    <div className="min-h-screen w-full flex flex-col bg-[#020617] text-slate-100 overflow-x-hidden">
+    <main className="h-[100dvh] w-screen overflow-hidden bg-[#01030a] text-slate-100">
       <SkyObservatoryContainer />
-    </div>
+    </main>
   );
 }

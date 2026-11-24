@@ -1,18 +1,12 @@
 'use client';
-// components/osint/ImageryControl.tsx
-// ─────────────────────────────────────────────────────────────────────────────
-// Control panel for the NASA GIBS satellite imagery basemap.
-// Includes:
-//   - Base layer selection (VIIRS SNPP, MODIS Terra, VIIRS Night Band)
-//   - Overlay toggles + opacity sliders (Coastlines, Reference Labels)
-//   - Date selector (constrained to 30 days back up to layer's latencyDays)
-//   - Quick "Kemarin" button
-//   - Soft error notification banner
-// ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react';
+/**
+ * ImageryControl — Refined Glassmorphic Satellite Basemap Controls (NASA GIBS + Bing Aerial).
+ */
+
+import { Satellite, X, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import type { HiResMode } from '@/components/osint/OsintGlobe';
 import {
-  GIBS_LAYERS,
   getBaseLayers,
   getOverlayLayers,
   type GibsLayer,
@@ -26,13 +20,14 @@ import {
 
 export interface OverlayConfig {
   enabled: boolean;
-  opacity: number; // 0.0 .. 1.0
+  opacity: number;
 }
 
 export interface ImagerySettings {
   baseLayerId: string;
   dateStr: string;
   overlays: Record<string, OverlayConfig>;
+  hiResMode: HiResMode;
 }
 
 export interface ImageryControlProps {
@@ -58,7 +53,7 @@ export default function ImageryControl({
   onDismissError,
   onApplyFallbackDate,
 }: ImageryControlProps) {
-  const baseLayers = getBaseLayers();
+  const baseLayers = getBaseLayers().filter((l) => !l.isCesiumIon);
   const overlayLayers = getOverlayLayers();
 
   const currentBaseLayer =
@@ -68,17 +63,9 @@ export default function ImageryControl({
   const minDate = getMinDate();
 
   const handleBaseLayerSelect = (layer: GibsLayer) => {
-    // When changing base layer, ensure date is clamped to new layer's maxDate
     const newMaxDate = getMaxDateForLayer(layer);
-    let newDate = settings.dateStr;
-    if (newDate > newMaxDate) {
-      newDate = newMaxDate;
-    }
-    onChange({
-      ...settings,
-      baseLayerId: layer.id,
-      dateStr: newDate,
-    });
+    const newDate = settings.dateStr > newMaxDate ? newMaxDate : settings.dateStr;
+    onChange({ ...settings, baseLayerId: layer.id, dateStr: newDate });
   };
 
   const handleDateChange = (newDateStr: string) => {
@@ -86,10 +73,7 @@ export default function ImageryControl({
     let clamped = newDateStr;
     if (clamped > maxDate) clamped = maxDate;
     if (clamped < minDate) clamped = minDate;
-    onChange({
-      ...settings,
-      dateStr: clamped,
-    });
+    onChange({ ...settings, dateStr: clamped });
   };
 
   const handleStepDay = (deltaDays: number) => {
@@ -102,10 +86,7 @@ export default function ImageryControl({
     const existing = settings.overlays[layerId] ?? { enabled: false, opacity: 0.8 };
     onChange({
       ...settings,
-      overlays: {
-        ...settings.overlays,
-        [layerId]: { ...existing, enabled },
-      },
+      overlays: { ...settings.overlays, [layerId]: { ...existing, enabled } },
     });
   };
 
@@ -113,10 +94,7 @@ export default function ImageryControl({
     const existing = settings.overlays[layerId] ?? { enabled: true, opacity: 0.8 };
     onChange({
       ...settings,
-      overlays: {
-        ...settings.overlays,
-        [layerId]: { ...existing, opacity },
-      },
+      overlays: { ...settings.overlays, [layerId]: { ...existing, opacity } },
     });
   };
 
@@ -125,60 +103,66 @@ export default function ImageryControl({
   return (
     <div
       role="dialog"
-      aria-label="NASA GIBS Satellite Imagery Settings"
+      aria-label="Satellite Imagery Settings"
       className="
-        absolute z-20 top-16 left-20 max-md:left-4 max-md:top-24 max-md:right-4
-        w-84 max-w-[calc(100vw-2rem)]
-        bg-slate-900/95 backdrop-blur-md border border-slate-700/60
-        rounded-2xl p-4 shadow-2xl text-slate-200
-        animate-in fade-in duration-150
+        fixed z-30 top-20 left-60 max-md:inset-x-4 max-md:top-28
+        w-[340px] max-w-[calc(100vw-2rem)] max-h-[calc(100dvh-7.5rem)] overflow-y-auto
+        rounded-2xl border border-white/[0.10] bg-[#030714]/78 p-4 text-slate-200
+        backdrop-blur-2xl shadow-[0_24px_64px_rgba(0,0,0,0.75),inset_0_1px_0_rgba(255,255,255,0.1)]
       "
     >
       {/* Header */}
-      <div className="flex items-center justify-between pb-3 border-b border-slate-800">
-        <div className="flex items-center gap-2">
-          <span className="text-base" aria-hidden="true">🛰️</span>
-          <h2 className="text-sm font-semibold text-slate-100">
-            Satellite Imagery (NASA GIBS)
-          </h2>
+      <div className="flex items-center justify-between border-b border-white/[0.08] pb-3">
+        <div className="flex items-center gap-2.5">
+          <div className="flex h-7 w-7 items-center justify-center rounded-full border border-sky-400/25 bg-sky-400/10 text-sky-300">
+            <Satellite className="h-3.5 w-3.5" />
+          </div>
+          <div>
+            <h2 className="font-[family-name:var(--font-orbitron)] text-xs font-medium tracking-[0.14em] text-white uppercase">
+              Satellite Imagery
+            </h2>
+            <p className="text-[10px] text-slate-400">NASA GIBS · Bing Aerial</p>
+          </div>
         </div>
         <button
+          type="button"
           onClick={onClose}
-          className="text-slate-400 hover:text-slate-200 rounded-lg p-1 hover:bg-slate-800 transition-colors"
-          aria-label="Close imagery panel"
+          aria-label="Close imagery settings"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition-colors hover:bg-white/12 hover:text-white"
         >
-          ✕
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* Tile Error Notification Banner (if any) */}
+      {/* Tile Error Notice */}
       {tileErrorNotice && (
-        <div className="mt-3 p-2.5 rounded-xl bg-amber-950/60 border border-amber-500/40 text-xs text-amber-200">
+        <div className="mt-3 rounded-xl border border-amber-400/25 bg-amber-500/10 p-3 text-xs text-amber-100">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex-1">
-              <p className="font-medium">⚠️ Some tiles not yet available</p>
-              <p className="text-[11px] text-amber-300/80 mt-0.5">
-                {tileErrorNotice.message}
-              </p>
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0 text-amber-300" />
+              <div>
+                <p className="font-medium">Tiles not yet published</p>
+                <p className="mt-0.5 text-[11px] text-amber-200/80">
+                  {tileErrorNotice.message}
+                </p>
+              </div>
             </div>
             {onDismissError && (
               <button
+                type="button"
                 onClick={onDismissError}
-                className="text-amber-400 hover:text-amber-200 text-sm font-bold"
-                aria-label="Dismiss error notice"
+                className="cursor-pointer text-amber-300 hover:text-white"
+                aria-label="Dismiss error"
               >
-                ✕
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
           </div>
           {onApplyFallbackDate && tileErrorNotice.fallbackDate && (
             <button
+              type="button"
               onClick={() => onApplyFallbackDate(tileErrorNotice.fallbackDate)}
-              className="
-                mt-2 w-full py-1 px-2 rounded-lg bg-amber-600/30 hover:bg-amber-600/50
-                border border-amber-500/40 text-amber-200 text-[11px] font-medium
-                transition-colors
-              "
+              className="mt-2.5 w-full cursor-pointer rounded-lg border border-amber-400/30 bg-amber-400/15 py-1.5 text-[11px] font-medium text-amber-100 transition-colors hover:bg-amber-400/25"
             >
               Use previous date ({tileErrorNotice.fallbackDate})
             </button>
@@ -186,72 +170,108 @@ export default function ImageryControl({
         </div>
       )}
 
-      <div className="mt-3 space-y-4 text-xs">
-        {/* Base Layer Radio Selector */}
+      <div className="mt-4 space-y-4 text-xs">
+        {/* Resolution Mode */}
         <div>
-          <label className="block font-medium text-slate-400 mb-1.5">
-            Base Layer (Nominal Resolution)
-          </label>
+          <span className="mb-2 block font-mono text-[9.5px] tracking-[0.2em] text-slate-400 uppercase">
+            Resolution Mode
+          </span>
           <div className="space-y-1.5">
-            {baseLayers.map((layer) => {
-              const isSelected = layer.id === settings.baseLayerId;
+            {(
+              [
+                {
+                  value: 'auto' as const,
+                  label: 'Auto (Recommended)',
+                  desc: 'NASA GIBS > 600 km · Bing ~1m < 400 km',
+                },
+                {
+                  value: 'always-gibs' as const,
+                  label: 'NASA GIBS Only',
+                  desc: 'Daily global imagery (250m, unlimited)',
+                },
+                {
+                  value: 'always-hires' as const,
+                  label: 'High-Res Aerial',
+                  desc: 'Bing Maps Aerial (~1m)',
+                },
+              ] satisfies { value: HiResMode; label: string; desc: string }[]
+            ).map((opt) => {
+              const selected = settings.hiResMode === opt.value;
               return (
-                <label
-                  key={layer.id}
-                  className={`
-                    flex items-center justify-between p-2 rounded-xl cursor-pointer
-                    border transition-all duration-150
-                    ${
-                      isSelected
-                        ? 'border-indigo-500/60 bg-indigo-950/40 text-indigo-100 shadow-sm'
-                        : 'border-slate-800 bg-slate-800/30 hover:bg-slate-800/60 text-slate-300'
-                    }
-                  `}
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => onChange({ ...settings, hiResMode: opt.value })}
+                  className={`flex w-full cursor-pointer flex-col rounded-xl border px-3 py-2 text-left transition-all ${
+                    selected
+                      ? 'border-white/25 bg-white/[0.11] text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]'
+                      : 'border-white/[0.06] bg-white/[0.02] text-slate-300 hover:border-white/15 hover:bg-white/[0.05]'
+                  }`}
                 >
-                  <div className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name="gibsBaseLayer"
-                      checked={isSelected}
-                      onChange={() => handleBaseLayerSelect(layer)}
-                      className="text-indigo-600 focus:ring-indigo-500 bg-slate-800 border-slate-700"
-                    />
-                    <span className="font-medium">{layer.label}</span>
-                  </div>
-                  <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-800/80 text-slate-400">
-                    {layer.resolution}
-                  </span>
-                </label>
+                  <span className="text-[11px] font-medium">{opt.label}</span>
+                  <span className="mt-0.5 text-[10px] text-slate-400">{opt.desc}</span>
+                </button>
               );
             })}
           </div>
         </div>
 
-        {/* Date Selector */}
+        {/* Base Layer */}
         <div>
-          <div className="flex items-center justify-between mb-1.5">
-            <label htmlFor="gibs-date-picker" className="font-medium text-slate-400">
+          <span className="mb-2 block font-mono text-[9.5px] tracking-[0.2em] text-slate-400 uppercase">
+            NASA Sensor Feed
+          </span>
+          <div className="space-y-1.5">
+            {baseLayers.map((layer) => {
+              const selected = layer.id === settings.baseLayerId;
+              return (
+                <button
+                  key={layer.id}
+                  type="button"
+                  onClick={() => handleBaseLayerSelect(layer)}
+                  className={`flex w-full cursor-pointer items-center justify-between rounded-xl border px-3 py-2 text-left transition-all ${
+                    selected
+                      ? 'border-white/25 bg-white/[0.11] text-white'
+                      : 'border-white/[0.06] bg-white/[0.02] text-slate-300 hover:border-white/15 hover:bg-white/[0.05]'
+                  }`}
+                >
+                  <span className="text-[11px] font-medium">{layer.label}</span>
+                  <span className="rounded-full border border-white/10 bg-white/[0.05] px-2 py-0.5 font-mono text-[9px] text-slate-300">
+                    {layer.resolution}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Acquisition Date */}
+        <div>
+          <div className="mb-1.5 flex items-center justify-between">
+            <label
+              htmlFor="gibs-date-picker"
+              className="font-mono text-[9.5px] tracking-[0.2em] text-slate-400 uppercase"
+            >
               Acquisition Date (UTC)
             </label>
             <button
+              type="button"
               onClick={() => handleDateChange(maxDate)}
-              className="text-[11px] text-indigo-400 hover:text-indigo-300 font-medium underline"
+              className="cursor-pointer font-mono text-[10px] text-sky-300 transition-colors hover:text-white"
             >
-              Yesterday ({maxDate})
+              Latest ({maxDate})
             </button>
           </div>
 
           <div className="flex items-center gap-1.5">
             <button
+              type="button"
               onClick={() => handleStepDay(-1)}
               disabled={settings.dateStr <= minDate}
               aria-label="Previous day"
-              className="
-                p-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700
-                disabled:opacity-30 disabled:cursor-not-allowed text-slate-200
-              "
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              ◀
+              <ChevronLeft className="h-3.5 w-3.5" />
             </button>
             <input
               id="gibs-date-picker"
@@ -260,33 +280,28 @@ export default function ImageryControl({
               max={maxDate}
               value={settings.dateStr}
               onChange={(e) => handleDateChange(e.target.value)}
-              className="
-                flex-1 bg-slate-800/80 border border-slate-700 rounded-lg px-2.5 py-1.5
-                text-slate-100 font-mono text-center focus:outline-none focus:border-indigo-500
-              "
+              className="h-8 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-2.5 text-center font-mono text-[11px] text-white focus:border-white/30 focus:outline-none"
             />
             <button
+              type="button"
               onClick={() => handleStepDay(1)}
               disabled={settings.dateStr >= maxDate}
               aria-label="Next day"
-              className="
-                p-2 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700
-                disabled:opacity-30 disabled:cursor-not-allowed text-slate-200
-              "
+              className="flex h-8 w-8 cursor-pointer items-center justify-center rounded-xl border border-white/10 bg-white/[0.04] text-slate-200 transition-colors hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-30"
             >
-              ▶
+              <ChevronRight className="h-3.5 w-3.5" />
             </button>
           </div>
-          <p className="text-[10px] text-slate-500 mt-1">
-            Historical range: past 30 days (product latency: {currentBaseLayer.latencyDays} day{currentBaseLayer.latencyDays > 1 ? 's' : ''}).
+          <p className="mt-1.5 text-[10px] text-slate-500">
+            30-day archive · sensor latency {currentBaseLayer.latencyDays}d UTC.
           </p>
         </div>
 
         {/* Overlays */}
-        <div className="pt-2 border-t border-slate-800">
-          <label className="block font-medium text-slate-400 mb-2">
-            Borders & Labels Overlays (15m)
-          </label>
+        <div className="border-t border-white/[0.08] pt-3">
+          <span className="mb-2.5 block font-mono text-[9.5px] tracking-[0.2em] text-slate-400 uppercase">
+            Cartographic Overlays
+          </span>
           <div className="space-y-3">
             {overlayLayers.map((layer) => {
               const cfg = settings.overlays[layer.id] ?? {
@@ -296,24 +311,23 @@ export default function ImageryControl({
               return (
                 <div key={layer.id} className="space-y-1.5">
                   <div className="flex items-center justify-between">
-                    <label className="flex items-center gap-2 cursor-pointer">
+                    <label className="flex cursor-pointer items-center gap-2">
                       <input
                         type="checkbox"
                         checked={cfg.enabled}
                         onChange={(e) =>
                           handleOverlayToggle(layer.id, e.target.checked)
                         }
-                        className="rounded border-slate-700 text-indigo-600 focus:ring-indigo-500 bg-slate-800"
+                        className="h-3.5 w-3.5 rounded border-white/20 bg-white/5 accent-sky-400"
                       />
-                      <span className="font-medium text-slate-300">
+                      <span className="text-[11px] font-medium text-slate-200">
                         {layer.label}
                       </span>
                     </label>
-                    <span className="text-[10px] font-mono text-slate-400">
+                    <span className="font-mono text-[10px] text-slate-400">
                       {Math.round(cfg.opacity * 100)}%
                     </span>
                   </div>
-
                   {cfg.enabled && (
                     <input
                       type="range"
@@ -322,13 +336,10 @@ export default function ImageryControl({
                       step="0.05"
                       value={cfg.opacity}
                       onChange={(e) =>
-                        handleOverlayOpacity(
-                          layer.id,
-                          parseFloat(e.target.value),
-                        )
+                        handleOverlayOpacity(layer.id, parseFloat(e.target.value))
                       }
                       aria-label={`${layer.label} opacity`}
-                      className="w-full accent-indigo-500 h-1 bg-slate-700 rounded-lg cursor-pointer"
+                      className="h-1 w-full cursor-pointer rounded-lg bg-white/15 accent-sky-300"
                     />
                   )}
                 </div>

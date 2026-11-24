@@ -1,144 +1,96 @@
 "use client";
 
 /**
- * PlanetInfoPanel — NASA Deep Space Object Inspector & Astrophysical HUD.
- * Ultra-translucent crystal frosted glassmorphic inspector card floating on the right.
+ * PlanetInfoPanel — Refined Luxury Aerospace Celestial Inspector.
+ *
+ * Floating sheer frosted-glass inspector on desktop (right rail) and
+ * clean compact drawer on mobile, replacing the legacy neon tactical HUD.
  */
 
 import { useState } from "react";
-import {
-  X,
-  Orbit,
-  Sparkles,
-  Info,
-  CircleDot,
-  Layers,
-  Compass,
-  Rocket,
-  Flame,
-  Droplets,
-  Radio,
-  ChevronRight,
-  Sparkle,
-} from "lucide-react";
+import { X } from "lucide-react";
 import { DETAILED_PLANET_DATA } from "@/lib/astronomy/planetDetailedData";
+import type { LivePlanetTelemetry } from "@/lib/astronomy/solarSystemPhysics";
 import type { PlanetId } from "@/lib/astronomy/types";
 
 type Props = {
   selectedPlanetId: PlanetId | null;
+  liveTelemetry?: LivePlanetTelemetry | null;
   onClose: () => void;
 };
 
-export default function PlanetInfoPanel({ selectedPlanetId, onClose }: Props) {
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "moons" | "orbit" | "physics" | "atmosphere" | "missions"
-  >("overview");
+type TabId = "overview" | "orbit" | "physics" | "atmosphere" | "moons" | "missions";
 
-  const planet = selectedPlanetId ? DETAILED_PLANET_DATA[selectedPlanetId] : null;
+const TABS: { id: TabId; label: string }[] = [
+  { id: "overview", label: "Info" },
+  { id: "orbit", label: "Orbit" },
+  { id: "physics", label: "Physics" },
+  { id: "atmosphere", label: "Atmo" },
+  { id: "moons", label: "Moons" },
+  { id: "missions", label: "Probes" },
+];
+
+export default function PlanetInfoPanel({
+  selectedPlanetId,
+  liveTelemetry,
+  onClose,
+}: Props) {
+  const [activeTab, setActiveTab] = useState<TabId>("overview");
+
+  const planet = selectedPlanetId
+    ? DETAILED_PLANET_DATA[selectedPlanetId]
+    : null;
   if (!planet) return null;
 
   return (
     <aside
-      className="
-        fixed top-20 right-4 bottom-24 z-30 w-80 sm:w-96
-        flex flex-col rounded-[26px] bg-[#030712]/30
-        border border-slate-700/35 shadow-[0_16px_50px_rgba(0,0,0,0.5),inset_0_1px_1px_rgba(255,255,255,0.06)]
-        backdrop-blur-2xl overflow-y-auto text-slate-100 font-sans pointer-events-auto
-        animate-fade-in
-      "
-      aria-label="NASA Deep Space Planet Telemetry Inspector"
+      className="pointer-events-auto fixed inset-x-3 bottom-20 z-30 flex max-h-[52vh] flex-col overflow-hidden rounded-2xl border border-white/[0.10] bg-[#030714]/56 text-slate-100 backdrop-blur-2xl shadow-[0_20px_60px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.1)] md:inset-auto md:top-20 md:right-5 md:bottom-24 md:max-h-none md:w-[350px]"
+      aria-label="Celestial Body Inspector"
     >
-      {/* ── Top Header with Neon Badge & Close Button ─────────────────────── */}
-      <div className="flex items-center justify-between px-5 py-3.5 border-b border-slate-800/50 bg-[#030712]/35 backdrop-blur-xl sticky top-0 z-30 font-mono">
-        <div className="flex items-center gap-2">
-          <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-          <span className="text-[11px] font-bold tracking-widest uppercase text-cyan-300">
-            OBJECT INSPECTOR // NASA J2000
-          </span>
+      {/* Sticky Minimal Header */}
+      <div className="flex items-center justify-between border-b border-white/[0.08] px-5 py-3.5">
+        <div className="flex items-center gap-3">
+          <div className="h-8 w-8 shrink-0 overflow-hidden rounded-full border border-white/25 shadow-sm">
+            <img
+              src={`/textures/planets/${planet.id}.jpg`}
+              alt={planet.name}
+              className="h-full w-full object-cover"
+            />
+          </div>
+          <div>
+            <h2 className="font-[family-name:var(--font-orbitron)] text-sm font-medium tracking-[0.14em] text-white uppercase">
+              {planet.name}
+            </h2>
+            <p className="text-[10px] tracking-[0.08em] text-slate-400">
+              {planet.classification}
+            </p>
+          </div>
         </div>
 
         <button
           type="button"
           onClick={onClose}
           aria-label="Close Inspector"
-          title="Close Panel"
-          className="
-            w-7 h-7 rounded-full text-slate-400 hover:text-white
-            bg-slate-900/60 border border-slate-700/60 hover:border-cyan-400 transition-all
-            flex items-center justify-center
-          "
+          title="Return to Overview (Esc)"
+          className="flex h-7 w-7 cursor-pointer items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-slate-300 transition-colors hover:border-white/25 hover:bg-white/12 hover:text-white"
         >
-          <X size={14} />
+          <X className="h-3.5 w-3.5" />
         </button>
       </div>
 
-      {/* ── Panel Body ────────────────────────────────────────────────────── */}
-      <div className="flex flex-col p-5 space-y-4">
-        
-        {/* ── Hero Thumbnail of Planet (NASA Imagery) ─────────────────────── */}
-        <div className="relative w-full h-36 rounded-2xl overflow-hidden border border-cyan-500/25 bg-[#030712]/40 backdrop-blur-md flex items-center justify-center group">
-          <div
-            className="absolute inset-0 opacity-30 blur-2xl transition-opacity group-hover:opacity-50"
-            style={{ backgroundColor: planet.color }}
-          />
-
-          <div className="relative w-24 h-24 rounded-full overflow-hidden shadow-[0_0_25px_rgba(0,0,0,0.85)] border border-white/25">
-            <img
-              src={planet.planetImageSrc}
-              alt={planet.name}
-              className="w-full h-full object-cover transform scale-105 group-hover:scale-115 transition-transform duration-700"
-            />
-            <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,transparent_40%,rgba(0,0,0,0.75)_100%)] pointer-events-none" />
-          </div>
-
-          <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-slate-950/70 border border-cyan-500/30 font-mono text-[9px] text-cyan-300">
-            NASA IMAGERY
-          </div>
-          <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded-md bg-slate-950/70 border border-slate-700/60 font-mono text-[9px] text-emerald-400">
-            TARGET: {planet.id.toUpperCase()}
-          </div>
-        </div>
-
-        {/* Title & Classification */}
-        <div>
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-500/25 text-cyan-300 text-[10px] font-mono mb-1.5">
-            <Sparkle className="w-3 h-3 text-cyan-400" />
-            <span>{planet.badge}</span>
-          </div>
-
-          <div className="flex items-center gap-2.5">
-            <div className="w-4 h-4 rounded-full overflow-hidden shrink-0 border border-white/70 shadow-sm">
-              <img src={`/textures/planets/${planet.id}.jpg`} alt={planet.name} className="w-full h-full object-cover" />
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight font-sans">
-              {planet.name}
-            </h2>
-          </div>
-          <div className="text-[11px] font-mono text-slate-400 tracking-wider mt-1">
-            {planet.subtitle} &bull; {planet.classification}
-          </div>
-        </div>
-
-        {/* Tab Navigation Controls */}
-        <div className="grid grid-cols-6 gap-1 p-1 rounded-xl bg-[#030712]/50 border border-slate-800/60 font-mono text-[9px]">
-          {(
-            [
-              { id: "overview", label: "INFO" },
-              { id: "moons", label: `MOONS` },
-              { id: "orbit", label: "ORBIT" },
-              { id: "physics", label: "PHYS" },
-              { id: "atmosphere", label: "ATMO" },
-              { id: "missions", label: "PROBES" },
-            ] as const
-          ).map((tab) => (
+      {/* Scrollable Body */}
+      <div className="flex flex-1 flex-col gap-4 overflow-y-auto p-5">
+        {/* Clean Pill Tabs */}
+        <div className="grid grid-cols-6 gap-0.5 rounded-xl border border-white/[0.07] bg-white/[0.03] p-1 font-mono text-[9.5px]">
+          {TABS.map((tab) => (
             <button
               key={tab.id}
               type="button"
               onClick={() => setActiveTab(tab.id)}
-              className={`py-1.5 rounded-lg font-bold transition-all text-center ${
+              className={`cursor-pointer rounded-lg py-1.5 text-center font-medium uppercase transition-all ${
                 activeTab === tab.id
-                  ? "bg-[#25324d]/80 text-cyan-300 border border-cyan-500/40 shadow-sm"
-                  : "text-slate-400 hover:text-white"
+                  ? "bg-white/14 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]"
+                  : "text-slate-400 hover:text-slate-200"
               }`}
             >
               {tab.label}
@@ -146,144 +98,151 @@ export default function PlanetInfoPanel({ selectedPlanetId, onClose }: Props) {
           ))}
         </div>
 
-        {/* ── TAB 1: OVERVIEW ──────────────────────────────────────────────── */}
+        {/* Overview Tab */}
         {activeTab === "overview" && (
-          <div className="space-y-3 font-sans text-xs">
-            <p className="text-slate-300 leading-relaxed bg-[#030712]/40 p-3 rounded-xl border border-slate-800/50">
+          <div className="space-y-3.5">
+            <p className="text-xs leading-relaxed font-light text-slate-200/90">
               {planet.overview}
             </p>
 
             <div className="grid grid-cols-2 gap-2 font-mono text-[10px]">
-              <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50">
-                <span className="text-slate-500 block text-[9px]">RADIUS</span>
-                <strong className="text-white block">{planet.physicalStats.meanRadiusKm}</strong>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50">
-                <span className="text-slate-500 block text-[9px]">GRAVITY</span>
-                <strong className="text-cyan-300 block">{planet.physicalStats.surfaceGravity}</strong>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50">
-                <span className="text-slate-500 block text-[9px]">DISTANCE (SUN)</span>
-                <strong className="text-amber-300 block">{planet.orbitalStats.semiMajorAxisAU}</strong>
-              </div>
-              <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50">
-                <span className="text-slate-500 block text-[9px]">AVG TEMP</span>
-                <strong className="text-emerald-400 block">{planet.physicalStats.avgTempC}</strong>
-              </div>
+              <MetricCard
+                label={liveTelemetry ? "Live Distance" : "Solar Distance"}
+                value={
+                  liveTelemetry
+                    ? `${liveTelemetry.distanceAU.toFixed(4)} AU`
+                    : planet.orbitalStats.semiMajorAxisAU
+                }
+              />
+              <MetricCard
+                label={liveTelemetry ? "Live Velocity" : "Gravity"}
+                value={
+                  liveTelemetry
+                    ? `${liveTelemetry.velocityKmS.toFixed(2)} km/s`
+                    : planet.physicalStats.surfaceGravity
+                }
+              />
+              <MetricCard label="Mean Radius" value={planet.physicalStats.meanRadiusKm} />
+              <MetricCard label="Mean Temp" value={planet.physicalStats.avgTempC} />
             </div>
           </div>
         )}
 
-        {/* ── TAB 2: MOONS ─────────────────────────────────────────────────── */}
+        {/* Orbit Tab */}
+        {activeTab === "orbit" && (
+          <div className="space-y-2 font-mono text-[10px]">
+            {liveTelemetry && (
+              <>
+                <MetricRow
+                  label="Live Distance r(t)"
+                  value={`${liveTelemetry.distanceAU.toFixed(5)} AU`}
+                />
+                <MetricRow
+                  label="Live Speed v(t) (Vis-Viva)"
+                  value={`${liveTelemetry.velocityKmS.toFixed(3)} km/s`}
+                />
+                <MetricRow
+                  label="Ecliptic Lon / Lat (J2000)"
+                  value={`${liveTelemetry.eclipticLonDeg.toFixed(2)}° / ${liveTelemetry.eclipticLatDeg >= 0 ? "+" : ""}${liveTelemetry.eclipticLatDeg.toFixed(2)}°`}
+                />
+              </>
+            )}
+            <MetricRow
+              label="Semi-Major Axis (a)"
+              value={`${planet.orbitalStats.semiMajorAxisAU} (${planet.orbitalStats.semiMajorAxisKm})`}
+            />
+            <MetricRow label="Orbital Period" value={planet.orbitalStats.orbitalPeriod} />
+            <MetricRow label="Mean Velocity" value={planet.orbitalStats.orbitalSpeedKmS} />
+            <MetricRow label="Inclination" value={planet.orbitalStats.inclinationDeg} />
+          </div>
+        )}
+
+        {/* Physics Tab */}
+        {activeTab === "physics" && (
+          <div className="space-y-2 font-mono text-[10px]">
+            <MetricRow label="Mass" value={planet.physicalStats.massKg} />
+            <MetricRow label="Surface Gravity" value={planet.physicalStats.surfaceGravity} />
+            <MetricRow label="Escape Velocity" value={planet.physicalStats.escapeVelocity} />
+            <MetricRow label="Axial Tilt" value={planet.physicalStats.axialTilt} />
+          </div>
+        )}
+
+        {/* Atmosphere Tab */}
+        {activeTab === "atmosphere" && (
+          <div className="space-y-3 font-mono text-[10px]">
+            <MetricRow label="Surface Pressure" value={planet.atmosphere.pressureBar} />
+
+            <div className="space-y-2 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3">
+              <span className="block text-[9px] tracking-[0.2em] text-slate-400 uppercase">
+                Composition
+              </span>
+              {planet.atmosphere.components.map((comp) => (
+                <div
+                  key={comp.name}
+                  className="flex items-center justify-between text-[10px]"
+                >
+                  <span className="text-slate-300">{comp.name}</span>
+                  <strong className="font-medium text-white/90">{comp.percent}</strong>
+                </div>
+              ))}
+            </div>
+
+            <p className="px-0.5 font-sans text-[11px] leading-relaxed font-light text-slate-400">
+              {planet.atmosphere.notes}
+            </p>
+          </div>
+        )}
+
+        {/* Moons Tab */}
         {activeTab === "moons" && (
           <div className="space-y-2 font-mono text-[10px]">
-            <div className="flex items-center justify-between px-2 py-1 text-slate-400">
-              <span>TOTAL SATELLITES:</span>
-              <strong className="text-cyan-300">{planet.moons.count} MOONS</strong>
+            <div className="flex items-center justify-between px-1 pb-1 text-slate-400">
+              <span className="text-[9px] tracking-[0.2em] uppercase">Known Moons</span>
+              <strong className="font-medium text-white">{planet.moons.count}</strong>
             </div>
 
             {planet.moons.moonsList.length > 0 ? (
               planet.moons.moonsList.map((moon) => (
                 <div
                   key={moon.name}
-                  className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex items-center justify-between"
+                  className="flex items-center justify-between rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5"
                 >
                   <div>
-                    <strong className="text-white block">{moon.name}</strong>
-                    <span className="text-[9px] text-slate-400">Diameter: {moon.diameterKm}</span>
+                    <strong className="block font-sans text-xs font-medium text-white">
+                      {moon.name}
+                    </strong>
+                    <span className="text-[9px] text-slate-400">
+                      Ø {moon.diameterKm}
+                    </span>
                   </div>
-                  <span className="text-[9px] text-slate-400">{moon.orbitalPeriodDays}</span>
+                  <span className="text-[9px] text-slate-300">
+                    {moon.orbitalPeriodDays}
+                  </span>
                 </div>
               ))
             ) : (
-              <div className="p-4 rounded-xl bg-[#030712]/45 border border-slate-800/50 text-center text-slate-500 italic">
-                No natural satellites in orbit
+              <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-4 text-center font-sans text-xs font-light text-slate-400">
+                No natural satellites in orbit.
               </div>
             )}
           </div>
         )}
 
-        {/* ── TAB 3: ORBIT ─────────────────────────────────────────────────── */}
-        {activeTab === "orbit" && (
-          <div className="space-y-2 font-mono text-[10px]">
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Semi-Major Axis:</span>
-              <strong className="text-white">{planet.orbitalStats.semiMajorAxisAU} ({planet.orbitalStats.semiMajorAxisKm})</strong>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Orbital Period:</span>
-              <strong className="text-cyan-300">{planet.orbitalStats.orbitalPeriod}</strong>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Orbital Velocity:</span>
-              <strong className="text-amber-300">{planet.orbitalStats.orbitalSpeedKmS}</strong>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Orbital Inclination:</span>
-              <strong className="text-emerald-400">{planet.orbitalStats.inclinationDeg}</strong>
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB 4: PHYSICS ───────────────────────────────────────────────── */}
-        {activeTab === "physics" && (
-          <div className="space-y-2 font-mono text-[10px]">
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Mass:</span>
-              <strong className="text-white">{planet.physicalStats.massKg}</strong>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Surface Gravity:</span>
-              <strong className="text-cyan-300">{planet.physicalStats.surfaceGravity}</strong>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Escape Velocity:</span>
-              <strong className="text-amber-300">{planet.physicalStats.escapeVelocity}</strong>
-            </div>
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Axial Tilt:</span>
-              <strong className="text-emerald-400">{planet.physicalStats.axialTilt}</strong>
-            </div>
-          </div>
-        )}
-
-        {/* ── TAB 5: ATMOSPHERE ────────────────────────────────────────────── */}
-        {activeTab === "atmosphere" && (
-          <div className="space-y-2.5 font-mono text-[10px]">
-            <div className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 flex justify-between">
-              <span className="text-slate-400">Surface Pressure:</span>
-              <strong className="text-cyan-300">{planet.atmosphere.pressureBar}</strong>
-            </div>
-
-            <div className="space-y-1.5 p-3 rounded-xl bg-[#030712]/45 border border-slate-800/50">
-              <span className="text-slate-400 block text-[9px] mb-1.5 uppercase">CHEMICAL COMPOSITION</span>
-              {planet.atmosphere.components.map((comp) => (
-                <div key={comp.name} className="flex justify-between items-center text-[10px]">
-                  <span className="text-slate-300">{comp.name}</span>
-                  <strong className="text-cyan-400">{comp.percent}</strong>
-                </div>
-              ))}
-            </div>
-
-            <p className="text-slate-400 text-[9px] italic leading-relaxed px-1">
-              {planet.atmosphere.notes}
-            </p>
-          </div>
-        )}
-
-        {/* ── TAB 6: MISSIONS ──────────────────────────────────────────────── */}
+        {/* Missions Tab */}
         {activeTab === "missions" && (
-          <div className="space-y-2 font-mono text-[10px]">
+          <div className="space-y-2">
             {planet.missions.map((m) => (
               <div
                 key={m.name}
-                className="p-2.5 rounded-xl bg-[#030712]/45 border border-slate-800/50 space-y-1"
+                className="space-y-1 rounded-xl border border-white/[0.07] bg-white/[0.025] p-3"
               >
-                <div className="flex justify-between items-center">
-                  <strong className="text-cyan-300 font-sans">{m.name}</strong>
-                  <span className="text-[9px] text-slate-400">{m.agency} &bull; {m.year}</span>
+                <div className="flex items-center justify-between gap-2">
+                  <strong className="text-xs font-medium text-white">{m.name}</strong>
+                  <span className="font-mono text-[9px] text-slate-400">
+                    {m.agency} · {m.year}
+                  </span>
                 </div>
-                <p className="text-[9px] text-slate-300 font-sans leading-tight">
+                <p className="text-[11px] leading-relaxed font-light text-slate-300/90">
                   {m.achievement}
                 </p>
               </div>
@@ -292,5 +251,27 @@ export default function PlanetInfoPanel({ selectedPlanetId, onClose }: Props) {
         )}
       </div>
     </aside>
+  );
+}
+
+function MetricCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.025] p-2.5">
+      <span className="block text-[9px] tracking-[0.14em] text-slate-400 uppercase">
+        {label}
+      </span>
+      <strong className="mt-1 block text-[11px] font-medium text-white/95">
+        {value}
+      </strong>
+    </div>
+  );
+}
+
+function MetricRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-white/[0.07] bg-white/[0.025] px-3 py-2.5">
+      <span className="text-slate-400">{label}</span>
+      <strong className="text-right font-medium text-white/95">{value}</strong>
+    </div>
   );
 }

@@ -5,7 +5,10 @@
  * and NASA JPL Standards.
  */
 
+import { CODEX_EXPANDED_ENTRIES } from "./spaceCodexExpanded";
+
 export type CodexCategory =
+  | "nasa-missions"
   | "astrophysics"
   | "planetary-defense"
   | "astrometry"
@@ -42,6 +45,13 @@ export interface CodexEntry {
 }
 
 export const CODEX_CATEGORIES: Record<CodexCategory, CodexCategoryMeta> = {
+  "nasa-missions": {
+    id: "nasa-missions",
+    name: "NASA & Spaceflight",
+    shortDesc: "Flagship observatories, planetary probes, human spaceflight programs, and deep-space missions.",
+    icon: "Rocket",
+    colorHex: "#60a5fa",
+  },
   "astrophysics": {
     id: "astrophysics",
     name: "Astrophysics & Dynamics",
@@ -713,4 +723,5 @@ export const CODEX_ENTRIES: CodexEntry[] = [
     tags: ["Space Boundary", "Aerodynamics", "Astronautics", "Atmosphere"],
     relatedTermIds: ["escape-velocity", "sgp4-tle", "delta-v"],
   },
+  ...CODEX_EXPANDED_ENTRIES,
 ];

@@ -108,6 +108,129 @@ export function calculateImpactKineticEnergy(
   return Math.round(megatonsTNT * 100) / 100;
 }
 
+export type AsteroidDensityClass = "porous" | "stony" | "iron";
+
+export interface ImpactPhysicsResult {
+  massTonnes: number;
+  energyJoules: number;
+  energyMegatons: number;
+  hiroshimaRatio: number;
+  tsarBombaRatio: number;
+  machNumber: number;
+  isAirburst: boolean;
+  airburstAltKm: number | null;
+  transientCraterKm: number;
+  finalCraterKm: number;
+  blast5PsiKm: number;
+  blast1PsiKm: number;
+  seismicMw: number;
+  hazardClassification: "Bolide Airburst" | "Local Event" | "City-Scale" | "Regional" | "Continental";
+}
+
+/**
+ * Peer-reviewed Collins, Melosh & Marcus (2005) "Earth Impact Effects Program"
+ * scaling model for hypothetical atmospheric entry & cratering physics.
+ */
+export function computeImpactPhysics(
+  diameterMeters: number,
+  velocityKms: number,
+  densityKgM3: number = 2600,
+  impactAngleDeg: number = 45,
+): ImpactPhysicsResult {
+  const D = Math.max(1, diameterMeters);
+  const vKms = Math.max(11.2, velocityKms); // Earth escape velocity lower bound for atmospheric entry
+  const vMs = vKms * 1000;
+  const sinTheta = Math.sin((Math.max(10, Math.min(90, impactAngleDeg)) * Math.PI) / 180);
+
+  const r = D / 2;
+  const volumeM3 = (4 / 3) * Math.PI * r * r * r;
+  const massKg = volumeM3 * densityKgM3;
+  const massTonnes = massKg / 1000;
+
+  const energyJoules = 0.5 * massKg * vMs * vMs;
+  const energyMegatons = energyJoules / 4.184e15;
+  const energyKiloton = energyMegatons * 1000;
+  const hiroshimaRatio = energyKiloton / 15; // Little Boy ~15 kt TNT
+  const tsarBombaRatio = energyMegatons / 50; // Tsar Bomba ~50 Mt TNT
+  const machNumber = vMs / 343;
+
+  // Airburst vs surface impact threshold (Hills-Goda / Collins-Melosh pancake breakup)
+  const airburstThresholdM = densityKgM3 >= 6000 ? 18 : densityKgM3 <= 1800 ? 78 : 52;
+  const isAirburst = D < airburstThresholdM;
+  const airburstAltKm = isAirburst
+    ? Math.max(4, Math.min(48, Math.round((36 * Math.pow(airburstThresholdM / D, 0.42) * Math.pow(sinTheta, 0.35)) * 10) / 10))
+    : null;
+
+  // Pi-group transient crater scaling on sedimentary rock (rho_t = 2500 kg/m^3, g = 9.81 m/s^2)
+  const targetDensity = 2500;
+  const g = 9.81;
+  const transientCraterM = isAirburst
+    ? 0
+    : 1.161 *
+      Math.pow(densityKgM3 / targetDensity, 1 / 3) *
+      Math.pow(D, 0.78) *
+      Math.pow(vMs, 0.44) *
+      Math.pow(g, -0.22) *
+      Math.pow(sinTheta, 1 / 3);
+  const transientCraterKm = transientCraterM / 1000;
+  // Simple-to-complex crater transition on Earth at ~3.2 km
+  const finalCraterKm = isAirburst
+    ? 0
+    : transientCraterKm < 2.56
+      ? 1.25 * transientCraterKm
+      : 1.17 * Math.pow(transientCraterKm, 1.13) / Math.pow(3.2, 0.13);
+
+  // Overpressure blast radius scaling (5 psi structural collapse, 1 psi glass shatter)
+  const blast5PsiKm = Math.max(0.1, 0.28 * Math.pow(Math.max(0.01, energyKiloton), 1 / 3));
+  const blast1PsiKm = blast5PsiKm * 2.25;
+
+  // Gutenberg-Richter seismic coupling (efficiency ~10^-4 for surface, ~10^-5 for airburst)
+  const seismicMw = Math.max(
+    0,
+    Math.min(11.5, 0.67 * Math.log10(Math.max(1e9, energyJoules * (isAirburst ? 0.1 : 1))) - 5.87),
+  );
+
+  let hazardClassification: ImpactPhysicsResult["hazardClassification"] = "Bolide Airburst";
+  if (energyMegatons >= 100_000) hazardClassification = "Continental";
+  else if (energyMegatons >= 1_000) hazardClassification = "Regional";
+  else if (energyMegatons >= 10) hazardClassification = "City-Scale";
+  else if (!isAirburst || energyMegatons >= 0.3) hazardClassification = "Local Event";
+
+  return {
+    massTonnes,
+    energyJoules,
+    energyMegatons,
+    hiroshimaRatio,
+    tsarBombaRatio,
+    machNumber,
+    isAirburst,
+    airburstAltKm,
+    transientCraterKm,
+    finalCraterKm,
+    blast5PsiKm,
+    blast1PsiKm,
+    seismicMw,
+    hazardClassification,
+  };
+}
+
+/**
+ * Formats relative close-approach countdown (e.g. "T-4h 12m" or "T+2d 6h").
+ */
+export function formatApproachCountdown(epochMs?: number, nowMs: number = Date.now()): string {
+  if (!epochMs || Number.isNaN(epochMs)) return "N/A";
+  const diffSec = Math.round((epochMs - nowMs) / 1000);
+  const prefix = diffSec >= 0 ? "T-" : "T+";
+  const abs = Math.abs(diffSec);
+  const days = Math.floor(abs / 86400);
+  const hours = Math.floor((abs % 86400) / 3600);
+  const mins = Math.floor((abs % 3600) / 60);
+  if (days >= 365) return `${prefix}${(days / 365.25).toFixed(1)}y`;
+  if (days > 0) return `${prefix}${days}d ${hours}h`;
+  if (hours > 0) return `${prefix}${hours}h ${mins}m`;
+  return `${prefix}${mins}m`;
+}
+
 /**
  * Computes deterministic 3D radar coordinates for an asteroid relative to Earth
  * Converts Lunar Distance, Approach Angle (derived from approach time & velocity), and Inclination
